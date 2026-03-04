@@ -1,6 +1,6 @@
 import { env } from '$env/dynamic/private';
+import { ElevenLabsClient, ElevenLabsError } from '@elevenlabs/elevenlabs-js';
 import { error } from '@sveltejs/kit';
-import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -30,13 +30,16 @@ export const load: PageServerLoad = async () => {
 					agent.conversationConfig?.agent?.prompt?.prompt ?? 'No system prompt configured.'
 			}
 		};
-	} catch (e: any) {
-		if (e.status === 401) {
+	} catch (e: unknown) {
+		if (!(e instanceof ElevenLabsError)) {
+			throw e;
+		}
+		if (e.statusCode === 401) {
 			throw error(401, 'Unauthorized: Invalid ElevenLabs API Key.');
 		}
-		if (e.status === 404) {
+		if (e.statusCode === 404) {
 			throw error(404, `Agent with ID "${agentId}" not found.`);
 		}
-		throw error(e.status || 500, `Failed to fetch agent: ${e.message || 'Unknown error'}`);
+		throw error(e.statusCode || 500, `Failed to fetch agent: ${e.message || 'Unknown error'}`);
 	}
 };
