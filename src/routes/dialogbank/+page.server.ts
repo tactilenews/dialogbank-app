@@ -1,5 +1,6 @@
 import { env } from '$env/dynamic/private';
 import { error } from '@sveltejs/kit';
+import { ElevenLabsClient } from '@elevenlabs/elevenlabs-js';
 import type { PageServerLoad } from './$types';
 
 export const load: PageServerLoad = async () => {
@@ -14,30 +15,28 @@ export const load: PageServerLoad = async () => {
 		throw error(500, 'ELEVENLABS_AGENT_ID is not configured on the server.');
 	}
 
-	const response = await fetch(`https://api.elevenlabs.io/v1/convai/agents/${agentId}`, {
-		headers: {
-			'xi-api-key': apiKey
-		}
+	const client = new ElevenLabsClient({
+		apiKey
 	});
 
-	if (!response.ok) {
-		if (response.status === 401) {
+	try {
+		const agent = await client.conversationalAi.agents.get(agentId);
+
+		return {
+			agent: {
+				id: agentId,
+				name: agent.name ?? 'Unnamed Agent',
+				systemPrompt:
+					agent.conversationConfig?.agent?.prompt?.prompt ?? 'No system prompt configured.'
+			}
+		};
+	} catch (e: any) {
+		if (e.status === 401) {
 			throw error(401, 'Unauthorized: Invalid ElevenLabs API Key.');
 		}
-		if (response.status === 404) {
+		if (e.status === 404) {
 			throw error(404, `Agent with ID "${agentId}" not found.`);
 		}
-		throw error(response.status, `Failed to fetch agent: ${response.statusText}`);
+		throw error(e.status || 500, `Failed to fetch agent: ${e.message || 'Unknown error'}`);
 	}
-
-	const data = await response.json();
-
-	return {
-		agent: {
-			id: agentId,
-			name: data.name,
-			systemPrompt:
-				data.conversation_config?.agent?.prompt?.prompt || 'No system prompt configured.'
-		}
-	};
 };

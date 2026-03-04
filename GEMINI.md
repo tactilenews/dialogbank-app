@@ -4,6 +4,10 @@
 - **Package Manager**: pnpm
 - **Add-ons**: prettier, eslint, vitest, playwright, tailwindcss, sveltekit-adapter, devtools-json, drizzle, better-auth, mdsvex, storybook, mcp
 
+## Documentation
+
+- [ElevenLabs API Reference](https://elevenlabs.io/docs/api-reference/introduction)
+
 ## Testing Mandates
 
 - **E2E Tests**: Every route must have a co-located E2E test file ending in `.e2e.spec.ts` (e.g., `src/routes/my-route/page.e2e.spec.ts`). **Test files must not have a `+` prefix**, as it is reserved for SvelteKit.
