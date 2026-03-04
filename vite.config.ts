@@ -32,7 +32,7 @@ export default defineConfig({
 						]
 					},
 					include: ['src/**/*.svelte.{test,spec}.{js,ts}'],
-					exclude: ['src/lib/server/**']
+					exclude: ['src/lib/server/**', '**/*.e2e.spec.ts']
 				}
 			},
 			{
@@ -41,7 +41,7 @@ export default defineConfig({
 					name: 'server',
 					environment: 'node',
 					include: ['src/**/*.{test,spec}.{js,ts}'],
-					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
+					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}', '**/*.e2e.spec.ts']
 				}
 			},
 			{
@@ -65,7 +65,8 @@ export default defineConfig({
 							}
 						]
 					},
-					setupFiles: ['.storybook/vitest.setup.ts']
+					setupFiles: ['.storybook/vitest.setup.ts'],
+					exclude: ['**/*.e2e.spec.ts']
 				}
 			}
 		]

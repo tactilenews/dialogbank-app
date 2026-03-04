@@ -4,6 +4,11 @@
 - **Package Manager**: pnpm
 - **Add-ons**: prettier, eslint, vitest, playwright, tailwindcss, sveltekit-adapter, devtools-json, drizzle, better-auth, mdsvex, storybook, mcp
 
+## Testing Mandates
+
+- **E2E Tests**: Every route must have a co-located E2E test file ending in `.e2e.spec.ts` (e.g., `src/routes/my-route/page.e2e.spec.ts`). **Test files must not have a `+` prefix**, as it is reserved for SvelteKit.
+- **Integration Tests**: Every component must have a co-located integration test file ending in `.spec.ts` (e.g., `src/lib/components/MyComponent.spec.ts`). For route pages (`+page.svelte`), if an E2E test exists, the integration test is not required.
+
 ---
 
 You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
