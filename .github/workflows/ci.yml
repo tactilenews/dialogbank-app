@@ -11,8 +11,6 @@ jobs:
   check-lint-test-build:
     runs-on: ubuntu-latest
     env:
-      DATABASE_URL: postgres://user:password@localhost:5432/db
-      BETTER_AUTH_SECRET: some-secret-value-of-at-least-32-chars-long
       ORIGIN: http://localhost:5173
     steps:
       - name: Checkout repository
