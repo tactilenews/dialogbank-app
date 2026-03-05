@@ -3,6 +3,10 @@ name: CI
 on:
   pull_request:
 
+permissions:
+  id-token: write # Required for OIDC authentication
+  contents: read # Required for checking out code
+
 jobs:
   check-lint-test-build:
     runs-on: ubuntu-latest
@@ -13,6 +17,15 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
+
+      - name: Fetch secrets from Infisical
+        uses: Infisical/secrets-action@v1.0.9
+        with:
+          method: "oidc"
+          identity-id: "b4a2a01a-d164-41de-bfbc-7098c791d475" # From Step 4
+          domain: "https://eu.infisical.com"
+          project-slug: "dialogbank" # Your Infisical project slug
+          env-slug: "test"
 
       - name: Install pnpm
         uses: pnpm/action-setup@v4
