@@ -1,0 +1,11 @@
+name: Placeholder Workflow for Merge Queue
+
+on:
+  pull_request:
+
+jobs:
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
