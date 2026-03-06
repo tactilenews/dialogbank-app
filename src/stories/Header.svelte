@@ -4,12 +4,12 @@
 
 	interface Props {
 		user?: { name: string };
-		onLogin?: () => void;
-		onLogout?: () => void;
+		onSignIn?: () => void;
+		onSignOut?: () => void;
 		onCreateAccount?: () => void;
 	}
 
-	const { user, onLogin, onLogout, onCreateAccount }: Props = $props();
+	const { user, onSignIn, onSignOut, onCreateAccount }: Props = $props();
 </script>
 
 <header>
@@ -35,9 +35,9 @@
 				<span class="welcome">
 					Welcome, <b>{user.name}</b>!
 				</span>
-				<Button size="small" onclick={onLogout} label="Log out" />
+				<Button size="small" onclick={onSignOut} label="Sign out" />
 			{:else}
-				<Button size="small" onclick={onLogin} label="Log in" />
+				<Button size="small" onclick={onSignIn} label="Sign in" />
 				<Button primary size="small" onclick={onCreateAccount} label="Sign up" />
 			{/if}
 		</div>

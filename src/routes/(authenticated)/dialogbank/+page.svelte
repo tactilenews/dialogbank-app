@@ -1,11 +1,21 @@
 <script lang="ts">
+	import { enhance } from '$app/forms';
 	import type { PageData } from './$types';
 
 	let { data }: { data: PageData } = $props();
 </script>
 
 <div class="mx-auto max-w-3xl p-6">
-	<h1 class="mb-6 text-3xl font-bold">DialogBank Agent Explorer</h1>
+	<div class="mb-6 flex items-center justify-between">
+		<h1 class="text-3xl font-bold">DialogBank Agent Explorer</h1>
+		<form method="post" action="/auth/sign-out" use:enhance>
+			<button
+				class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"
+			>
+				Sign out
+			</button>
+		</form>
+	</div>
 
 	{#if data.agent}
 		<div class="rounded-lg border bg-white p-6 shadow-md">

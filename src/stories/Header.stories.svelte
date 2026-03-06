@@ -14,8 +14,8 @@
 			layout: 'fullscreen'
 		},
 		args: {
-			onLogin: fn(),
-			onLogout: fn(),
+			onSignIn: fn(),
+			onSignOut: fn(),
 			onCreateAccount: fn()
 		}
 	});
