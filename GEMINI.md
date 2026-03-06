@@ -4,6 +4,13 @@
 - **Package Manager**: pnpm
 - **Add-ons**: prettier, eslint, vitest, playwright, tailwindcss, sveltekit-adapter, devtools-json, drizzle, better-auth, mdsvex, storybook, mcp
 
+## Secrets & Environment Variables
+
+- **Infisical**: All commands that require secrets (including `dev`, `build`, `preview`, `test`, `test:e2e`, and `db:*`) must be run using Infisical to provide environment variables.
+  - Usage: `infisical run -- [command]`
+  - Example: `infisical run -- pnpm dev`
+  - Example: `infisical run -- pnpm test:e2e`
+
 ## Documentation
 
 - [ElevenLabs API Reference](https://elevenlabs.io/docs/api-reference/introduction)

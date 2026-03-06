@@ -3,6 +3,10 @@
 	"mcpServers": {
 		"svelte": {
 			"url": "https://mcp.svelte.dev/mcp"
+		},
+		"better-auth": {
+			"url": "https://mcp.inkeep.com/better-auth/mcp",
+			"type": "http"
 		}
 	}
 }
