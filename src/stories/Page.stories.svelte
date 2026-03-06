@@ -19,13 +19,13 @@
 	name="Logged In"
 	play={async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const loginButton = canvas.getByRole('button', { name: /Log in/i });
-		await expect(loginButton).toBeInTheDocument();
-		await userEvent.click(loginButton);
-		await waitFor(() => expect(loginButton).not.toBeInTheDocument());
+		const signInButton = canvas.getByRole('button', { name: /Sign in/i });
+		await expect(signInButton).toBeInTheDocument();
+		await userEvent.click(signInButton);
+		await waitFor(() => expect(signInButton).not.toBeInTheDocument());
 
-		const logoutButton = canvas.getByRole('button', { name: /Log out/i });
-		await expect(logoutButton).toBeInTheDocument();
+		const signOutButton = canvas.getByRole('button', { name: /Sign out/i });
+		await expect(signOutButton).toBeInTheDocument();
 	}}
 />
 

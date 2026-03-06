@@ -8,8 +8,8 @@
 <article>
 	<Header
 		{user}
-		onLogin={() => (user = { name: 'Jane Doe' })}
-		onLogout={() => (user = undefined)}
+		onSignIn={() => (user = { name: 'Jane Doe' })}
+		onSignOut={() => (user = undefined)}
 		onCreateAccount={() => (user = { name: 'Jane Doe' })}
 	/>
 
