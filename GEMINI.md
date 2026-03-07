@@ -18,8 +18,8 @@
 
 ## Testing Mandates
 
-- **E2E Tests**: Every route must have a co-located E2E test file ending in `.e2e.spec.ts` (e.g., `src/routes/my-route/page.e2e.spec.ts`). **Test files must not have a `+` prefix**, as it is reserved for SvelteKit.
-- **Integration Tests**: Every component must have a co-located integration test file ending in `.spec.ts` (e.g., `src/lib/components/MyComponent.spec.ts`). For route pages (`+page.svelte`), if an E2E test exists, the integration test is not required.
+- **E2E Tests**: All E2E tests must be located in the top-level `e2e/` directory. They should be named with `.test.ts` or `.spec.ts` extensions.
+- **Integration Tests**: Every component must have a co-located integration test file ending in `.spec.ts` (e.g., `src/lib/components/MyComponent.spec.ts`). For route pages (`+page.svelte`), an integration test should be used to test component logic in isolation.
 
 ## Naming & Wording Mandates
 
