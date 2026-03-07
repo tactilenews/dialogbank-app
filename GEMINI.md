@@ -7,9 +7,10 @@
 ## Secrets & Environment Variables
 
 - **Infisical**: All commands that require secrets (including `dev`, `build`, `preview`, `test`, `test:e2e`, and `db:*`) must be run using Infisical to provide environment variables.
-  - Usage: `infisical run -- [command]`
-  - Example: `infisical run -- pnpm dev`
-  - Example: `infisical run -- pnpm test:e2e`
+  - **Usage**: `infisical run --env [env] -- [command]`
+  - **Testing**: All test-related scripts (e.g., `test`, `test:e2e`, `vitest`) **must** be run with `--env test`.
+  - Example: `infisical run --env dev -- pnpm dev`
+  - Example: `infisical run --env test -- pnpm test:e2e`
 
 ## Documentation
 
