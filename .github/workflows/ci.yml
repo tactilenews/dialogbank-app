@@ -25,6 +25,9 @@ jobs:
           project-slug: "dialogbank" # Your Infisical project slug
           env-slug: "test"
 
+      - name: Start services
+        run: docker compose up -d
+
       - name: Install pnpm
         uses: pnpm/action-setup@v4
         with:
