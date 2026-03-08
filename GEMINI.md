@@ -1,4 +1,6 @@
-## Project Configuration
+## Package Management
+
+- **Development Dependencies**: Unless there is a good reason, always install new dependencies as a development dependency (`-D` or `--save-dev`) because Svelte/Vite handles bundling.
 
 - **Language**: TypeScript
 - **Package Manager**: pnpm
@@ -20,6 +22,8 @@
 
 - **E2E Tests**: All E2E tests must be located in the top-level `e2e/` directory. They should be named with `.test.ts` or `.spec.ts` extensions.
 - **Integration Tests**: Every component must have a co-located integration test file ending in `.spec.ts` (e.g., `src/lib/components/MyComponent.spec.ts`). For route pages (`+page.svelte`), an integration test should be used to test component logic in isolation.
+- **Promise Expectations**: Always expect promises using `.resolves` (e.g., `await expect(promise).resolves.toEqual(...)`).
+- **Test Fixtures**: Fixtures and sample data for tests must be co-located with the test file in a directory named after the test (e.g., `my.spec.ts` imports from `my.spec/data.ts`).
 
 ## Naming & Wording Mandates
 
