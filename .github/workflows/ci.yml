@@ -4,61 +4,48 @@ on:
   pull_request:
 
 permissions:
-  id-token: write # Required for OIDC authentication
-  contents: read # Required for checking out code
+  id-token: write
+  contents: read
 
 jobs:
-  check-lint-test-build:
+  static-analysis:
     runs-on: ubuntu-latest
-    env:
-      ORIGIN: http://localhost:5173
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Lint & Type Check
+        run: |
+          pnpm lint
+          pnpm check
 
-      - name: Fetch secrets from Infisical
-        uses: Infisical/secrets-action@v1.0.9
-        with:
-          method: "oidc"
-          identity-id: "b4a2a01a-d164-41de-bfbc-7098c791d475" # From Step 4
-          domain: "https://eu.infisical.com"
-          project-slug: "dialogbank" # Your Infisical project slug
-          env-slug: "test"
-
-      - name: Start services
-        run: docker compose up -d
-
-      - name: Install pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - name: Install Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22
-          cache: pnpm
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
       - name: Install Playwright Browsers
         run: pnpm exec playwright install chromium --with-deps
-
-      - name: Lint
-        run: pnpm lint
-
-      - name: Svelte-Check (Typescript)
-        run: pnpm check
-
       - name: Unit Tests
         run: pnpm test:unit --run
 
+  e2e-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Start services
+        run: docker compose up -d
+      - name: Install Playwright Browsers
+        run: pnpm exec playwright install chromium --with-deps
       - name: E2E Tests
         run: pnpm test:e2e
 
-      - name: Build
-        run: pnpm build
-
-      - name: Build Storybook
-        run: pnpm build-storybook
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup
+      - name: Build App & Storybook
+        run: |
+          pnpm build
+          pnpm build-storybook
