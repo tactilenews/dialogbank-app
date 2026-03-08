@@ -1,4 +1,4 @@
-name: "Lint PR"
+name: PR
 
 on:
   pull_request_target:
@@ -10,7 +10,7 @@ on:
 
 jobs:
   main:
-    name: Validate PR title
+    name: pr-title
     runs-on: ubuntu-slim
     permissions:
       pull-requests: read
