@@ -30,7 +30,7 @@ test('sign-in page has expected heading', async ({ page }) => {
 	await expect(page.getByRole('heading', { name: 'Sign In' })).toBeVisible();
 });
 
-test('with a user record you can sign in', async ({ auth, page }) => {
+test('signs in with a user record', async ({ auth, page }) => {
 	await auth.api.signUpEmail({
 		body: {
 			email: 'user@example.org',
