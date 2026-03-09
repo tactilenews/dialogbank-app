@@ -2,11 +2,16 @@ import { describe, it, expect, vi } from 'vitest';
 import { POST } from './+server';
 import crypto from 'node:crypto';
 import type { RequestEvent } from './$types';
+import { processElevenLabsPostCall } from '$lib/server/elevenlabs/storage';
 
 vi.mock('$env/dynamic/private', () => ({
 	env: {
 		ELEVENLABS_WEBHOOK_SECRET: 'test-secret'
 	}
+}));
+
+vi.mock('$lib/server/elevenlabs/storage', () => ({
+	processElevenLabsPostCall: vi.fn()
 }));
 
 describe('ElevenLabs Webhook', () => {
@@ -28,7 +33,7 @@ describe('ElevenLabs Webhook', () => {
 	const validHeader = `t=${timestamp},v0=${signature}`;
 	const url = 'http://localhost/webhook/elevenlabs/post-call';
 
-	it('returns 200 for a valid signature and payload', async () => {
+	it('returns 200 and calls processElevenLabsPostCall for a valid payload', async () => {
 		const request = new Request(url, {
 			method: 'POST',
 			headers: {
@@ -44,6 +49,7 @@ describe('ElevenLabs Webhook', () => {
 
 		expect(response.status).toBe(200);
 		expect(result).toEqual({ success: true });
+		expect(processElevenLabsPostCall).toHaveBeenCalledWith(JSON.parse(body));
 	});
 
 	it('throws 401 if signature is missing', async () => {
@@ -60,8 +66,8 @@ describe('ElevenLabs Webhook', () => {
 			await POST(event);
 			expect.fail('Expected to throw 401');
 		} catch (e) {
-			const error = e as { status: number };
-			expect(error.status).toBe(401);
+			const err = e as { status: number };
+			expect(err.status).toBe(401);
 		}
 	});
 
@@ -80,8 +86,8 @@ describe('ElevenLabs Webhook', () => {
 			await POST(event);
 			expect.fail('Expected to throw 401');
 		} catch (e) {
-			const error = e as { status: number };
-			expect(error.status).toBe(401);
+			const err = e as { status: number };
+			expect(err.status).toBe(401);
 		}
 	});
 
@@ -106,8 +112,8 @@ describe('ElevenLabs Webhook', () => {
 			await POST(event);
 			expect.fail('Expected to throw 400');
 		} catch (e) {
-			const error = e as { status: number };
-			expect(error.status).toBe(400);
+			const err = e as { status: number };
+			expect(err.status).toBe(400);
 		}
 	});
 });
