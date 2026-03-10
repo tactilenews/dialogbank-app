@@ -32,7 +32,7 @@
 		"@eslint/js": "^10.0.1",
 		"@neondatabase/serverless": "^1.0.2",
 		"@playwright/test": "^1.58.2",
-		"@sentry/sveltekit": "^10.42.0",
+		"@sentry/sveltekit": "^10.43.0",
 		"@storybook/addon-a11y": "^10.2.17",
 		"@storybook/addon-docs": "^10.2.17",
 		"@storybook/addon-svelte-csf": "^5.0.11",
