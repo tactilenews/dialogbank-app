@@ -15,8 +15,8 @@ importers:
         specifier: ^5.0.1
         version: 5.0.1(storybook@10.2.17(@testing-library/dom@10.4.1)(prettier@3.8.1)(react-dom@19.2.4(react@19.2.4))(react@19.2.4))
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.37.0
-        version: 2.37.0
+        specifier: ^2.38.1
+        version: 2.38.1
       '@eslint/compat':
         specifier: ^2.0.2
         version: 2.0.2(eslint@10.0.3(jiti@2.6.1))
@@ -385,8 +385,8 @@ packages:
   '@drizzle-team/brocli@0.10.2':
     resolution: {integrity: sha512-z33Il7l5dKjUgGULTqBsQBQwckHh5AbIuxhdsIxDDiZAzBOrZO6q9ogcWC65kU382AfynTfgNumVcNIjuIua6w==}
 
-  '@elevenlabs/elevenlabs-js@2.37.0':
-    resolution: {integrity: sha512-GngmGe97krIhOzo3ZW6CYr1oiBmka/sVPLxMK5tZ8VioCZveY1P411yIY5x8qsK12hdwhmeq73S6dtJtc3UumA==}
+  '@elevenlabs/elevenlabs-js@2.38.1':
+    resolution: {integrity: sha512-D2nL4KId2y052IXbJ5UG7DW7JjjDmgGHf08UalLb7OCbmm5RgJQoRIWigfcQyCr9XrrhoKWUxvK8r72pNwYM7g==}
     engines: {node: '>=18.0.0'}
 
   '@esbuild-kit/core-utils@3.3.2':
@@ -4196,7 +4196,7 @@ snapshots:
 
   '@drizzle-team/brocli@0.10.2': {}
 
-  '@elevenlabs/elevenlabs-js@2.37.0':
+  '@elevenlabs/elevenlabs-js@2.38.1':
     dependencies:
       command-exists: 1.2.9
       node-fetch: 2.7.0
