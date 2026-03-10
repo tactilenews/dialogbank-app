@@ -7,6 +7,44 @@ updates:
     open-pull-requests-limit: 10
     labels:
       - "dependencies"
+    groups:
+      linting:
+        patterns:
+          - "eslint*"
+          - "prettier*"
+          - "globals"
+          - "typescript-eslint"
+      testing:
+        patterns:
+          - "vitest*"
+          - "playwright*"
+          - "@playwright/*"
+          - "@vitest/*"
+      svelte-ecosystem:
+        patterns:
+          - "svelte*"
+          - "@sveltejs/*"
+          - "vite*"
+      tailwind-ecosystem:
+        patterns:
+          - "tailwindcss*"
+          - "@tailwindcss/*"
+      storybook-ecosystem:
+        patterns:
+          - "storybook*"
+          - "@storybook/*"
+          - "@chromatic-com/*"
+      drizzle-ecosystem:
+        patterns:
+          - "drizzle-*"
+      better-auth-ecosystem:
+        patterns:
+          - "better-auth*"
+          - "@better-auth/*"
+      types:
+        patterns:
+          - "@types/*"
+          - "typescript"
 
   - package-ecosystem: "github-actions"
     directory: "/"
@@ -16,6 +54,10 @@ updates:
     labels:
       - "dependencies"
       - "github-actions"
+    groups:
+      actions:
+        patterns:
+          - "*"
 
   - package-ecosystem: "docker"
     directory: "/"
