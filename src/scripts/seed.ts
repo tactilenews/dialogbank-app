@@ -1,7 +1,7 @@
 import { auth as baseAuth } from '$lib/server/auth';
 import { db } from '$lib/server/db';
 import * as schema from '$lib/server/db/schema';
-import { seed, reset } from 'drizzle-seed';
+import { reset } from 'drizzle-seed';
 import { betterAuth } from 'better-auth/minimal';
 
 const auth = betterAuth({
@@ -16,7 +16,6 @@ const auth = betterAuth({
 });
 
 await reset(db, schema); // Wipes existing data
-await seed(db, { task: schema.task });
 
 await auth.api.signUpEmail({
 	body: {
