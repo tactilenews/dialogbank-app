@@ -10,8 +10,8 @@ type Fixtures = {
 const test = base.extend<Fixtures>({
 	// eslint-disable-next-line no-empty-pattern
 	auth: async ({}, use) => {
-		await use(auth);
 		await seed.reset(db, schema);
+		await use(auth);
 	}
 });
 

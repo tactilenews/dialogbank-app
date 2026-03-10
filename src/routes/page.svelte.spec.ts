@@ -5,7 +5,7 @@ import Page from './+page.svelte';
 
 describe('/+page.svelte', () => {
 	it('renders h1', async () => {
-		render(Page, { props: { data: { user: null } } });
+		render(Page, { props: { data: { user: null, answers: [] } } });
 
 		const heading = page.getByRole('heading', { name: 'DialogBank' });
 		await expect.element(heading).toBeInTheDocument();
