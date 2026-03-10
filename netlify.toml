@@ -2,3 +2,11 @@
 package = "@sentry/netlify-build-plugin"
 [plugins.inputs]
 skipSetCommits = true
+
+[build]
+command = "pnpm run build"
+publish = "build"
+
+# Context-specific override for production
+[context.production]
+command = "pnpm run db:migrate && pnpm run build"

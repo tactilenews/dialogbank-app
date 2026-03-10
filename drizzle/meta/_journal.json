@@ -15,6 +15,13 @@
       "when": 1773051659224,
       "tag": "0001_confused_dreadnoughts",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773141829459,
+      "tag": "0002_nosy_master_mold",
+      "breakpoints": true
     }
   ]
 }
