@@ -12,14 +12,9 @@ const dirname =
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 
-const isTest = process.env.VITEST === 'true' || process.env.PLAYWRIGHT_TEST === '1'
+const isTest = process.env.VITEST === 'true' || process.env.PLAYWRIGHT_TEST === '1';
 export default defineConfig({
-	plugins: [
-		isTest ? null : sentrySvelteKit(),
-		tailwindcss(),
-		sveltekit(),
-		devtoolsJson()
-	],
+	plugins: [isTest ? null : sentrySvelteKit(), tailwindcss(), sveltekit(), devtoolsJson()],
 	test: {
 		expect: {
 			requireAssertions: true
