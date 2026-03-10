@@ -44,11 +44,13 @@ describe('ElevenLabs Webhook', () => {
 		});
 
 		const event = { request } as RequestEvent;
-		const response = await POST(event);
-		const result = await response.json();
+		const responsePromise = POST(event);
 
+		await expect(responsePromise).resolves.toBeInstanceOf(Response);
+		const response = await responsePromise;
 		expect(response.status).toBe(200);
-		expect(result).toEqual({ success: true });
+
+		await expect(response.json()).resolves.toEqual({ success: true });
 		expect(processElevenLabsPostCall).toHaveBeenCalledWith(JSON.parse(body));
 	});
 
@@ -61,14 +63,8 @@ describe('ElevenLabs Webhook', () => {
 			body
 		});
 
-		try {
-			const event = { request } as RequestEvent;
-			await POST(event);
-			expect.fail('Expected to throw 401');
-		} catch (e) {
-			const err = e as { status: number };
-			expect(err.status).toBe(401);
-		}
+		const event = { request } as RequestEvent;
+		await expect(POST(event)).rejects.toMatchObject({ status: 401 });
 	});
 
 	it('throws 401 for an invalid signature', async () => {
@@ -81,14 +77,8 @@ describe('ElevenLabs Webhook', () => {
 			body
 		});
 
-		try {
-			const event = { request } as RequestEvent;
-			await POST(event);
-			expect.fail('Expected to throw 401');
-		} catch (e) {
-			const err = e as { status: number };
-			expect(err.status).toBe(401);
-		}
+		const event = { request } as RequestEvent;
+		await expect(POST(event)).rejects.toMatchObject({ status: 401 });
 	});
 
 	it('throws 400 for invalid JSON', async () => {
@@ -107,13 +97,7 @@ describe('ElevenLabs Webhook', () => {
 			body: invalidBody
 		});
 
-		try {
-			const event = { request } as RequestEvent;
-			await POST(event);
-			expect.fail('Expected to throw 400');
-		} catch (e) {
-			const err = e as { status: number };
-			expect(err.status).toBe(400);
-		}
+		const event = { request } as RequestEvent;
+		await expect(POST(event)).rejects.toMatchObject({ status: 400 });
 	});
 });
