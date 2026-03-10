@@ -6,6 +6,10 @@
 - **Package Manager**: pnpm
 - **Add-ons**: prettier, eslint, vitest, playwright, tailwindcss, sveltekit-adapter, devtools-json, drizzle, better-auth, mdsvex, storybook, mcp
 
+## Coding Standards
+
+- **TypeScript**: NEVER use the non-null assertion operator (`!`). Always use proper null checks, optional chaining, or type guards.
+
 ## Secrets & Environment Variables
 
 - **Infisical**: All commands that require secrets (including `dev`, `build`, `preview`, `test`, `test:e2e`, and `db:*`) must be run using Infisical to provide environment variables.

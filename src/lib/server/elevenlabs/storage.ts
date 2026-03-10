@@ -1,5 +1,5 @@
 import { db } from '$lib/server/db';
-import { answers } from '$lib/server/db/schema';
+import { answers, conversations } from '$lib/server/db/schema';
 import { parseElevenLabsWebhook } from './parsing';
 import { consola } from 'consola';
 
@@ -13,28 +13,31 @@ export async function processElevenLabsPostCall(payload: unknown): Promise<{
 	const data = parseElevenLabsWebhook(payload);
 
 	try {
-		if (data.dataCollectionResults.length > 0) {
-			const answerRecords = data.dataCollectionResults.map((r) => ({
-				agentId: data.agentId,
-				conversationId: data.conversationId,
-				dataCollectionId: r.data_collection_id,
-				value: String(r.value ?? ''),
-				rationale: r.rationale
+		// Use db.batch to run both inserts in a single HTTP request (atomic transaction on server)
+		if (data.answers.length > 0) {
+			const answerRecords = data.answers.map((a) => ({
+				conversationId: data.conversation.conversationId,
+				...a
 			}));
 
-			await db.insert(answers).values(answerRecords);
+			await db.batch([
+				db.insert(conversations).values(data.conversation),
+				db.insert(answers).values(answerRecords)
+			]);
+		} else {
+			await db.insert(conversations).values(data.conversation);
 		}
 
 		consola.success(
-			`Conversation ${data.conversationId} processed: ${data.dataCollectionResults.length} answers stored`
+			`Conversation ${data.conversation.conversationId} processed: ${data.answers.length} answers stored`
 		);
 
 		return {
-			conversationId: data.conversationId,
-			answerCount: data.dataCollectionResults.length
+			conversationId: data.conversation.conversationId,
+			answerCount: data.answers.length
 		};
 	} catch (e) {
-		consola.error(`Failed to store ElevenLabs data for ${data.conversationId}`, e);
+		consola.error(`Failed to store ElevenLabs data for ${data.conversation.conversationId}`, e);
 		throw e;
 	}
 }

@@ -19,38 +19,41 @@ export const samplePayload1: ElevenLabsWebhookPayload = {
 	}
 };
 
+/**
+ * Latest sample payload with English field names.
+ */
 export const samplePayload2: ElevenLabsWebhookPayload = {
 	type: 'post_call_transcription',
 	data: {
-		conversation_id: 'conv_2201kjqpnmwmfmvb42nam7v1ghrw',
+		conversation_id: 'conv_7501kkbqgsfsfjf8smjkdsn7pt6q',
 		agent_id: 'agent_0501kjanbz0qe07rt0vnskaz2aag',
 		analysis: {
-			transcript_summary: 'Nadia, a virtual WDR editor, initiated a conversation with Heinz...',
+			transcript_summary: 'The conversation began with the WDR AI agent, Nadia...',
 			data_collection_results: {
-				Vorname: {
-					data_collection_id: 'Vorname',
-					value: 'Heinz',
-					rationale: 'Der Benutzer gibt seinen Vornamen als "Heinz" an.'
+				first_name: {
+					data_collection_id: 'first_name',
+					value: 'Fritz',
+					rationale: 'Der Benutzer gibt seinen Vornamen als "Fritz" an.'
 				},
-				Nachname: {
-					data_collection_id: 'Nachname',
-					value: null,
-					rationale: 'Der Nutzer gibt nur seinen Vornamen "Heinz" an.'
+				last_name: {
+					data_collection_id: 'last_name',
+					value: 'Haarmaan',
+					rationale: "Der Benutzer gibt seinen vollständigen Namen als 'Fritz Haarmaan' an."
 				},
-				Alter: {
-					data_collection_id: 'Alter',
-					value: null,
-					rationale: 'Der Benutzer hat sein Alter nicht genannt.'
+				age: {
+					data_collection_id: 'age',
+					value: 49,
+					rationale: 'Der Benutzer gibt sein Alter mit "49 Jahre" an.'
 				},
-				'Zitat-Erlaubnis': {
-					data_collection_id: 'Zitat-Erlaubnis',
-					value: false,
-					rationale: 'Der Nutzer hat in der Konversation explizit "nein" gesagt.'
+				publication_allowed: {
+					data_collection_id: 'publication_allowed',
+					value: true,
+					rationale: "Der Nutzer hat mit 'Ja klar' geantwortet."
 				},
-				Antworten: {
-					data_collection_id: 'Antworten',
-					value: 'Heinz, Ich bin gerade in Köln und das Wetter ist sonnig., nö, nein, nein',
-					rationale: 'Die Antworten des Nutzers auf die Fragen des Agenten.'
+				answer_1: {
+					data_collection_id: 'answer_1',
+					value: 'Sachsen',
+					rationale: "Der Nutzer antwortet mit 'Bin aus Sachsen'."
 				}
 			},
 			call_successful: 'success'

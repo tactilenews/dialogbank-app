@@ -6,9 +6,10 @@ import * as seed from 'drizzle-seed';
 /**
  * Creates an ElevenLabs HMAC-SHA256 signature header for testing.
  */
-function createElevenLabsSignature(body: string, timestamp: string): string {
+function createElevenLabsSignature(body: string): string {
 	// This secret must be added to Infisical as ELEVENLABS_WEBHOOK_SECRET for the test environment
 	const TEST_WEBHOOK_SECRET = 'webhook-test-secret-12345';
+	const timestamp = Math.floor(Date.now() / 1000).toString();
 	const signedPayload = `${timestamp}.${body}`;
 	const signature = crypto
 		.createHmac('sha256', TEST_WEBHOOK_SECRET)
@@ -34,15 +35,35 @@ test.describe('ElevenLabs Webhook E2E', () => {
 		const payload = {
 			type: 'post_call_transcription',
 			data: {
-				conversation_id: 'e2e-conv-123',
-				agent_id: 'e2e-agent-456',
+				conversation_id: 'e2e-conv-fritz',
+				agent_id: 'e2e-agent-fritz',
 				analysis: {
-					transcript_summary: 'E2E Test Summary',
+					transcript_summary: 'Fritz interview summary',
 					data_collection_results: {
-						'test-field': {
-							data_collection_id: 'test-field',
-							value: 'test-value',
-							rationale: 'test-rationale'
+						first_name: {
+							data_collection_id: 'first_name',
+							value: 'Fritz',
+							rationale: 'Said Fritz'
+						},
+						last_name: {
+							data_collection_id: 'last_name',
+							value: 'Haarmaan',
+							rationale: 'Said Haarmaan'
+						},
+						age: {
+							data_collection_id: 'age',
+							value: 49,
+							rationale: 'Said 49'
+						},
+						publication_allowed: {
+							data_collection_id: 'publication_allowed',
+							value: true,
+							rationale: 'Agreed'
+						},
+						favorite_color: {
+							data_collection_id: 'favorite_color',
+							value: 'blue',
+							rationale: 'Said blue'
 						}
 					},
 					call_successful: 'success'
@@ -51,8 +72,7 @@ test.describe('ElevenLabs Webhook E2E', () => {
 		};
 
 		const body = JSON.stringify(payload);
-		const timestamp = Math.floor(Date.now() / 1000).toString();
-		const signatureHeader = createElevenLabsSignature(body, timestamp);
+		const signatureHeader = createElevenLabsSignature(body);
 
 		const response = await request.post('/webhook/elevenlabs/post-call', {
 			data: body,
@@ -62,21 +82,37 @@ test.describe('ElevenLabs Webhook E2E', () => {
 			}
 		});
 
-		expect(response.ok()).toBe(true);
 		await expect(response.json()).resolves.toEqual({ success: true });
 
 		// Verify database records
+		const storedConversation = await db.query.conversations.findFirst({
+			where: (conv, { eq }) => eq(conv.conversationId, 'e2e-conv-fritz')
+		});
+
+		expect(storedConversation).toBeDefined();
+		if (!storedConversation) {
+			throw new Error('storedConversation is undefined');
+		}
+		expect(storedConversation).toMatchObject({
+			agentId: 'e2e-agent-fritz',
+			conversationId: 'e2e-conv-fritz',
+			firstName: 'Fritz',
+			lastName: 'Haarmaan',
+			age: 49,
+			publicationAllowed: true,
+			callSuccessful: 'success',
+			summary: 'Fritz interview summary'
+		});
+
 		const storedAnswers = await db.query.answers.findMany({
-			where: (answers, { eq }) => eq(answers.conversationId, 'e2e-conv-123')
+			where: (answers, { eq }) => eq(answers.conversationId, storedConversation.conversationId)
 		});
 
 		expect(storedAnswers).toHaveLength(1);
 		expect(storedAnswers[0]).toMatchObject({
-			agentId: 'e2e-agent-456',
-			conversationId: 'e2e-conv-123',
-			dataCollectionId: 'test-field',
-			value: 'test-value',
-			rationale: 'test-rationale'
+			dataCollectionId: 'favorite_color',
+			value: 'blue',
+			rationale: 'Said blue'
 		});
 	});
 });

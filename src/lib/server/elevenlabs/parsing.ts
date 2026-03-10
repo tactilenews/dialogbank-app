@@ -36,7 +36,7 @@ export const elevenLabsWebhookSchema = z.object({
 		analysis: z.object({
 			transcript_summary: z.string().optional().nullable(),
 			data_collection_results: z.record(z.string(), elevenLabsDataPointSchema).default({}),
-			call_successful: z.union([z.boolean(), z.string()]).optional().nullable()
+			call_successful: z.string().optional().nullable()
 		})
 	})
 });
@@ -45,21 +45,66 @@ export type ElevenLabsWebhookPayload = z.infer<typeof elevenLabsWebhookSchema>;
 
 /**
  * Parses the ElevenLabs post-call transcription webhook payload.
- * Returns a strongly typed plain JavaScript object.
+ * Returns a strongly typed object structured for database insertion.
  */
 export function parseElevenLabsWebhook(payload: unknown) {
 	const validated = elevenLabsWebhookSchema.parse(payload);
 	const { conversation_id, agent_id, analysis } = validated.data;
 
-	const isSuccess = !!analysis.call_successful && analysis.call_successful !== 'failure';
+	const callSuccessful = analysis.call_successful ?? null;
+	const summary = analysis.transcript_summary ?? null;
+
+	// Map expected fields and other answers
+	let firstName: string | null = null;
+	let lastName: string | null = null;
+	let age: number | null = null;
+	let publicationAllowed = false;
+
+	const otherAnswers: {
+		dataCollectionId: string;
+		value: string | null;
+		rationale: string;
+	}[] = [];
 
 	const results = Object.values(analysis.data_collection_results);
 
+	for (const result of results) {
+		const id = result.data_collection_id.toLowerCase();
+		const val = result.value;
+
+		switch (id) {
+			case 'first_name':
+				firstName = val as string;
+				break;
+			case 'last_name':
+				lastName = val as string;
+				break;
+			case 'age':
+				age = val as number;
+				break;
+			case 'publication_allowed':
+				publicationAllowed = val === true;
+				break;
+			default:
+				otherAnswers.push({
+					dataCollectionId: result.data_collection_id,
+					value: val !== null ? String(val) : null,
+					rationale: result.rationale
+				});
+		}
+	}
+
 	return {
-		conversationId: conversation_id,
-		agentId: agent_id,
-		summary: analysis.transcript_summary ?? null,
-		isSuccess,
-		dataCollectionResults: results
+		conversation: {
+			agentId: agent_id,
+			conversationId: conversation_id,
+			firstName,
+			lastName,
+			age,
+			publicationAllowed,
+			callSuccessful,
+			summary
+		},
+		answers: otherAnswers
 	};
 }

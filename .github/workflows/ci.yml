@@ -37,6 +37,8 @@ jobs:
         run: docker compose up -d
       - name: Install Playwright Browsers
         run: pnpm exec playwright install chromium --with-deps
+      - name: Run Database Migrations
+        run: pnpm run db:migrate
       - name: E2E Tests
         run: pnpm test:e2e
 
