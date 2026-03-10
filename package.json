@@ -52,7 +52,7 @@
 		"drizzle-kit": "^0.31.8",
 		"drizzle-orm": "^0.45.1",
 		"drizzle-seed": "^0.3.1",
-		"eslint": "^9.39.2",
+		"eslint": "^10.0.3",
 		"eslint-config-prettier": "^10.1.8",
 		"eslint-plugin-storybook": "^10.2.15",
 		"eslint-plugin-svelte": "^3.14.0",
