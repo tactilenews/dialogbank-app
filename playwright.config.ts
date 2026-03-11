@@ -8,6 +8,8 @@ export default defineConfig({
 	},
 	testDir: "e2e",
 	testMatch: /(.+\.)?(test|spec)\.[jt]s/,
+	// Run tests in isolation.
+	workers: 1,
 	// Fail the build on CI if you accidentally left test.only in the source code.
 	forbidOnly: !!process.env.CI,
 });
