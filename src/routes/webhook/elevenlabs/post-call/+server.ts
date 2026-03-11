@@ -8,16 +8,16 @@ import type { RequestHandler } from "./$types";
 export const POST: RequestHandler = withElevenLabsVerification(async ({ request }) => {
 	const body = await request.text();
 
-	// biome-ignore lint/suspicious/noImplicitAnyLet: payload is assigned in try block
-	let payload;
+	let payload: unknown;
 	try {
 		payload = JSON.parse(body);
 	} catch {
 		throw error(400, "Invalid JSON");
 	}
 
-	consola.info("Received ElevenLabs webhook:", payload.type);
-	Sentry.logger.info("[elevenlabs webhook payload]", payload);
+	const typedPayload = payload as { type: string };
+	consola.info("Received ElevenLabs webhook:", typedPayload.type);
+	Sentry.logger.info("[elevenlabs webhook payload]", typedPayload);
 
 	try {
 		await processElevenLabsPostCall(payload);

@@ -8,6 +8,7 @@ type Fixtures = {
 };
 
 const test = base.extend<Fixtures>({
+	// biome-ignore lint/correctness/noEmptyPattern: Playwright fixture requires destructuring pattern
 	auth: async ({}, use) => {
 		await seed.reset(db, schema);
 		await use(auth);

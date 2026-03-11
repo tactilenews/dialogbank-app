@@ -18,12 +18,11 @@
 			"recommended": true,
 			"correctness": {
 				"noUnusedVariables": "warn",
-				"noUnusedImports": "warn",
-				"noEmptyPattern": "off"
+				"noUnusedImports": "warn"
 			},
 			"suspicious": {
 				"noImplicitAnyLet": "warn",
-				"noExplicitAny": "off"
+				"noExplicitAny": "warn"
 			}
 		}
 	},

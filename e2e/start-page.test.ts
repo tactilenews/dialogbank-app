@@ -4,6 +4,7 @@ import { db as dbInstance, schema } from "./lib/db";
 
 // Extend base test to include a database reset fixture
 const test = base.extend<{ db: typeof dbInstance }>({
+	// biome-ignore lint/correctness/noEmptyPattern: Playwright fixture requires destructuring pattern
 	db: async ({}, use) => {
 		await seed.reset(dbInstance, schema);
 		await use(dbInstance);
