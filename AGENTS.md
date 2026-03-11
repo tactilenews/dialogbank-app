@@ -66,6 +66,10 @@ infisical --env test run -- pnpm run db:migrate
 ## Testing Mandates
 
 - **E2E Tests**: All E2E tests must be located in the top-level `e2e/` directory. They should be named with `.test.ts` or `.spec.ts` extensions.
+- **Page Component Tests**: Use page component tests (`.svelte.spec.ts`) for testing page UI and component logic without database or navigation dependencies. Prefer these over E2E tests when:
+  - No database interaction is needed
+  - No cross-page navigation is being tested
+  - You can pass mock data via props
 - **Integration Tests**: Every component must have a co-located integration test file ending in `.spec.ts` (e.g., `src/lib/components/MyComponent.spec.ts`). For route pages (`+page.svelte`), an integration test should be used to test component logic in isolation.
 - **Promise Expectations**: Always expect promises using `.resolves` (e.g., `await expect(promise).resolves.toEqual(...)`).
 - **Test Fixtures**: Fixtures and sample data for tests must be co-located with the test file in a directory named after the test (e.g., `my.spec.ts` imports from `my.spec/data.ts`).
