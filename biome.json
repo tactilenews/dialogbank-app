@@ -22,7 +22,8 @@
 				"noEmptyPattern": "off"
 			},
 			"suspicious": {
-				"noImplicitAnyLet": "warn"
+				"noImplicitAnyLet": "warn",
+				"noExplicitAny": "off"
 			}
 		}
 	},
@@ -39,6 +40,19 @@
 			"enabled": true
 		}
 	},
+	"overrides": [
+		{
+			"includes": ["**/*.svelte", "**/*.stories.svelte"],
+			"linter": {
+				"rules": {
+					"correctness": {
+						"noUnusedVariables": "off",
+						"noUnusedImports": "off"
+					}
+				}
+			}
+		}
+	],
 	"assist": {
 		"enabled": true,
 		"actions": {

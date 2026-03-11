@@ -9,6 +9,7 @@ export const POST: RequestHandler = withElevenLabsVerification(
 	async ({ request }) => {
 		const body = await request.text();
 
+		// biome-ignore lint/suspicious/noImplicitAnyLet: payload is assigned in try block
 		let payload;
 		try {
 			payload = JSON.parse(body);

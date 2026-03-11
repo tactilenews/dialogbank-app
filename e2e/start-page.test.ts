@@ -123,6 +123,7 @@ test.describe("Start Page E2E", () => {
 
 	test("hides featured answer section when no answers exist", async ({
 		page,
+		// biome-ignore lint/correctness/noUnusedFunctionParameters: required to reset db
 		db,
 	}) => {
 		await page.goto("/", { waitUntil: "networkidle" });
