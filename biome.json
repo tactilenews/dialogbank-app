@@ -10,7 +10,6 @@
 	},
 	"formatter": {
 		"enabled": true,
-		"indentStyle": "tab",
 		"lineWidth": 100
 	},
 	"linter": {
@@ -26,11 +25,6 @@
 				"noImplicitAnyLet": "warn",
 				"noExplicitAny": "off"
 			}
-		}
-	},
-	"javascript": {
-		"formatter": {
-			"quoteStyle": "double"
 		}
 	},
 	"css": {
