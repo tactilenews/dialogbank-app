@@ -2,10 +2,7 @@ import crypto from "node:crypto";
 import { error, type RequestEvent } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
 
-export function verifyElevenLabsSignature(
-	body: string,
-	header: string,
-): boolean {
+export function verifyElevenLabsSignature(body: string, header: string): boolean {
 	const webhookSecret = env.ELEVENLABS_WEBHOOK_SECRET;
 
 	if (!webhookSecret) {
@@ -28,10 +25,7 @@ export function verifyElevenLabsSignature(
 		.digest("hex");
 
 	try {
-		return crypto.timingSafeEqual(
-			Buffer.from(signature),
-			Buffer.from(expectedSignature),
-		);
+		return crypto.timingSafeEqual(Buffer.from(signature), Buffer.from(expectedSignature));
 	} catch {
 		return false;
 	}
@@ -40,9 +34,7 @@ export function verifyElevenLabsSignature(
 /**
  * Higher-order function to protect ElevenLabs webhook endpoints
  */
-export function withElevenLabsVerification(
-	handler: (event: RequestEvent) => Promise<Response>,
-) {
+export function withElevenLabsVerification(handler: (event: RequestEvent) => Promise<Response>) {
 	return async (event: RequestEvent) => {
 		const signatureHeader = event.request.headers.get("ElevenLabs-Signature");
 		if (!signatureHeader) {

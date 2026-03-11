@@ -104,8 +104,7 @@ test.describe("ElevenLabs Webhook E2E", () => {
 		});
 
 		const storedAnswers = await db.query.answers.findMany({
-			where: (answers, { eq }) =>
-				eq(answers.conversationId, storedConversation.conversationId),
+			where: (answers, { eq }) => eq(answers.conversationId, storedConversation.conversationId),
 		});
 
 		expect(storedAnswers).toHaveLength(1);

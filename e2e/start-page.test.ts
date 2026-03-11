@@ -18,14 +18,10 @@ test.describe("Start Page E2E", () => {
 		await expect(page.locator("h1")).toContainText("DialogBank");
 
 		// Check for description
-		await expect(
-			page.locator("text=This is a public page for DialogBank"),
-		).toBeVisible();
+		await expect(page.locator("text=This is a public page for DialogBank")).toBeVisible();
 
 		// Check for Agent Explorer button
-		await expect(
-			page.locator("a", { hasText: "Go to Agent Explorer" }),
-		).toBeVisible();
+		await expect(page.locator("a", { hasText: "Go to Agent Explorer" })).toBeVisible();
 	});
 
 	test("displays sign in button when not authenticated", async ({ page }) => {
@@ -40,10 +36,7 @@ test.describe("Start Page E2E", () => {
 		await expect(signOutButton).not.toBeVisible();
 	});
 
-	test("displays featured answers when published answers exist", async ({
-		page,
-		db,
-	}) => {
+	test("displays featured answers when published answers exist", async ({ page, db }) => {
 		// Seed the database with a conversation and answers
 		await db.insert(schema.conversations).values({
 			conversationId: "e2e-conv-test",
@@ -129,9 +122,7 @@ test.describe("Start Page E2E", () => {
 		await page.goto("/", { waitUntil: "networkidle" });
 
 		// Featured Answer container should not be visible (it's wrapped in an if statement)
-		const featuredContainer = page.locator(
-			"div.rounded-lg.border.border-gray-200",
-		);
+		const featuredContainer = page.locator("div.rounded-lg.border.border-gray-200");
 		await expect(featuredContainer).not.toBeVisible();
 	});
 

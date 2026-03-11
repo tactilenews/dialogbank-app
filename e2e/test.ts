@@ -19,9 +19,7 @@ test("index page has expected h1", async ({ page }) => {
 	await expect(page.getByRole("heading", { name: "DialogBank" })).toBeVisible();
 });
 
-test("dialogbank page redirects to sign-in when unauthenticated", async ({
-	page,
-}) => {
+test("dialogbank page redirects to sign-in when unauthenticated", async ({ page }) => {
 	await page.goto("/dialogbank");
 	await expect(page).toHaveURL("/auth/sign-in");
 });
@@ -46,7 +44,5 @@ test("signs in with a user record", async ({ auth, page }) => {
 	await page.getByRole("button", { name: "Sign In" }).click();
 
 	await expect(page).toHaveURL("/dialogbank");
-	await expect(
-		page.getByRole("heading", { name: "DialogBank Agent Explorer" }),
-	).toBeVisible();
+	await expect(page.getByRole("heading", { name: "DialogBank Agent Explorer" })).toBeVisible();
 });

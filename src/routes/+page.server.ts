@@ -10,10 +10,7 @@ export const load: PageServerLoad = async (event) => {
 			value: answers.value,
 		})
 		.from(answers)
-		.innerJoin(
-			conversations,
-			eq(answers.conversationId, conversations.conversationId),
-		)
+		.innerJoin(conversations, eq(answers.conversationId, conversations.conversationId))
 		.where(eq(conversations.publicationAllowed, true));
 
 	return {

@@ -62,18 +62,14 @@ describe("ElevenLabs Webhook Parser", () => {
 		it("parses real sample data (samplePayload1 - empty results)", () => {
 			const data = parseElevenLabsWebhook(samplePayload1);
 
-			expect(data.conversation.conversationId).toBe(
-				"conv_4401kjbexa6tfnz97e45sy0666d9",
-			);
+			expect(data.conversation.conversationId).toBe("conv_4401kjbexa6tfnz97e45sy0666d9");
 			expect(data.answers).toHaveLength(0);
 		});
 
 		it("parses real sample data (samplePayload2 - with detailed records)", () => {
 			const data = parseElevenLabsWebhook(samplePayload2);
 
-			expect(data.conversation.conversationId).toBe(
-				"conv_7501kkbqgsfsfjf8smjkdsn7pt6q",
-			);
+			expect(data.conversation.conversationId).toBe("conv_7501kkbqgsfsfjf8smjkdsn7pt6q");
 			expect(data.answers).toHaveLength(1);
 
 			expect(data.conversation.firstName).toBe("Fritz");
@@ -81,9 +77,7 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(data.conversation.age).toBe(49);
 			expect(data.conversation.publicationAllowed).toBe(true);
 
-			const answer1 = data.answers.find(
-				(r) => r.dataCollectionId === "answer_1",
-			);
+			const answer1 = data.answers.find((r) => r.dataCollectionId === "answer_1");
 			expect(answer1).toBeDefined();
 			expect(answer1?.value).toBe("Sachsen");
 			expect(answer1?.rationale).toContain("Sachsen");

@@ -37,10 +37,7 @@ export async function processElevenLabsPostCall(payload: unknown): Promise<{
 			answerCount: data.answers.length,
 		};
 	} catch (e) {
-		consola.error(
-			`Failed to store ElevenLabs data for ${data.conversation.conversationId}`,
-			e,
-		);
+		consola.error(`Failed to store ElevenLabs data for ${data.conversation.conversationId}`, e);
 		throw e;
 	}
 }

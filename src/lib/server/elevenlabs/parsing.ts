@@ -35,9 +35,7 @@ export const elevenLabsWebhookSchema = z.object({
 		agent_id: z.string(),
 		analysis: z.object({
 			transcript_summary: z.string().optional().nullable(),
-			data_collection_results: z
-				.record(z.string(), elevenLabsDataPointSchema)
-				.default({}),
+			data_collection_results: z.record(z.string(), elevenLabsDataPointSchema).default({}),
 			call_successful: z.string().optional().nullable(),
 		}),
 	}),

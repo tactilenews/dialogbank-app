@@ -27,8 +27,7 @@ export const load: PageServerLoad = async () => {
 				id: agentId,
 				name: agent.name ?? "Unnamed Agent",
 				systemPrompt:
-					agent.conversationConfig?.agent?.prompt?.prompt ??
-					"No system prompt configured.",
+					agent.conversationConfig?.agent?.prompt?.prompt ?? "No system prompt configured.",
 			},
 		};
 	} catch (e: unknown) {
@@ -41,9 +40,6 @@ export const load: PageServerLoad = async () => {
 		if (e.statusCode === 404) {
 			throw error(404, `Agent with ID "${agentId}" not found.`);
 		}
-		throw error(
-			e.statusCode || 500,
-			`Failed to fetch agent: ${e.message || "Unknown error"}`,
-		);
+		throw error(e.statusCode || 500, `Failed to fetch agent: ${e.message || "Unknown error"}`);
 	}
 };

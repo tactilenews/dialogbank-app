@@ -28,8 +28,7 @@ export const samplePayload2: ElevenLabsWebhookPayload = {
 		conversation_id: "conv_7501kkbqgsfsfjf8smjkdsn7pt6q",
 		agent_id: "agent_0501kjanbz0qe07rt0vnskaz2aag",
 		analysis: {
-			transcript_summary:
-				"The conversation began with the WDR AI agent, Nadia...",
+			transcript_summary: "The conversation began with the WDR AI agent, Nadia...",
 			data_collection_results: {
 				first_name: {
 					data_collection_id: "first_name",
@@ -39,8 +38,7 @@ export const samplePayload2: ElevenLabsWebhookPayload = {
 				last_name: {
 					data_collection_id: "last_name",
 					value: "Haarmaan",
-					rationale:
-						"Der Benutzer gibt seinen vollständigen Namen als 'Fritz Haarmaan' an.",
+					rationale: "Der Benutzer gibt seinen vollständigen Namen als 'Fritz Haarmaan' an.",
 				},
 				age: {
 					data_collection_id: "age",
@@ -63,7 +61,4 @@ export const samplePayload2: ElevenLabsWebhookPayload = {
 	},
 };
 
-export const samplePayloads: ElevenLabsWebhookPayload[] = [
-	samplePayload1,
-	samplePayload2,
-];
+export const samplePayloads: ElevenLabsWebhookPayload[] = [samplePayload1, samplePayload2];

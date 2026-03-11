@@ -14,20 +14,10 @@ interface Props {
 	onclick?: () => void;
 }
 
-const {
-	primary = false,
-	backgroundColor,
-	size = "medium",
-	label,
-	...props
-}: Props = $props();
+const { primary = false, backgroundColor, size = "medium", label, ...props }: Props = $props();
 
-let mode = $derived(
-	primary ? "storybook-button--primary" : "storybook-button--secondary",
-);
-let style = $derived(
-	backgroundColor ? `background-color: ${backgroundColor}` : "",
-);
+let mode = $derived(primary ? "storybook-button--primary" : "storybook-button--secondary");
+let style = $derived(backgroundColor ? `background-color: ${backgroundColor}` : "");
 </script>
 
 <button
