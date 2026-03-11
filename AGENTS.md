@@ -8,6 +8,7 @@
 
 ## Coding Standards
 
+- **Linting & Formatting**: Always run `pnpm run lint:fix` every time source files are changed to ensure consistent style and apply safe fixes.
 - **TypeScript**: NEVER use the non-null assertion operator (`!`). Always use proper null checks, optional chaining, or type guards.
 
 ## Secrets & Environment Variables
