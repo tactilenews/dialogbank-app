@@ -1,4 +1,4 @@
-import { z } from 'zod';
+import { z } from "zod";
 
 /**
  * Zod schema for the JSON schema part of data collection results.
@@ -9,7 +9,7 @@ const DataCollectionJsonSchema = z.object({
 	enum: z.array(z.string()).nullable().optional(),
 	is_system_provided: z.boolean().optional(),
 	dynamic_variable: z.string().optional(),
-	constant_value: z.string().optional()
+	constant_value: z.string().optional(),
 });
 
 /**
@@ -19,7 +19,7 @@ export const elevenLabsDataPointSchema = z.object({
 	data_collection_id: z.string(),
 	value: z.union([z.string(), z.number(), z.boolean()]).nullable(),
 	json_schema: DataCollectionJsonSchema.optional(),
-	rationale: z.string()
+	rationale: z.string(),
 });
 
 export type ElevenLabsDataPoint = z.infer<typeof elevenLabsDataPointSchema>;
@@ -29,16 +29,18 @@ export type ElevenLabsDataPoint = z.infer<typeof elevenLabsDataPointSchema>;
  * Focuses on metadata and analysis results.
  */
 export const elevenLabsWebhookSchema = z.object({
-	type: z.literal('post_call_transcription'),
+	type: z.literal("post_call_transcription"),
 	data: z.object({
 		conversation_id: z.string(),
 		agent_id: z.string(),
 		analysis: z.object({
 			transcript_summary: z.string().optional().nullable(),
-			data_collection_results: z.record(z.string(), elevenLabsDataPointSchema).default({}),
-			call_successful: z.string().optional().nullable()
-		})
-	})
+			data_collection_results: z
+				.record(z.string(), elevenLabsDataPointSchema)
+				.default({}),
+			call_successful: z.string().optional().nullable(),
+		}),
+	}),
 });
 
 export type ElevenLabsWebhookPayload = z.infer<typeof elevenLabsWebhookSchema>;
@@ -73,23 +75,23 @@ export function parseElevenLabsWebhook(payload: unknown) {
 		const val = result.value;
 
 		switch (id) {
-			case 'first_name':
+			case "first_name":
 				firstName = val as string;
 				break;
-			case 'last_name':
+			case "last_name":
 				lastName = val as string;
 				break;
-			case 'age':
+			case "age":
 				age = val as number;
 				break;
-			case 'publication_allowed':
+			case "publication_allowed":
 				publicationAllowed = val === true;
 				break;
 			default:
 				otherAnswers.push({
 					dataCollectionId: result.data_collection_id,
 					value: val !== null ? String(val) : null,
-					rationale: result.rationale
+					rationale: result.rationale,
 				});
 		}
 	}
@@ -103,8 +105,8 @@ export function parseElevenLabsWebhook(payload: unknown) {
 			age,
 			publicationAllowed,
 			callSuccessful,
-			summary
+			summary,
 		},
-		answers: otherAnswers
+		answers: otherAnswers,
 	};
 }

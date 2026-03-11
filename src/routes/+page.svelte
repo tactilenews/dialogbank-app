@@ -1,22 +1,22 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
-	import { resolve } from '$app/paths';
-	import { fade } from 'svelte/transition';
-	import type { PageData } from './$types';
+import { fade } from "svelte/transition";
+import { enhance } from "$app/forms";
+import { resolve } from "$app/paths";
+import type { PageData } from "./$types";
 
-	let { data }: { data: PageData } = $props();
+let { data }: { data: PageData } = $props();
 
-	let currentAnswerIndex = $state(0);
+let currentAnswerIndex = $state(0);
 
-	$effect(() => {
-		if (data.answers.length > 0) {
-			const interval = setInterval(() => {
-				currentAnswerIndex = (currentAnswerIndex + 1) % data.answers.length;
-			}, 5000);
+$effect(() => {
+	if (data.answers.length > 0) {
+		const interval = setInterval(() => {
+			currentAnswerIndex = (currentAnswerIndex + 1) % data.answers.length;
+		}, 5000);
 
-			return () => clearInterval(interval);
-		}
-	});
+		return () => clearInterval(interval);
+	}
+});
 </script>
 
 <div class="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 text-center">
