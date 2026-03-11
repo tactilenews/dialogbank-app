@@ -1,13 +1,13 @@
-import { defineConfig } from '@playwright/test';
+import { defineConfig } from "@playwright/test";
 
 export default defineConfig({
 	webServer: {
-		command: 'pnpm run build && pnpm run preview',
+		command: "pnpm run build && pnpm run preview",
 		port: 4173,
-		reuseExistingServer: !process.env.CI
+		reuseExistingServer: !process.env.CI,
 	},
-	testDir: 'e2e',
+	testDir: "e2e",
 	testMatch: /(.+\.)?(test|spec)\.[jt]s/,
 	// Fail the build on CI if you accidentally left test.only in the source code.
-	forbidOnly: !!process.env.CI
+	forbidOnly: !!process.env.CI,
 });

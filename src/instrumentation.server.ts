@@ -1,8 +1,8 @@
-import * as Sentry from '@sentry/sveltekit';
-import consola from 'consola';
+import * as Sentry from "@sentry/sveltekit";
+import consola from "consola";
 
 Sentry.init({
-	enableLogs: true
+	enableLogs: true,
 });
 
 const reporter = Sentry.createConsolaReporter();

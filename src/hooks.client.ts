@@ -1,10 +1,10 @@
-import { env } from '$env/dynamic/public';
-import consola from 'consola';
-import * as Sentry from '@sentry/sveltekit';
+import * as Sentry from "@sentry/sveltekit";
+import consola from "consola";
+import { env } from "$env/dynamic/public";
 
 Sentry.init({
 	dsn: env.PUBLIC_SENTRY_DSN,
-	enableLogs: true
+	enableLogs: true,
 });
 
 export const handleError = Sentry.handleErrorWithSentry();

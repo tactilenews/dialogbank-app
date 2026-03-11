@@ -1,5 +1,5 @@
-import { mdsvex } from 'mdsvex';
-import adapter from '@sveltejs/adapter-netlify';
+import adapter from "@sveltejs/adapter-netlify";
+import { mdsvex } from "mdsvex";
 
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
@@ -9,11 +9,11 @@ const config = {
 		// See https://svelte.dev/docs/kit/adapters for more information about adapters.
 		adapter: adapter(),
 		experimental: {
-			instrumentation: { server: true }
-		}
+			instrumentation: { server: true },
+		},
 	},
 	preprocess: [mdsvex()],
-	extensions: ['.svelte', '.svx']
+	extensions: [".svelte", ".svx"],
 };
 
 export default config;

@@ -1,46 +1,46 @@
-import { describe, it, expect, vi } from 'vitest';
-import { POST } from './+server';
-import crypto from 'node:crypto';
-import type { RequestEvent } from './$types';
-import { processElevenLabsPostCall } from '$lib/server/elevenlabs/storage';
+import crypto from "node:crypto";
+import { describe, expect, it, vi } from "vitest";
+import { processElevenLabsPostCall } from "$lib/server/elevenlabs/storage";
+import { POST } from "./+server";
+import type { RequestEvent } from "./$types";
 
-vi.mock('$env/dynamic/private', () => ({
+vi.mock("$env/dynamic/private", () => ({
 	env: {
-		ELEVENLABS_WEBHOOK_SECRET: 'test-secret'
-	}
+		ELEVENLABS_WEBHOOK_SECRET: "test-secret",
+	},
 }));
 
-vi.mock('$lib/server/elevenlabs/storage', () => ({
-	processElevenLabsPostCall: vi.fn()
+vi.mock("$lib/server/elevenlabs/storage", () => ({
+	processElevenLabsPostCall: vi.fn(),
 }));
 
-describe('ElevenLabs Webhook', () => {
-	const secret = 'test-secret';
+describe("ElevenLabs Webhook", () => {
+	const secret = "test-secret";
 	const timestamp = Math.floor(Date.now() / 1000).toString();
 	const body = JSON.stringify({
-		type: 'post_call_transcription',
+		type: "post_call_transcription",
 		data: {
-			conversation_id: 'conv-123',
-			agent_id: 'agent-456'
-		}
+			conversation_id: "conv-123",
+			agent_id: "agent-456",
+		},
 	});
 
 	const signature = crypto
-		.createHmac('sha256', secret)
+		.createHmac("sha256", secret)
 		.update(`${timestamp}.${body}`)
-		.digest('hex');
+		.digest("hex");
 
 	const validHeader = `t=${timestamp},v0=${signature}`;
-	const url = 'http://localhost/webhook/elevenlabs/post-call';
+	const url = "http://localhost/webhook/elevenlabs/post-call";
 
-	it('returns 200 and calls processElevenLabsPostCall for a valid payload', async () => {
+	it("returns 200 and calls processElevenLabsPostCall for a valid payload", async () => {
 		const request = new Request(url, {
-			method: 'POST',
+			method: "POST",
 			headers: {
-				'ElevenLabs-Signature': validHeader,
-				'Content-Type': 'application/json'
+				"ElevenLabs-Signature": validHeader,
+				"Content-Type": "application/json",
 			},
-			body
+			body,
 		});
 
 		const event = { request } as RequestEvent;
@@ -54,47 +54,47 @@ describe('ElevenLabs Webhook', () => {
 		expect(processElevenLabsPostCall).toHaveBeenCalledWith(JSON.parse(body));
 	});
 
-	it('throws 401 if signature is missing', async () => {
+	it("throws 401 if signature is missing", async () => {
 		const request = new Request(url, {
-			method: 'POST',
+			method: "POST",
 			headers: {
-				'Content-Type': 'application/json'
+				"Content-Type": "application/json",
 			},
-			body
+			body,
 		});
 
 		const event = { request } as RequestEvent;
 		await expect(POST(event)).rejects.toMatchObject({ status: 401 });
 	});
 
-	it('throws 401 for an invalid signature', async () => {
+	it("throws 401 for an invalid signature", async () => {
 		const request = new Request(url, {
-			method: 'POST',
+			method: "POST",
 			headers: {
-				'ElevenLabs-Signature': `t=${timestamp},v0=wrong-sig`,
-				'Content-Type': 'application/json'
+				"ElevenLabs-Signature": `t=${timestamp},v0=wrong-sig`,
+				"Content-Type": "application/json",
 			},
-			body
+			body,
 		});
 
 		const event = { request } as RequestEvent;
 		await expect(POST(event)).rejects.toMatchObject({ status: 401 });
 	});
 
-	it('throws 400 for invalid JSON', async () => {
-		const invalidBody = 'invalid-json';
+	it("throws 400 for invalid JSON", async () => {
+		const invalidBody = "invalid-json";
 		const invalidSig = crypto
-			.createHmac('sha256', secret)
+			.createHmac("sha256", secret)
 			.update(`${timestamp}.${invalidBody}`)
-			.digest('hex');
+			.digest("hex");
 
 		const request = new Request(url, {
-			method: 'POST',
+			method: "POST",
 			headers: {
-				'ElevenLabs-Signature': `t=${timestamp},v0=${invalidSig}`,
-				'Content-Type': 'application/json'
+				"ElevenLabs-Signature": `t=${timestamp},v0=${invalidSig}`,
+				"Content-Type": "application/json",
 			},
-			body: invalidBody
+			body: invalidBody,
 		});
 
 		const event = { request } as RequestEvent;
