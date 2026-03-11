@@ -11,6 +11,7 @@
 - **Linting & Formatting**: Always run `pnpm run lint:fix` every time source files are changed to ensure consistent style and apply safe fixes.
 - **Type Checking**: After source files are changed, run `pnpm run check` and fix any TypeScript errors.
 - **TypeScript**: NEVER use the non-null assertion operator (`!`). Always use proper null checks, optional chaining, or type guards.
+
 ## PR Guidelines
 
 - **PR Titles**: Must follow the Conventional Commits specification (e.g., `feat: add pglite-backed integration tests`).
@@ -69,7 +70,8 @@ infisical --env test run -- pnpm run db:migrate
 
 ## Testing Mandates
 
-- **E2E Tests**: All E2E tests must be located in the top-level `e2e/` directory. They should be named with `.test.ts` or `.spec.ts` extensions.
+- **Test File Naming**: All tests must use the `.spec.ts` extension.
+- **E2E Tests**: All E2E tests must be located in the top-level `e2e/` directory.
 - **Page Component Tests**: Use page component tests (`.svelte.spec.ts`) for testing page UI and component logic without database or navigation dependencies. Prefer these over E2E tests when:
   - No database interaction is needed
   - No cross-page navigation is being tested
@@ -118,7 +120,7 @@ infisical --env test run -- pnpm run db:migrate
 
 You are able to use the Svelte MCP server, where you have access to comprehensive Svelte 5 and SvelteKit documentation. Here's how to use the available tools effectively:
 
-## Available MCP Tools:
+## Available MCP Tools
 
 ### 1. list-sections
 
