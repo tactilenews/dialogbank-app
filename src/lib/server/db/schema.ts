@@ -24,6 +24,7 @@ export const answers = pgTable("answers", {
 	dataCollectionId: text("data_collection_id").notNull(),
 	value: text("value"),
 	rationale: text("rationale"),
+	classification: text("classification"),
 });
 
 export const answersRelations = relations(answers, ({ one }) => ({
