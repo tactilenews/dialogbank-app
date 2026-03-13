@@ -1,15 +1,5 @@
-import { test as base, expect } from "@playwright/test";
-import * as seed from "drizzle-seed";
-import { db as dbInstance, schema } from "./lib/db";
-
-// Extend base test to include a database reset fixture
-const test = base.extend<{ db: typeof dbInstance }>({
-	// biome-ignore lint/correctness/noEmptyPattern: Playwright fixture requires destructuring pattern
-	db: async ({}, use) => {
-		await seed.reset(dbInstance, schema);
-		await use(dbInstance);
-	},
-});
+import { schema } from "./lib/db";
+import { expect, test } from "./lib/fixtures";
 
 test.describe("Start Page E2E", () => {
 	test("displays featured answers when published answers exist", async ({ page, db }) => {
@@ -38,7 +28,7 @@ test.describe("Start Page E2E", () => {
 		await expect(page.locator("text=Featured Answer")).toBeVisible();
 
 		// Check that the answer value is displayed
-		await expect(page.locator("text=Blue")).toBeVisible();
+		await expect(page.getByText("Blue", { exact: true })).toBeVisible();
 
 		// Check pagination indicator
 		await expect(page.locator("text=1 / 1")).toBeVisible();
@@ -88,8 +78,7 @@ test.describe("Start Page E2E", () => {
 		await expect(page.locator("text=2 / 2")).toBeVisible();
 	});
 
-	// biome-ignore lint/correctness/noUnusedFunctionParameters: test needs to reset the database first
-	test("hides featured answer section when no answers exist", async ({ page, db }) => {
+	test("hides featured answer section when no answers exist", async ({ page }) => {
 		await page.goto("/", { waitUntil: "networkidle" });
 
 		// Featured Answer container should not be visible (it's wrapped in an if statement)
@@ -141,10 +130,10 @@ test.describe("Start Page E2E", () => {
 
 		await page.goto("/");
 
-		// Should show the public answer
-		await expect(page.locator("text=Soccer")).toBeVisible();
+		// Should show "Soccer" (allowed)
+		await expect(page.getByText("Soccer", { exact: true })).toBeVisible();
 
-		// Should not show the private answer
-		await expect(page.locator("text=Reading")).not.toBeVisible();
+		// Should NOT show "Reading" (not allowed)
+		await expect(page.getByText("Reading", { exact: true })).not.toBeVisible();
 	});
 });

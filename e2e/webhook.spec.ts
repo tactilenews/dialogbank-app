@@ -1,7 +1,5 @@
 import crypto from "node:crypto";
-import { test as base, expect } from "@playwright/test";
-import * as seed from "drizzle-seed";
-import { db as dbInstance, schema } from "./lib/db";
+import { expect, test } from "./lib/fixtures";
 
 /**
  * Creates an ElevenLabs HMAC-SHA256 signature header for testing.
@@ -17,15 +15,6 @@ function createElevenLabsSignature(body: string): string {
 		.digest("hex");
 	return `t=${timestamp},v0=${signature}`;
 }
-
-// Extend base test to include a database reset fixture
-const test = base.extend<{ db: typeof dbInstance }>({
-	// biome-ignore lint/correctness/noEmptyPattern: Playwright fixture requires destructuring pattern
-	db: async ({}, use) => {
-		await seed.reset(dbInstance, schema);
-		await use(dbInstance);
-	},
-});
 
 test.describe("ElevenLabs Webhook E2E", () => {
 	test("successfully processes a signed webhook payload and stores answers", async ({

@@ -1,19 +1,4 @@
-import { test as base, expect } from "@playwright/test";
-import * as seed from "drizzle-seed";
-import { auth } from "./lib/auth";
-import { db, schema } from "./lib/db";
-
-type Fixtures = {
-	auth: typeof auth;
-};
-
-const test = base.extend<Fixtures>({
-	// biome-ignore lint/correctness/noEmptyPattern: Playwright fixture requires destructuring pattern
-	auth: async ({}, use) => {
-		await seed.reset(db, schema);
-		await use(auth);
-	},
-});
+import { expect, test } from "./lib/fixtures";
 
 test.describe("Authentication", () => {
 	test("unauthenticated users cannot access /dialogbank and are redirected to sign-in", async ({
