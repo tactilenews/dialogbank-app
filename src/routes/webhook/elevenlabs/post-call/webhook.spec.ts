@@ -1,8 +1,8 @@
 import crypto from "node:crypto";
-import { describe, expect, it, vi } from "vitest";
+import { vi } from "vitest";
 import { processElevenLabsPostCall } from "$lib/server/elevenlabs/storage";
+import { createRequestEvent, describe, it } from "$lib/server/test/fixtures";
 import { POST } from "./+server";
-import type { RequestEvent } from "./$types";
 
 vi.mock("$env/dynamic/private", () => ({
 	env: {
@@ -33,7 +33,11 @@ describe("ElevenLabs Webhook", () => {
 	const validHeader = `t=${timestamp},v0=${signature}`;
 	const url = "http://localhost/webhook/elevenlabs/post-call";
 
-	it("returns 200 and calls processElevenLabsPostCall for a valid payload", async () => {
+	it("returns 200 and calls processElevenLabsPostCall for a valid payload", async ({
+		db,
+		expect,
+		schema,
+	}) => {
 		const request = new Request(url, {
 			method: "POST",
 			headers: {
@@ -43,7 +47,11 @@ describe("ElevenLabs Webhook", () => {
 			body,
 		});
 
-		const event = { request } as RequestEvent;
+		const event = createRequestEvent({
+			request,
+			locals: { db, schema },
+			routeId: "/webhook/elevenlabs/post-call",
+		});
 		const responsePromise = POST(event);
 
 		await expect(responsePromise).resolves.toBeInstanceOf(Response);
@@ -51,10 +59,10 @@ describe("ElevenLabs Webhook", () => {
 		expect(response.status).toBe(200);
 
 		await expect(response.json()).resolves.toEqual({ success: true });
-		expect(processElevenLabsPostCall).toHaveBeenCalledWith(JSON.parse(body));
+		expect(processElevenLabsPostCall).toHaveBeenCalledWith({ db, payload: JSON.parse(body) });
 	});
 
-	it("throws 401 if signature is missing", async () => {
+	it("throws 401 if signature is missing", async ({ db, expect, schema }) => {
 		const request = new Request(url, {
 			method: "POST",
 			headers: {
@@ -63,11 +71,15 @@ describe("ElevenLabs Webhook", () => {
 			body,
 		});
 
-		const event = { request } as RequestEvent;
+		const event = createRequestEvent({
+			request,
+			locals: { db, schema },
+			routeId: "/webhook/elevenlabs/post-call",
+		});
 		await expect(POST(event)).rejects.toMatchObject({ status: 401 });
 	});
 
-	it("throws 401 for an invalid signature", async () => {
+	it("throws 401 for an invalid signature", async ({ db, expect, schema }) => {
 		const request = new Request(url, {
 			method: "POST",
 			headers: {
@@ -77,11 +89,15 @@ describe("ElevenLabs Webhook", () => {
 			body,
 		});
 
-		const event = { request } as RequestEvent;
+		const event = createRequestEvent({
+			request,
+			locals: { db, schema },
+			routeId: "/webhook/elevenlabs/post-call",
+		});
 		await expect(POST(event)).rejects.toMatchObject({ status: 401 });
 	});
 
-	it("throws 400 for invalid JSON", async () => {
+	it("throws 400 for invalid JSON", async ({ db, expect, schema }) => {
 		const invalidBody = "invalid-json";
 		const invalidSig = crypto
 			.createHmac("sha256", secret)
@@ -97,7 +113,11 @@ describe("ElevenLabs Webhook", () => {
 			body: invalidBody,
 		});
 
-		const event = { request } as RequestEvent;
+		const event = createRequestEvent({
+			request,
+			locals: { db, schema },
+			routeId: "/webhook/elevenlabs/post-call",
+		});
 		await expect(POST(event)).rejects.toMatchObject({ status: 400 });
 	});
 });

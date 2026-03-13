@@ -1,9 +1,10 @@
 import { eq } from "drizzle-orm";
-import { db } from "$lib/server/db";
-import { answers, conversations } from "$lib/server/db/schema";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
+	const { db, schema } = event.locals;
+	const { answers, conversations } = schema;
+
 	const publishedAnswers = await db
 		.select({
 			id: answers.id,

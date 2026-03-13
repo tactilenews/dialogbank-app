@@ -5,7 +5,7 @@ import { withElevenLabsVerification } from "$lib/server/elevenlabs/signature";
 import { processElevenLabsPostCall } from "$lib/server/elevenlabs/storage";
 import type { RequestHandler } from "./$types";
 
-export const POST: RequestHandler = withElevenLabsVerification(async ({ request }) => {
+export const POST: RequestHandler = withElevenLabsVerification(async ({ request, locals }) => {
 	const body = await request.text();
 
 	let payload: unknown;
@@ -20,7 +20,7 @@ export const POST: RequestHandler = withElevenLabsVerification(async ({ request 
 	Sentry.logger.info("[elevenlabs webhook payload]", typedPayload);
 
 	try {
-		await processElevenLabsPostCall(payload);
+		await processElevenLabsPostCall({ db: locals.db, payload });
 	} catch (e) {
 		// parseElevenLabsWebhook might throw ZodError, or db might throw
 		consola.error(e);

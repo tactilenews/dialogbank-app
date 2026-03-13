@@ -1,40 +1,32 @@
-import { test as baseTest, describe, expect } from "vitest";
-import { db } from "$lib/server/db";
-import { answers, conversations } from "$lib/server/db/schema";
+import { describe, it } from "$lib/server/test/fixtures";
 import { processElevenLabsPostCall } from "./storage";
 import { samplePayload1, samplePayload2 } from "./storage.spec/data";
 
-const test = baseTest.extend("dbReset", { auto: true }, async () => {
-	await expect(db.delete(answers)).resolves.toBeDefined();
-	await expect(db.delete(conversations)).resolves.toBeDefined();
-	return true;
-});
-
 describe("ElevenLabs Storage", () => {
-	test("processes payload with no results", async () => {
-		const resultPromise = processElevenLabsPostCall(samplePayload1);
+	it("processes payload with no results", async ({ db, expect, schema }) => {
+		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload1 });
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({
 				answerCount: 0,
 			}),
 		);
 
-		const conversationsPromise = db.select().from(conversations);
+		const conversationsPromise = db.select().from(schema.conversations);
 		await expect(conversationsPromise).resolves.toHaveLength(1);
 
-		const answersPromise = db.select().from(answers);
+		const answersPromise = db.select().from(schema.answers);
 		await expect(answersPromise).resolves.toHaveLength(0);
 	});
 
-	test("processes latest payload format (English IDs)", async () => {
-		const resultPromise = processElevenLabsPostCall(samplePayload2);
+	it("processes latest payload format (English IDs)", async ({ db, expect, schema }) => {
+		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload2 });
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({
 				answerCount: 1,
 			}),
 		);
 
-		const conversationsPromise = db.select().from(conversations);
+		const conversationsPromise = db.select().from(schema.conversations);
 		await expect(conversationsPromise).resolves.toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
@@ -50,7 +42,7 @@ describe("ElevenLabs Storage", () => {
 			]),
 		);
 
-		const answersPromise = db.select().from(answers);
+		const answersPromise = db.select().from(schema.answers);
 		await expect(answersPromise).resolves.toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
