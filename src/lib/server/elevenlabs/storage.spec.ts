@@ -1,16 +1,17 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { test as baseTest, describe, expect } from "vitest";
 import { db } from "$lib/server/db";
 import { answers, conversations } from "$lib/server/db/schema";
 import { processElevenLabsPostCall } from "./storage";
 import { samplePayload1, samplePayload2 } from "./storage.spec/data";
 
-describe("ElevenLabs Storage", () => {
-	beforeEach(async () => {
-		await expect(db.delete(answers)).resolves.toBeDefined();
-		await expect(db.delete(conversations)).resolves.toBeDefined();
-	});
+const test = baseTest.extend("dbReset", { auto: true }, async () => {
+	await expect(db.delete(answers)).resolves.toBeDefined();
+	await expect(db.delete(conversations)).resolves.toBeDefined();
+	return true;
+});
 
-	it("processes payload with no results", async () => {
+describe("ElevenLabs Storage", () => {
+	test("processes payload with no results", async () => {
 		const resultPromise = processElevenLabsPostCall(samplePayload1);
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({
@@ -25,7 +26,7 @@ describe("ElevenLabs Storage", () => {
 		await expect(answersPromise).resolves.toHaveLength(0);
 	});
 
-	it("processes latest payload format (English IDs)", async () => {
+	test("processes latest payload format (English IDs)", async () => {
 		const resultPromise = processElevenLabsPostCall(samplePayload2);
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({
