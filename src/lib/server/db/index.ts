@@ -6,7 +6,6 @@ import { env } from "$env/dynamic/private";
 import * as schema from "./schema";
 
 const isVitest = process.env.VITEST === "true" || process.env.VITEST === "1";
-if (!isVitest && !env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
 
 function createNeonHttpDb() {
 	if (!env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
