@@ -32,6 +32,15 @@ type QueryLike<T = unknown> = PromiseLike<T>;
 type QueryList = readonly [QueryLike, ...QueryLike[]];
 
 export async function dbAtomic(build: (client: DbClient) => QueryList): Promise<unknown[]> {
+	/**
+	 * Motivation:
+	 * - Production/dev/e2e use Neon HTTP (recommended for serverless), which supports `batch` but not `transaction`.
+	 * - Integration tests use PGlite for isolation, which supports `transaction` but not `batch`.
+	 *
+	 * `dbAtomic` provides a single API for multi-write operations and selects the best
+	 * atomic mechanism available at runtime. If neither capability exists, it fails fast
+	 * to avoid silent partial writes.
+	 */
 	if ("batch" in db && typeof db.batch === "function") {
 		const queries = build(db);
 		return (db as { batch: (items: readonly unknown[]) => Promise<unknown[]> }).batch(
