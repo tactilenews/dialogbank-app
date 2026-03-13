@@ -30,16 +30,22 @@ export const db = isVitest ? createPgliteDb() : createNeonHttpDb();
 
 type DbClient = typeof db;
 type QueryLike<T = unknown> = PromiseLike<T>;
+type QueryList = readonly [QueryLike, ...QueryLike[]];
 
-export async function dbAtomic(
-	build: (client: DbClient) => readonly QueryLike[],
-): Promise<unknown[]> {
+export async function dbAtomic(build: (client: DbClient) => QueryList): Promise<unknown[]> {
 	if ("batch" in db && typeof db.batch === "function") {
-		return db.batch(build(db));
+		const queries = build(db);
+		return (db as { batch: (items: readonly unknown[]) => Promise<unknown[]> }).batch(
+			queries as readonly unknown[],
+		);
 	}
 
 	if ("transaction" in db && typeof db.transaction === "function") {
-		return db.transaction(async (tx) => {
+		return (
+			db as {
+				transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
+			}
+		).transaction(async (tx) => {
 			const queries = build(tx as DbClient);
 			const results: unknown[] = [];
 			for (const query of queries) {
