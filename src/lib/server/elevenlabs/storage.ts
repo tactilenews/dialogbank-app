@@ -1,12 +1,18 @@
 import { consola } from "consola";
-import { db, dbAtomic } from "$lib/server/db";
+import type { DbClient } from "$lib/server/db";
+import { dbAtomic } from "$lib/server/db";
 import { answers, conversations } from "$lib/server/db/schema";
 import { parseElevenLabsWebhook } from "./parsing";
+
+type StorageInput = {
+	db: DbClient;
+	payload: unknown;
+};
 
 /**
  * Handles the storage of ElevenLabs post-call transcription data.
  */
-export async function processElevenLabsPostCall(payload: unknown): Promise<{
+export async function processElevenLabsPostCall({ db, payload }: StorageInput): Promise<{
 	conversationId: string;
 	answerCount: number;
 }> {
@@ -20,7 +26,7 @@ export async function processElevenLabsPostCall(payload: unknown): Promise<{
 				...a,
 			}));
 
-			await dbAtomic((client) => [
+			await dbAtomic(db, (client) => [
 				client.insert(conversations).values(data.conversation),
 				client.insert(answers).values(answerRecords),
 			]);

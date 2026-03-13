@@ -27,11 +27,14 @@ function createPgliteDb() {
 
 export const db = isVitest ? createPgliteDb() : createNeonHttpDb();
 
-type DbClient = typeof db;
+export type DbClient = typeof db;
 type QueryLike<T = unknown> = PromiseLike<T>;
 type QueryList = readonly [QueryLike, ...QueryLike[]];
 
-export async function dbAtomic(build: (client: DbClient) => QueryList): Promise<unknown[]> {
+export async function dbAtomic(
+	client: DbClient,
+	build: (client: DbClient) => QueryList,
+): Promise<unknown[]> {
 	/**
 	 * Motivation:
 	 * - Production/dev/e2e use Neon HTTP (recommended for serverless), which supports `batch` but not `transaction`.
@@ -41,16 +44,16 @@ export async function dbAtomic(build: (client: DbClient) => QueryList): Promise<
 	 * atomic mechanism available at runtime. If neither capability exists, it fails fast
 	 * to avoid silent partial writes.
 	 */
-	if ("batch" in db && typeof db.batch === "function") {
-		const queries = build(db);
-		return (db as { batch: (items: readonly unknown[]) => Promise<unknown[]> }).batch(
+	if ("batch" in client && typeof client.batch === "function") {
+		const queries = build(client);
+		return (client as { batch: (items: readonly unknown[]) => Promise<unknown[]> }).batch(
 			queries as readonly unknown[],
 		);
 	}
 
-	if ("transaction" in db && typeof db.transaction === "function") {
+	if ("transaction" in client && typeof client.transaction === "function") {
 		return (
-			db as {
+			client as {
 				transaction: <T>(fn: (tx: unknown) => Promise<T>) => Promise<T>;
 			}
 		).transaction(async (tx) => {

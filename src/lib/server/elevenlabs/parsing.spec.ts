@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, it } from "vitest";
 import { ZodError } from "zod";
 import { parseElevenLabsWebhook } from "./parsing";
 import { samplePayload1, samplePayload2 } from "./parsing.spec/data";
@@ -24,7 +24,7 @@ describe("ElevenLabs Webhook Parser", () => {
 	};
 
 	describe("parseElevenLabsWebhook", () => {
-		it("returns strongly typed data from the payload", () => {
+		it("returns strongly typed data from the payload", ({ expect }) => {
 			const data = parseElevenLabsWebhook(mockPayload);
 
 			expect(data.conversation.conversationId).toBe("conv-123");
@@ -39,12 +39,12 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(result.rationale).toBe("User said pizza");
 		});
 
-		it("throws ZodError if payload is invalid", () => {
+		it("throws ZodError if payload is invalid", ({ expect }) => {
 			const invalidPayload = { type: "wrong_type" };
 			expect(() => parseElevenLabsWebhook(invalidPayload)).toThrow(ZodError);
 		});
 
-		it("returns an empty array if data_collection_results is empty", () => {
+		it("returns an empty array if data_collection_results is empty", ({ expect }) => {
 			const emptyPayload = {
 				...mockPayload,
 				data: {
@@ -59,14 +59,14 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(answers).toHaveLength(0);
 		});
 
-		it("parses real sample data (samplePayload1 - empty results)", () => {
+		it("parses real sample data (samplePayload1 - empty results)", ({ expect }) => {
 			const data = parseElevenLabsWebhook(samplePayload1);
 
 			expect(data.conversation.conversationId).toBe("conv_4401kjbexa6tfnz97e45sy0666d9");
 			expect(data.answers).toHaveLength(0);
 		});
 
-		it("parses real sample data (samplePayload2 - with detailed records)", () => {
+		it("parses real sample data (samplePayload2 - with detailed records)", ({ expect }) => {
 			const data = parseElevenLabsWebhook(samplePayload2);
 
 			expect(data.conversation.conversationId).toBe("conv_7501kkbqgsfsfjf8smjkdsn7pt6q");
@@ -83,7 +83,7 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(answer1?.rationale).toContain("Sachsen");
 		});
 
-		it("parses publication_allowed field", () => {
+		it("parses publication_allowed field", ({ expect }) => {
 			const payload = {
 				type: "post_call_transcription",
 				data: {
@@ -109,7 +109,7 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(result.answers).toHaveLength(0);
 		});
 
-		it("handles publication not allowed (false value)", () => {
+		it("handles publication not allowed (false value)", ({ expect }) => {
 			const payload = {
 				type: "post_call_transcription",
 				data: {
@@ -135,7 +135,7 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(result.answers).toHaveLength(0);
 		});
 
-		it("defaults publicationAllowed to false when field is missing", () => {
+		it("defaults publicationAllowed to false when field is missing", ({ expect }) => {
 			const payload = {
 				type: "post_call_transcription",
 				data: {

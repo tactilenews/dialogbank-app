@@ -2,7 +2,7 @@ import { schema } from "./lib/db";
 import { expect, test } from "./lib/fixtures";
 
 test.describe("Start Page E2E", () => {
-	test("displays featured answers when published answers exist", async ({ page, db }) => {
+	test("displays featured answers when published answers exist", async ({ db, page }) => {
 		// Seed the database with a conversation and answers
 		await db.insert(schema.conversations).values({
 			conversationId: "e2e-conv-test",
@@ -34,7 +34,7 @@ test.describe("Start Page E2E", () => {
 		await expect(page.locator("text=1 / 1")).toBeVisible();
 	});
 
-	test("rotates through multiple featured answers", async ({ page, db }) => {
+	test("rotates through multiple featured answers", async ({ db, page }) => {
 		// Seed the database with multiple answers
 		await db.insert(schema.conversations).values({
 			conversationId: "e2e-conv-multiple",
@@ -87,8 +87,8 @@ test.describe("Start Page E2E", () => {
 	});
 
 	test("only shows answers from conversations with publicationAllowed true", async ({
-		page,
 		db,
+		page,
 	}) => {
 		// Create a conversation with publication allowed
 		await db.insert(schema.conversations).values({

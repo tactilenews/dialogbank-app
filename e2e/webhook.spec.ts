@@ -18,8 +18,8 @@ function createElevenLabsSignature(body: string): string {
 
 test.describe("ElevenLabs Webhook E2E", () => {
 	test("successfully processes a signed webhook payload and stores answers", async ({
-		request,
 		db,
+		request,
 	}) => {
 		const payload = {
 			type: "post_call_transcription",
