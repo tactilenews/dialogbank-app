@@ -1,40 +1,13 @@
-import type { Mock } from "vitest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { db } from "$lib/server/db";
 import { answers, conversations } from "$lib/server/db/schema";
 import { processElevenLabsPostCall } from "./storage";
 import { samplePayload1, samplePayload2 } from "./storage.spec/data";
 
-// Helper to create a chainable mock for drizzle insert
-const createInsertMock = () => {
-	const mock = {
-		values: vi.fn().mockReturnThis(),
-	};
-	return mock;
-};
-
-const mockInsertConversations = createInsertMock();
-const mockInsertAnswers = createInsertMock();
-
-vi.mock("$lib/server/db", () => {
-	const mockDb = {
-		insert: vi.fn((table) => {
-			if (table && "agentId" in table) return mockInsertConversations;
-			if (table && "dataCollectionId" in table) return mockInsertAnswers;
-			return { values: vi.fn().mockReturnThis() };
-		}),
-		batch: vi.fn().mockResolvedValue([]),
-	};
-	return { db: mockDb };
-});
-
-import { db } from "$lib/server/db";
-
 describe("ElevenLabs Storage", () => {
-	beforeEach(() => {
-		vi.clearAllMocks();
-		(db.batch as Mock).mockResolvedValue([]);
-		mockInsertConversations.values.mockReturnThis();
-		mockInsertAnswers.values.mockReturnThis();
+	beforeEach(async () => {
+		await expect(db.delete(answers)).resolves.toBeDefined();
+		await expect(db.delete(conversations)).resolves.toBeDefined();
 	});
 
 	it("processes payload with no results", async () => {
@@ -45,9 +18,11 @@ describe("ElevenLabs Storage", () => {
 			}),
 		);
 
-		expect(db.insert).toHaveBeenCalledWith(conversations);
-		expect(mockInsertConversations.values).toHaveBeenCalled();
-		expect(db.batch).not.toHaveBeenCalled();
+		const conversationsPromise = db.select().from(conversations);
+		await expect(conversationsPromise).resolves.toHaveLength(1);
+
+		const answersPromise = db.select().from(answers);
+		await expect(answersPromise).resolves.toHaveLength(0);
 	});
 
 	it("processes latest payload format (English IDs)", async () => {
@@ -58,31 +33,24 @@ describe("ElevenLabs Storage", () => {
 			}),
 		);
 
-		// Check that batch was called
-		expect(db.batch).toHaveBeenCalled();
-		const batchQueries = (db.batch as Mock).mock.calls[0][0];
-		expect(batchQueries).toHaveLength(2);
-
-		// Verify that inserts were called for both tables
-		expect(db.insert).toHaveBeenCalledWith(conversations);
-		expect(db.insert).toHaveBeenCalledWith(answers);
-
-		// Verify values were passed to conversations insert
-		expect(mockInsertConversations.values).toHaveBeenCalledWith(
-			expect.objectContaining({
-				agentId: samplePayload2.data.agent_id,
-				conversationId: samplePayload2.data.conversation_id,
-				firstName: "Fritz",
-				lastName: "Haarmaan",
-				age: 49,
-				publicationAllowed: true,
-				callSuccessful: "success",
-				summary: expect.stringContaining("The conversation began"),
-			}),
+		const conversationsPromise = db.select().from(conversations);
+		await expect(conversationsPromise).resolves.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					agentId: samplePayload2.data.agent_id,
+					conversationId: samplePayload2.data.conversation_id,
+					firstName: "Fritz",
+					lastName: "Haarmaan",
+					age: 49,
+					publicationAllowed: true,
+					callSuccessful: "success",
+					summary: expect.stringContaining("The conversation began"),
+				}),
+			]),
 		);
 
-		// Verify values were passed to answers insert
-		expect(mockInsertAnswers.values).toHaveBeenCalledWith(
+		const answersPromise = db.select().from(answers);
+		await expect(answersPromise).resolves.toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
 					conversationId: samplePayload2.data.conversation_id,

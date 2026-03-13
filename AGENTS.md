@@ -9,7 +9,11 @@
 ## Coding Standards
 
 - **Linting & Formatting**: Always run `pnpm run lint:fix` every time source files are changed to ensure consistent style and apply safe fixes.
+- **Type Checking**: After source files are changed, run `pnpm run check` and fix any TypeScript errors.
 - **TypeScript**: NEVER use the non-null assertion operator (`!`). Always use proper null checks, optional chaining, or type guards.
+## PR Guidelines
+
+- **PR Titles**: Must follow the Conventional Commits specification (e.g., `feat: add pglite-backed integration tests`).
 
 ## Secrets & Environment Variables
 
