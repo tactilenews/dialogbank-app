@@ -82,5 +82,82 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(answer1?.value).toBe("Sachsen");
 			expect(answer1?.rationale).toContain("Sachsen");
 		});
+
+		it("parses publication_allowed field", () => {
+			const payload = {
+				type: "post_call_transcription",
+				data: {
+					conversation_id: "conv_test",
+					agent_id: "agent_test",
+					analysis: {
+						transcript_summary: null,
+						call_successful: null,
+						data_collection_results: {
+							publication_allowed: {
+								data_collection_id: "publication_allowed",
+								value: true,
+								rationale: "User consented",
+							},
+						},
+					},
+				},
+			};
+
+			const result = parseElevenLabsWebhook(payload);
+
+			expect(result.conversation.publicationAllowed).toBe(true);
+			expect(result.answers).toHaveLength(0);
+		});
+
+		it("handles publication not allowed (false value)", () => {
+			const payload = {
+				type: "post_call_transcription",
+				data: {
+					conversation_id: "conv_test",
+					agent_id: "agent_test",
+					analysis: {
+						transcript_summary: null,
+						call_successful: null,
+						data_collection_results: {
+							publication_allowed: {
+								data_collection_id: "publication_allowed",
+								value: false,
+								rationale: "User did not consent",
+							},
+						},
+					},
+				},
+			};
+
+			const result = parseElevenLabsWebhook(payload);
+
+			expect(result.conversation.publicationAllowed).toBe(false);
+			expect(result.answers).toHaveLength(0);
+		});
+
+		it("defaults publicationAllowed to false when field is missing", () => {
+			const payload = {
+				type: "post_call_transcription",
+				data: {
+					conversation_id: "conv_test",
+					agent_id: "agent_test",
+					analysis: {
+						transcript_summary: null,
+						call_successful: null,
+						data_collection_results: {
+							first_name: {
+								data_collection_id: "first_name",
+								value: "Test",
+								rationale: "Test",
+							},
+						},
+					},
+				},
+			};
+
+			const result = parseElevenLabsWebhook(payload);
+
+			expect(result.conversation.publicationAllowed).toBe(false);
+		});
 	});
 });

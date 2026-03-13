@@ -7,7 +7,7 @@ export default defineConfig({
 		reuseExistingServer: !process.env.CI,
 	},
 	testDir: "e2e",
-	testMatch: /(.+\.)?(test|spec)\.[jt]s/,
+	testMatch: /(.+\.)?spec\.[jt]s/,
 	// Run tests in isolation.
 	workers: 1,
 	// Fail the build on CI if you accidentally left test.only in the source code.
