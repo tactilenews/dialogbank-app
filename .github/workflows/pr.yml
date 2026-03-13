@@ -6,7 +6,8 @@ on:
       - opened
       - reopened
       - edited
-      # - synchronize (if you use required Actions)
+      - synchronize
+      - ready_for_review
 
 jobs:
   main:
