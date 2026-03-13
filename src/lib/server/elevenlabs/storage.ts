@@ -1,5 +1,5 @@
 import { consola } from "consola";
-import { db } from "$lib/server/db";
+import { db, dbAtomic } from "$lib/server/db";
 import { answers, conversations } from "$lib/server/db/schema";
 import { parseElevenLabsWebhook } from "./parsing";
 
@@ -13,16 +13,16 @@ export async function processElevenLabsPostCall(payload: unknown): Promise<{
 	const data = parseElevenLabsWebhook(payload);
 
 	try {
-		// Use db.batch to run both inserts in a single HTTP request (atomic transaction on server)
+		// Use dbAtomic to run both inserts in the best available atomic mode
 		if (data.answers.length > 0) {
 			const answerRecords = data.answers.map((a) => ({
 				conversationId: data.conversation.conversationId,
 				...a,
 			}));
 
-			await db.batch([
-				db.insert(conversations).values(data.conversation),
-				db.insert(answers).values(answerRecords),
+			await dbAtomic((client) => [
+				client.insert(conversations).values(data.conversation),
+				client.insert(answers).values(answerRecords),
 			]);
 		} else {
 			await db.insert(conversations).values(data.conversation);

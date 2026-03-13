@@ -15,24 +15,29 @@ const createInsertMock = () => {
 const mockInsertConversations = createInsertMock();
 const mockInsertAnswers = createInsertMock();
 
-vi.mock("$lib/server/db", () => {
-	const mockDb = {
-		insert: vi.fn((table) => {
-			if (table && "agentId" in table) return mockInsertConversations;
-			if (table && "dataCollectionId" in table) return mockInsertAnswers;
-			return { values: vi.fn().mockReturnThis() };
-		}),
-		batch: vi.fn().mockResolvedValue([]),
-	};
-	return { db: mockDb };
+const mockDb = {
+	insert: vi.fn((table) => {
+		if (table && "agentId" in table) return mockInsertConversations;
+		if (table && "dataCollectionId" in table) return mockInsertAnswers;
+		return { values: vi.fn().mockReturnThis() };
+	}),
+};
+
+const mockDbAtomic = vi.fn(async (build) => {
+	build(mockDb);
+	return [];
 });
 
-import { db } from "$lib/server/db";
+vi.mock("$lib/server/db", () => {
+	return { db: mockDb, dbAtomic: mockDbAtomic };
+});
+
+import { db, dbAtomic } from "$lib/server/db";
 
 describe("ElevenLabs Storage", () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		(db.batch as Mock).mockResolvedValue([]);
+		(dbAtomic as Mock).mockResolvedValue([]);
 		mockInsertConversations.values.mockReturnThis();
 		mockInsertAnswers.values.mockReturnThis();
 	});
@@ -47,7 +52,7 @@ describe("ElevenLabs Storage", () => {
 
 		expect(db.insert).toHaveBeenCalledWith(conversations);
 		expect(mockInsertConversations.values).toHaveBeenCalled();
-		expect(db.batch).not.toHaveBeenCalled();
+		expect(dbAtomic).not.toHaveBeenCalled();
 	});
 
 	it("processes latest payload format (English IDs)", async () => {
@@ -58,10 +63,8 @@ describe("ElevenLabs Storage", () => {
 			}),
 		);
 
-		// Check that batch was called
-		expect(db.batch).toHaveBeenCalled();
-		const batchQueries = (db.batch as Mock).mock.calls[0][0];
-		expect(batchQueries).toHaveLength(2);
+		// Check that dbAtomic was called
+		expect(dbAtomic).toHaveBeenCalled();
 
 		// Verify that inserts were called for both tables
 		expect(db.insert).toHaveBeenCalledWith(conversations);
