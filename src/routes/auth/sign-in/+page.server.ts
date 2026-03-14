@@ -1,6 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { APIError } from "better-auth/api";
-import { auth } from "$lib/server/auth";
+import { getAuth } from "$lib/server/auth";
 import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -12,6 +12,7 @@ export const load: PageServerLoad = async (event) => {
 
 export const actions: Actions = {
 	signInEmail: async (event) => {
+		const auth = getAuth();
 		const formData = await event.request.formData();
 		const email = formData.get("email")?.toString() ?? "";
 		const password = formData.get("password")?.toString() ?? "";

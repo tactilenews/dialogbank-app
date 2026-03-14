@@ -3,8 +3,10 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import * as seed from "drizzle-seed";
 import { test as baseTest, beforeAll, describe } from "vitest";
-import { db } from "$lib/server/db";
+import { getDb } from "$lib/server/db";
 import * as schema from "$lib/server/db/schema";
+
+const db = getDb();
 
 export const it = baseTest.extend<{ db: typeof db; schema: typeof schema }>({
 	// biome-ignore lint/correctness/noEmptyPattern: Vitest fixture requires destructuring pattern

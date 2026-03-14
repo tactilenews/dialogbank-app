@@ -27,9 +27,16 @@ function createPgliteDb() {
 	return drizzlePglite(client, { schema });
 }
 
-export const db = isVitest ? createPgliteDb() : createNeonHttpDb();
+export type DbClient = ReturnType<typeof createNeonHttpDb> | ReturnType<typeof createPgliteDb>;
+let cachedDb: DbClient | null = null;
 
-export type DbClient = typeof db;
+export function getDb(): DbClient {
+	if (cachedDb) return cachedDb;
+	const client = isVitest ? createPgliteDb() : createNeonHttpDb();
+	cachedDb = client;
+	return client;
+}
+
 type QueryLike<T = unknown> = PromiseLike<T>;
 type QueryList = readonly [QueryLike, ...QueryLike[]];
 
