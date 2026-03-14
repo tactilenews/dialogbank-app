@@ -50,7 +50,8 @@ export const load: PageServerLoad = async (event) => {
 
 	const classificationGroups = await Promise.all(
 		classificationValues.map(async ({ classification, isNull }) => {
-			const slug = slugify(classification);
+			const baseSlug = slugify(classification) || "unclassified";
+			const slug = isNull ? `${baseSlug}-null` : baseSlug;
 			const pageParam = event.url.searchParams.get(`page_${slug}`);
 			const currentPage = Math.max(1, Number(pageParam ?? "1") || 1);
 			const offset = (currentPage - 1) * PAGE_SIZE;

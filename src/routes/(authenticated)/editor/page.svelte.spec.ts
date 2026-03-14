@@ -40,4 +40,12 @@ describe("/editor +page.svelte", () => {
 			.element(page.getByTestId("pagination-support-previous"))
 			.toHaveAttribute("href", "?page_support=1#classification-support");
 	});
+
+	it("preserves the classification anchor on pagination links", async () => {
+		render(Page, { props: { data: sampleEditorPageData } });
+
+		await expect
+			.element(page.getByTestId("pagination-support-next"))
+			.toHaveAttribute("href", "?page_support=2#classification-support");
+	});
 });

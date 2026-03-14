@@ -102,6 +102,7 @@ const statItems = [
 						>
 							<a
 								data-sveltekit-noscroll
+								data-sveltekit-reload
 								data-testid={`pagination-${group.slug}-previous`}
 								class={`rounded-full border px-4 py-2 text-sm font-medium ${
 									group.pagination.page <= 1
@@ -114,6 +115,7 @@ const statItems = [
 							</a>
 							<a
 								data-sveltekit-noscroll
+								data-sveltekit-reload
 								data-testid={`pagination-${group.slug}-next`}
 								class={`rounded-full border px-4 py-2 text-sm font-medium ${
 									group.pagination.page >= group.pagination.totalPages
