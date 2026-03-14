@@ -1,62 +1,62 @@
 {
-  "version": "7",
-  "dialect": "postgresql",
-  "entries": [
-    {
-      "idx": 0,
-      "version": "7",
-      "when": 1772637970540,
-      "tag": "0000_small_hulk",
-      "breakpoints": true
-    },
-    {
-      "idx": 1,
-      "version": "7",
-      "when": 1773051659224,
-      "tag": "0001_confused_dreadnoughts",
-      "breakpoints": true
-    },
-    {
-      "idx": 2,
-      "version": "7",
-      "when": 1773141829459,
-      "tag": "0002_nosy_master_mold",
-      "breakpoints": true
-    },
-    {
-      "idx": 3,
-      "version": "7",
-      "when": 1773148909446,
-      "tag": "0003_vengeful_hairball",
-      "breakpoints": true
-    },
-    {
-      "idx": 4,
-      "version": "7",
-      "when": 1773318601872,
-      "tag": "0004_sour_karen_page",
-      "breakpoints": true
-    },
-    {
-      "idx": 5,
-      "version": "7",
-      "when": 1773413596838,
-      "tag": "0005_stormy_truth",
-      "breakpoints": true
-    },
-    {
-      "idx": 6,
-      "version": "7",
-      "when": 1773499183020,
-      "tag": "0006_loose_tattoo",
-      "breakpoints": true
-    },
-    {
-      "idx": 7,
-      "version": "7",
-      "when": 1773501615861,
-      "tag": "0007_superb_ser_duncan",
-      "breakpoints": true
-    }
-  ]
+	"version": "7",
+	"dialect": "postgresql",
+	"entries": [
+		{
+			"idx": 0,
+			"version": "7",
+			"when": 1772637970540,
+			"tag": "0000_small_hulk",
+			"breakpoints": true
+		},
+		{
+			"idx": 1,
+			"version": "7",
+			"when": 1773051659224,
+			"tag": "0001_confused_dreadnoughts",
+			"breakpoints": true
+		},
+		{
+			"idx": 2,
+			"version": "7",
+			"when": 1773141829459,
+			"tag": "0002_nosy_master_mold",
+			"breakpoints": true
+		},
+		{
+			"idx": 3,
+			"version": "7",
+			"when": 1773148909446,
+			"tag": "0003_vengeful_hairball",
+			"breakpoints": true
+		},
+		{
+			"idx": 4,
+			"version": "7",
+			"when": 1773318601872,
+			"tag": "0004_sour_karen_page",
+			"breakpoints": true
+		},
+		{
+			"idx": 5,
+			"version": "7",
+			"when": 1773413596838,
+			"tag": "0005_stormy_truth",
+			"breakpoints": true
+		},
+		{
+			"idx": 6,
+			"version": "7",
+			"when": 1773499183020,
+			"tag": "0006_loose_tattoo",
+			"breakpoints": true
+		},
+		{
+			"idx": 7,
+			"version": "7",
+			"when": 1773501615861,
+			"tag": "0007_superb_ser_duncan",
+			"breakpoints": true
+		}
+	]
 }
