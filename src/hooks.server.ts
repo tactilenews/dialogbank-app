@@ -18,6 +18,8 @@ const handleDb: Handle = async ({ event, resolve }) => {
 
 const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	const auth = getAuth(event.locals.db);
+	event.locals.auth = auth;
+
 	const session = await auth.api.getSession({ headers: event.request.headers });
 
 	if (session) {

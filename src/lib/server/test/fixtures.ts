@@ -3,15 +3,22 @@ import type { PgliteDatabase } from "drizzle-orm/pglite";
 import { migrate } from "drizzle-orm/pglite/migrator";
 import * as seed from "drizzle-seed";
 import { test as baseTest, beforeAll, describe } from "vitest";
+import { getAuth } from "$lib/server/auth";
 import { getDb } from "$lib/server/db";
 import * as schema from "$lib/server/db/schema";
 
 const db = getDb();
+const auth = getAuth(db);
 
-export const it = baseTest.extend<{ db: typeof db; schema: typeof schema }>({
+export const it = baseTest.extend<{ db: typeof db; schema: typeof schema; auth: typeof auth }>({
 	// biome-ignore lint/correctness/noEmptyPattern: Vitest fixture requires destructuring pattern
 	db: async ({}, use) => {
 		await use(db);
+		await seed.reset(db, schema);
+	},
+	// biome-ignore lint/correctness/noEmptyPattern: Vitest fixture requires destructuring pattern
+	auth: async ({}, use) => {
+		await use(auth);
 		await seed.reset(db, schema);
 	},
 	// biome-ignore lint/correctness/noEmptyPattern: Vitest fixture requires destructuring pattern

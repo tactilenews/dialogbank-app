@@ -2,6 +2,7 @@ import type { Session, User } from "better-auth/minimal";
 
 type DbClient = ReturnType<typeof import("$lib/server/db").getDb>;
 type DbSchema = typeof import("$lib/server/db/schema");
+type Auth = ReturnType<typeof import("$lib/server/auth").getAuth>;
 
 // See https://svelte.dev/docs/kit/types#app.d.ts
 // for information about these interfaces
@@ -12,6 +13,7 @@ declare global {
 			session?: Session;
 			db: DbClient;
 			schema: DbSchema;
+			auth: Auth;
 		}
 
 		// interface Error {}
