@@ -3,35 +3,8 @@ import type { PageData } from "./$types";
 
 export let data: PageData;
 
-type AnswerItem = (typeof data.answers)[number];
-
-type ClassificationGroup = {
-	classification: string;
-	answers: AnswerItem[];
-	count: number;
-};
-
-let classificationGroups: ClassificationGroup[] = [];
-
-$: classificationGroups = groupAnswers(data.answers);
+const classificationGroups = data.classificationGroups ?? [];
 $: maxConversations = Math.max(1, ...data.conversationsPerDay.map((item) => item.count));
-
-function groupAnswers(answers: AnswerItem[]): ClassificationGroup[] {
-	const groupMap = new Map<string, AnswerItem[]>();
-
-	for (const answer of answers) {
-		const key = answer.classification || "Unclassified";
-		const bucket = groupMap.get(key) ?? [];
-		bucket.push(answer);
-		groupMap.set(key, bucket);
-	}
-
-	return Array.from(groupMap.entries()).map(([classification, groupedAnswers]) => ({
-		classification,
-		answers: groupedAnswers,
-		count: groupedAnswers.length,
-	}));
-}
 
 const statItems = [
 	{
@@ -93,9 +66,6 @@ const statItems = [
 	<section class="space-y-6">
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<h2 class="text-xl font-semibold text-slate-900">Answer classifications</h2>
-			<div class="text-sm text-slate-500">
-				Page {data.pagination.page} of {data.pagination.totalPages}
-			</div>
 		</div>
 
 		{#if classificationGroups.length === 0}
@@ -105,11 +75,17 @@ const statItems = [
 		{:else}
 			<div class="grid gap-6">
 				{#each classificationGroups as group}
-					<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
+					<div
+						id={`classification-${group.slug}`}
+						data-testid={`classification-${group.slug}`}
+						class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
+					>
 						<div class="flex items-center justify-between">
 							<div>
 								<h3 class="text-lg font-semibold text-slate-900">{group.classification}</h3>
-								<p class="text-sm text-slate-500">{group.count} answers on this page</p>
+								<p class="text-sm text-slate-500">
+									Page {group.pagination.page} of {group.pagination.totalPages}
+								</p>
 							</div>
 						</div>
 						<div class="mt-4 space-y-3">
@@ -120,32 +96,41 @@ const statItems = [
 								</div>
 							{/each}
 						</div>
+						<nav
+							class="mt-4 flex items-center justify-between"
+							aria-label={`${group.classification} pagination`}
+						>
+							<a
+								data-sveltekit-noscroll
+								data-testid={`pagination-${group.slug}-previous`}
+								class={`rounded-full border px-4 py-2 text-sm font-medium ${
+									group.pagination.page <= 1
+										? "pointer-events-none border-slate-200 text-slate-300"
+										: "border-slate-300 text-slate-700 hover:border-slate-400"
+								}`}
+								href={`?page_${group.slug}=${Math.max(1, group.pagination.page - 1)}#classification-${group.slug}`}
+							>
+								Previous
+							</a>
+							<a
+								data-sveltekit-noscroll
+								data-testid={`pagination-${group.slug}-next`}
+								class={`rounded-full border px-4 py-2 text-sm font-medium ${
+									group.pagination.page >= group.pagination.totalPages
+										? "pointer-events-none border-slate-200 text-slate-300"
+										: "border-slate-300 text-slate-700 hover:border-slate-400"
+								}`}
+								href={`?page_${group.slug}=${Math.min(
+									group.pagination.totalPages,
+									group.pagination.page + 1,
+								)}#classification-${group.slug}`}
+							>
+								Next
+							</a>
+						</nav>
 					</div>
 				{/each}
 			</div>
 		{/if}
-
-		<nav class="flex items-center justify-between" aria-label="Pagination">
-			<a
-				class={`rounded-full border px-4 py-2 text-sm font-medium ${
-					data.pagination.page <= 1
-						? "pointer-events-none border-slate-200 text-slate-300"
-						: "border-slate-300 text-slate-700 hover:border-slate-400"
-				}`}
-				href={`?page=${Math.max(1, data.pagination.page - 1)}`}
-			>
-				Previous
-			</a>
-			<a
-				class={`rounded-full border px-4 py-2 text-sm font-medium ${
-					data.pagination.page >= data.pagination.totalPages
-						? "pointer-events-none border-slate-200 text-slate-300"
-						: "border-slate-300 text-slate-700 hover:border-slate-400"
-				}`}
-				href={`?page=${Math.min(data.pagination.totalPages, data.pagination.page + 1)}`}
-			>
-				Next
-			</a>
-		</nav>
 	</section>
 </div>

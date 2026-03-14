@@ -26,16 +26,18 @@ describe("/editor +page.svelte", () => {
 
 		const supportGroup = page.getByRole("heading", { name: "Support" });
 		await expect.element(supportGroup).toBeVisible();
-		await expect.element(page.getByText("2 answers on this page")).toBeVisible();
+		await expect.element(page.getByTestId("classification-support")).toBeVisible();
 
 		await expect.element(page.getByText("Mara Klein")).toBeVisible();
 		await expect.element(page.getByText("Start a weekly neighborhood market.")).toBeVisible();
 	});
 
-	it("shows pagination state", async () => {
+	it("shows per-classification pagination", async () => {
 		render(Page, { props: { data: sampleEditorPageData } });
 
-		await expect.element(page.getByText("Page 1 of 2")).toBeVisible();
-		await expect.element(page.getByRole("link", { name: "Next" })).toBeVisible();
+		await expect.element(page.getByTestId("pagination-support-next")).toBeVisible();
+		await expect
+			.element(page.getByTestId("pagination-support-previous"))
+			.toHaveAttribute("href", "?page_support=1#classification-support");
 	});
 });
