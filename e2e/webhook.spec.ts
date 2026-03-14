@@ -1,20 +1,5 @@
-import crypto from "node:crypto";
 import { expect, test } from "./lib/fixtures";
-
-/**
- * Creates an ElevenLabs HMAC-SHA256 signature header for testing.
- */
-function createElevenLabsSignature(body: string): string {
-	// This secret must be added to Infisical as ELEVENLABS_WEBHOOK_SECRET for the test environment
-	const TEST_WEBHOOK_SECRET = "webhook-test-secret-12345";
-	const timestamp = Math.floor(Date.now() / 1000).toString();
-	const signedPayload = `${timestamp}.${body}`;
-	const signature = crypto
-		.createHmac("sha256", TEST_WEBHOOK_SECRET)
-		.update(signedPayload)
-		.digest("hex");
-	return `t=${timestamp},v0=${signature}`;
-}
+import { createElevenLabsSignature } from "./lib/webhook";
 
 test.describe("ElevenLabs Webhook E2E", () => {
 	test("successfully processes a signed webhook payload and stores answers", async ({
