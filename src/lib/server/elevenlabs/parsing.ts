@@ -58,7 +58,7 @@ export function parseElevenLabsWebhook(payload: unknown) {
 	let firstName: string | null = null;
 	let lastName: string | null = null;
 	let age: number | null = null;
-	let publicationAllowed = false;
+	let publicationAllowed: boolean | null = null;
 
 	const otherAnswers: {
 		dataCollectionId: string;
@@ -83,7 +83,9 @@ export function parseElevenLabsWebhook(payload: unknown) {
 				age = val as number;
 				break;
 			case "publication_allowed":
-				publicationAllowed = val === true;
+				if (typeof val === "boolean") {
+					publicationAllowed = val;
+				}
 				break;
 			default:
 				otherAnswers.push({

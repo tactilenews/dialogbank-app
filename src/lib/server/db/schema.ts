@@ -7,7 +7,7 @@ export const conversations = pgTable("conversations", {
 	firstName: text("first_name"),
 	lastName: text("last_name"),
 	age: integer("age"),
-	publicationAllowed: boolean("publication_allowed").notNull().default(false),
+	publicationAllowed: boolean("publication_allowed"),
 	callSuccessful: text("call_successful"),
 	summary: text("summary"),
 	createdAt: timestamp("created_at").defaultNow().notNull(),

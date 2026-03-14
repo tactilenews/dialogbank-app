@@ -135,7 +135,9 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(result.answers).toHaveLength(0);
 		});
 
-		it("defaults publicationAllowed to false when field is missing", ({ expect }) => {
+		it("defaults publicationAllowed to null when field is missing (e.g. conversation ended earlier)", ({
+			expect,
+		}) => {
 			const payload = {
 				type: "post_call_transcription",
 				data: {
@@ -157,7 +159,32 @@ describe("ElevenLabs Webhook Parser", () => {
 
 			const result = parseElevenLabsWebhook(payload);
 
-			expect(result.conversation.publicationAllowed).toBe(false);
+			expect(result.conversation.publicationAllowed).toBe(null);
+		});
+
+		it("sets publicationAllowed to null when field is explicitly null", ({ expect }) => {
+			const payload = {
+				type: "post_call_transcription",
+				data: {
+					conversation_id: "conv_test",
+					agent_id: "agent_test",
+					analysis: {
+						transcript_summary: null,
+						call_successful: null,
+						data_collection_results: {
+							publication_allowed: {
+								data_collection_id: "publication_allowed",
+								value: null,
+								rationale: "User did not answer yet",
+							},
+						},
+					},
+				},
+			};
+
+			const result = parseElevenLabsWebhook(payload);
+
+			expect(result.conversation.publicationAllowed).toBe(null);
 		});
 	});
 });
