@@ -54,6 +54,10 @@ infisical --env test run -- pnpm run test:watch
 
 ## Database
 
+- **Audit Columns**: All new tables in the database MUST include `createdAt` and `updatedAt` columns with automatic population.
+  - `createdAt`: Set to `defaultNow()` and `notNull()`.
+  - `updatedAt`: Set to `defaultNow()`, `notNull()`, and `$onUpdate(() => new Date())`.
+
 For database operations, always use the appropriate environment:
 
 ```sh
