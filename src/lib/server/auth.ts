@@ -5,11 +5,8 @@ import { getRequestEvent } from "$app/server";
 import { env } from "$env/dynamic/private";
 import { getDb } from "$lib/server/db";
 
-let cachedAuth: ReturnType<typeof betterAuth> | null = null;
-
-export function getAuth(db = getDb()): ReturnType<typeof betterAuth> {
-	if (cachedAuth) return cachedAuth;
-	cachedAuth = betterAuth({
+export function getAuth(db = getDb()) {
+	return betterAuth({
 		baseURL: env.ORIGIN,
 		secret: env.BETTER_AUTH_SECRET,
 		database: drizzleAdapter(db, { provider: "pg" }),
@@ -19,5 +16,4 @@ export function getAuth(db = getDb()): ReturnType<typeof betterAuth> {
 		},
 		plugins: [sveltekitCookies(getRequestEvent)], // make sure this is the last plugin in the array
 	});
-	return cachedAuth;
 }

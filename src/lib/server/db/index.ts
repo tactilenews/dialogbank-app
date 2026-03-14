@@ -28,13 +28,9 @@ function createPgliteDb() {
 }
 
 export type DbClient = ReturnType<typeof createNeonHttpDb> | ReturnType<typeof createPgliteDb>;
-let cachedDb: DbClient | null = null;
 
 export function getDb(): DbClient {
-	if (cachedDb) return cachedDb;
-	const client = isVitest ? createPgliteDb() : createNeonHttpDb();
-	cachedDb = client;
-	return client;
+	return isVitest ? createPgliteDb() : createNeonHttpDb();
 }
 
 type QueryLike<T = unknown> = PromiseLike<T>;
