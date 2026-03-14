@@ -2,16 +2,13 @@ import { neon, neonConfig } from "@neondatabase/serverless";
 import { drizzle } from "drizzle-orm/neon-http";
 import * as schema from "../../src/lib/server/db/schema";
 
-const { env } = process;
+const E2E_DATABASE_URL = "postgres://user:password@localhost:5433/neondb";
 
-if (!env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
+// Force e2e tests to use the dedicated e2e database on port 5433
+neonConfig.fetchEndpoint = "http://localhost:5433/sql";
+neonConfig.poolQueryViaFetch = true;
 
-// Configure for local development/testing with Neon Proxy
-// HTTP Mode (recommended for most applications)
-neonConfig.fetchEndpoint = "http://localhost:5432/sql"; // Routes HTTP requests to local proxy
-neonConfig.poolQueryViaFetch = true; // Enables HTTP connection pooling
-
-const client = neon(env.DATABASE_URL);
+const client = neon(E2E_DATABASE_URL);
 
 export const db = drizzle(client, { schema });
 export { schema };

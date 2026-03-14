@@ -7,8 +7,8 @@ Everything you need to build a Svelte project, powered by [`sv`](https://github.
 This project runs in multiple environments with intentionally different database setups:
 
 - **Production**: Deployed on Netlify serverless functions, connecting to the production Neon database using `drizzle-orm/neon-http`. This matches the serverless runtime and supports `db.batch` but not `db.transaction`.
-- **Development**: Uses the `neondatabase/neon_local` Docker container to work against ephemeral branches seeded from production data. This keeps development realistic while still being disposable.
-- **E2E**: Also uses `neondatabase/neon_local` to stay as close as possible to production infrastructure and behavior.
+- **Development**: Uses the `neondatabase/neon_local` Docker container (on port 5432) to work against ephemeral branches seeded from production data.
+- **E2E**: Uses a separate `neondatabase/neon_local` Docker container (on port 5433) to ensure that development data is not wiped out during tests.
 - **Integration Tests (Vitest)**: Uses PGlite (`drizzle-orm/pglite`) for fast, isolated tests. The goal is speed and test isolation, without needing to replicate the full production stack.
 
 To avoid branching application logic, multi-write operations go through `dbAtomic`, which selects the best atomic mechanism available at runtime (batch on Neon HTTP, transaction on PGlite). If neither capability is present, it throws to avoid silent partial writes.

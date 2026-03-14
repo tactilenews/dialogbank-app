@@ -1,10 +1,18 @@
 import { defineConfig } from "@playwright/test";
 
+/**
+ * Force e2e tests to use the dedicated e2e database on port 5433.
+ */
+const E2E_DATABASE_URL = "postgres://user:password@localhost:5433/neondb";
+
 export default defineConfig({
 	webServer: {
-		command: "pnpm run build && pnpm run preview",
+		command: "pnpm run db:push && pnpm run build && pnpm run preview",
 		port: 4173,
 		reuseExistingServer: !process.env.CI,
+		env: {
+			DATABASE_URL: E2E_DATABASE_URL,
+		},
 	},
 	testDir: "e2e",
 	testMatch: /(.+\.)?spec\.[jt]s/,

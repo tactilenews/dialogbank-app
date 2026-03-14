@@ -11,8 +11,10 @@ function createNeonHttpDb() {
 	if (!env.DATABASE_URL) throw new Error("DATABASE_URL is not set");
 	// Configure for local development/testing with Neon Proxy
 	if (env.DATABASE_URL.includes("localhost") || env.DATABASE_URL.includes("127.0.0.1")) {
+		const url = new URL(env.DATABASE_URL);
+		const port = url.port || "5432";
 		// HTTP Mode (recommended for most applications)
-		neonConfig.fetchEndpoint = "http://localhost:5432/sql"; // Routes HTTP requests to local proxy
+		neonConfig.fetchEndpoint = `http://localhost:${port}/sql`; // Routes HTTP requests to local proxy
 		neonConfig.poolQueryViaFetch = true; // Enables HTTP connection pooling
 	}
 
