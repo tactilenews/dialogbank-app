@@ -12,7 +12,14 @@ describe("ElevenLabs Storage", () => {
 		);
 
 		const conversationsPromise = db.select().from(schema.conversations);
-		await expect(conversationsPromise).resolves.toHaveLength(1);
+		await expect(conversationsPromise).resolves.toEqual(
+			expect.arrayContaining([
+				expect.objectContaining({
+					conversationId: samplePayload1.data.conversation_id,
+					publicationAllowed: null,
+				}),
+			]),
+		);
 
 		const answersPromise = db.select().from(schema.answers);
 		await expect(answersPromise).resolves.toHaveLength(0);
