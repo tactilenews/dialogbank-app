@@ -1,6 +1,7 @@
 import { answers, conversations } from "./legacy-dashboard.spec/data";
 import { schema } from "./lib/db";
 import { expect, test } from "./lib/fixtures";
+import { createElevenLabsSignature } from "./lib/webhook";
 
 test.describe("Legacy Dashboard E2E", () => {
 	test("shows stats counters and highlights the current classification", async ({ db, page }) => {
@@ -49,5 +50,70 @@ test.describe("Legacy Dashboard E2E", () => {
 				interval: 1000,
 			})
 			.not.toBe(initialText);
+	});
+
+	test("auto-refreshes stats after webhook fires", async ({ db, page, request }) => {
+		// Navigate to empty dashboard
+		await page.goto("/legacy", { waitUntil: "networkidle" });
+
+		// Verify baseline: guests stat shows 0
+		await expect(page.getByTestId("stat-guests")).toContainText("0");
+
+		// Fire a signed webhook POST that inserts a conversation + answer
+		const payload = {
+			type: "post_call_transcription",
+			data: {
+				conversation_id: "e2e-conv-auto-refresh",
+				agent_id: "e2e-agent-auto-refresh",
+				analysis: {
+					transcript_summary: "Auto-refresh test summary",
+					data_collection_results: {
+						first_name: {
+							data_collection_id: "first_name",
+							value: "Anna",
+							rationale: "Said Anna",
+						},
+						publication_allowed: {
+							data_collection_id: "publication_allowed",
+							value: true,
+							rationale: "Agreed",
+						},
+						favorite_color: {
+							data_collection_id: "favorite_color",
+							value: "blue",
+							rationale: "Said blue",
+						},
+					},
+					call_successful: "success",
+				},
+			},
+		};
+
+		const body = JSON.stringify(payload);
+		const signatureHeader = createElevenLabsSignature(body);
+
+		const response = await request.post("/webhook/elevenlabs/post-call", {
+			data: body,
+			headers: {
+				"Content-Type": "application/json",
+				"ElevenLabs-Signature": signatureHeader,
+			},
+		});
+		await expect(response.json()).resolves.toEqual({ success: true });
+
+		// Poll for the stat counter to update without any manual page.reload()
+		// Timeout must exceed the refresh interval (15s) by a safe margin.
+		await expect
+			.poll(
+				async () => {
+					const text = await page.getByTestId("stat-guests").textContent();
+					return text?.trim();
+				},
+				{ timeout: 30000, interval: 1000 },
+			)
+			.toContain("1");
+
+		// Also assert answer count updated
+		await expect(page.getByTestId("stat-answers")).toContainText("1");
 	});
 });

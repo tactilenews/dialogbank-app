@@ -1,5 +1,6 @@
 <script lang="ts">
 import { fly } from "svelte/transition";
+import { invalidateAll } from "$app/navigation";
 import logo from "$lib/assets/legacy-logo.svg";
 import type { LegacyClassification } from "./+page.server";
 import type { PageData } from "./$types";
@@ -121,6 +122,14 @@ $effect(() => {
 	if (quotes.length === 0) return;
 
 	const interval = setInterval(updateCurrent, intervalMs);
+	return () => clearInterval(interval);
+});
+
+$effect(() => {
+	const refreshIntervalMs = 15000;
+	const interval = setInterval(async () => {
+		await invalidateAll();
+	}, refreshIntervalMs);
 	return () => clearInterval(interval);
 });
 </script>
