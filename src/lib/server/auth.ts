@@ -3,9 +3,9 @@ import { betterAuth } from "better-auth/minimal";
 import { sveltekitCookies } from "better-auth/svelte-kit";
 import { getRequestEvent } from "$app/server";
 import { env } from "$env/dynamic/private";
-import { getDb } from "$lib/server/db";
+import type { DbClient } from "$lib/server/db";
 
-export function getAuth(db = getDb()) {
+export function getAuth(db: DbClient) {
 	return betterAuth({
 		baseURL: env.ORIGIN,
 		secret: env.BETTER_AUTH_SECRET,
