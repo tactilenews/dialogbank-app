@@ -1,0 +1,9 @@
+services:
+  db_e2e:
+    image: neondatabase/neon_local:latest
+    ports:
+      - "5433:5432"
+    environment:
+      NEON_API_KEY: ${NEON_API_KEY}
+      NEON_PROJECT_ID: ${NEON_PROJECT_ID}
+      PARENT_BRANCH_ID: ${PARENT_BRANCH_ID}
