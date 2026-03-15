@@ -18,7 +18,8 @@ const handleDb: Handle = async ({ event, resolve }) => {
 };
 
 const handleBetterAuth: Handle = async ({ event, resolve }) => {
-	if (!env.ORIGIN) {
+	const origin = env.ORIGIN ?? env.URL ?? event.url.origin;
+	if (!origin) {
 		throw new Error("ORIGIN is not set");
 	}
 	if (!env.BETTER_AUTH_SECRET) {
@@ -26,7 +27,7 @@ const handleBetterAuth: Handle = async ({ event, resolve }) => {
 	}
 
 	const auth = getAuth(event.locals.db, {
-		ORIGIN: env.ORIGIN,
+		ORIGIN: origin,
 		BETTER_AUTH_SECRET: env.BETTER_AUTH_SECRET,
 	});
 	event.locals.auth = auth;
