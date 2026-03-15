@@ -10,7 +10,7 @@ import * as schema from "$lib/server/db/schema";
 const db = getDb();
 const auth = getAuth(db, {
 	ORIGIN: "http://localhost:4173",
-	BETTER_AUTH_SECRET: "test-only-better-auth-secret",
+	BETTER_AUTH_SECRET: "better-auth-secret-with-32-characters-for-testing-only",
 });
 
 export const it = baseTest.extend<{ db: typeof db; schema: typeof schema; auth: typeof auth }>({
