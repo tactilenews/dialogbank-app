@@ -1,17 +1,3 @@
-services:
-  db:
-    image: neondatabase/neon_local:latest
-    ports:
-      - "5432:5432"
-    environment:
-      NEON_API_KEY: ${NEON_API_KEY}
-      NEON_PROJECT_ID: ${NEON_PROJECT_ID}
-      PARENT_BRANCH_ID: ${PARENT_BRANCH_ID}
-  db_e2e:
-    image: neondatabase/neon_local:latest
-    ports:
-      - "5433:5432"
-    environment:
-      NEON_API_KEY: ${NEON_API_KEY}
-      NEON_PROJECT_ID: ${NEON_PROJECT_ID}
-      PARENT_BRANCH_ID: ${PARENT_BRANCH_ID}
+include:
+  - ./compose.dev.yaml
+  - ./compose.e2e.yaml
