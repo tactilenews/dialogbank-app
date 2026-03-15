@@ -3,15 +3,6 @@ description: "Standard setup including pnpm, Node, and secrets"
 runs:
   using: "composite"
   steps:
-    - name: Fetch secrets from Infisical
-      uses: Infisical/secrets-action@v1.0.9
-      with:
-        method: "oidc"
-        identity-id: "b4a2a01a-d164-41de-bfbc-7098c791d475"
-        domain: "https://eu.infisical.com"
-        project-slug: "dialogbank"
-        env-slug: "test"
-
     - name: Install pnpm
       uses: pnpm/action-setup@v4
       with:

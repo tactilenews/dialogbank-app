@@ -38,12 +38,24 @@ jobs:
       - uses: ./.github/actions/setup
       - name: Start services
         run: docker compose up -d
+        env:
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          PARENT_BRANCH_ID: ${{ secrets.PARENT_BRANCH_ID }}
       - name: Install Playwright Browsers
         run: pnpm exec playwright install chromium --with-deps
       - name: Run Database Migrations
         run: pnpm run db:migrate
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
       - name: E2E Tests
         run: pnpm test:e2e
+        env:
+          BETTER_AUTH_SECRET: ${{ secrets.BETTER_AUTH_SECRET }}
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ELEVENLABS_AGENT_ID: ${{ secrets.ELEVENLABS_AGENT_ID }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_WEBHOOK_SECRET: ${{ secrets.ELEVENLABS_WEBHOOK_SECRET }}
 
   build:
     runs-on: ubuntu-latest
