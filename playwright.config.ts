@@ -8,7 +8,7 @@ const E2E_ORIGIN = "http://localhost:4173";
 const E2E_ELEVENLABS_WEBHOOK_SECRET = "test-elevenlabs-webhook-secret";
 
 process.env.ORIGIN ??= E2E_ORIGIN;
-process.env.BETTER_AUTH_SECRET ??= "test-only-better-auth-secret";
+process.env.BETTER_AUTH_SECRET ??= "better-auth-secret-with-32-characters-for-testing-only";
 process.env.ELEVENLABS_WEBHOOK_SECRET ??= E2E_ELEVENLABS_WEBHOOK_SECRET;
 
 export default defineConfig({
