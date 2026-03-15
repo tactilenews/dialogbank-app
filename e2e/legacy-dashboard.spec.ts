@@ -53,6 +53,8 @@ test.describe("Legacy Dashboard E2E", () => {
 	});
 
 	test("auto-refreshes stats after webhook fires", async ({ db, page, request }) => {
+		void db; // trigger database teardown because the following steps write to the database
+
 		// Navigate to empty dashboard
 		await page.goto("/legacy", { waitUntil: "networkidle" });
 
