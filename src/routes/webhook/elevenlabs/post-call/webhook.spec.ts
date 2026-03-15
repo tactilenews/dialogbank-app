@@ -35,9 +35,7 @@ describe("ElevenLabs Webhook", () => {
 
 	it("returns 200 and calls processElevenLabsPostCall for a valid payload", async ({
 		db,
-		auth,
 		expect,
-		schema,
 	}) => {
 		const request = new Request(url, {
 			method: "POST",
@@ -50,7 +48,7 @@ describe("ElevenLabs Webhook", () => {
 
 		const event = createRequestEvent({
 			request,
-			locals: { db, schema, auth },
+			locals: { db },
 			routeId: "/webhook/elevenlabs/post-call",
 		});
 		const responsePromise = POST(event);
@@ -63,7 +61,7 @@ describe("ElevenLabs Webhook", () => {
 		expect(processElevenLabsPostCall).toHaveBeenCalledWith({ db, payload: JSON.parse(body) });
 	});
 
-	it("throws 401 if signature is missing", async ({ auth, db, expect, schema }) => {
+	it("throws 401 if signature is missing", async ({ expect }) => {
 		const request = new Request(url, {
 			method: "POST",
 			headers: {
@@ -74,13 +72,13 @@ describe("ElevenLabs Webhook", () => {
 
 		const event = createRequestEvent({
 			request,
-			locals: { auth, db, schema },
+			locals: {},
 			routeId: "/webhook/elevenlabs/post-call",
 		});
 		await expect(POST(event)).rejects.toMatchObject({ status: 401 });
 	});
 
-	it("throws 401 for an invalid signature", async ({ auth, db, expect, schema }) => {
+	it("throws 401 for an invalid signature", async ({ expect }) => {
 		const request = new Request(url, {
 			method: "POST",
 			headers: {
@@ -92,13 +90,13 @@ describe("ElevenLabs Webhook", () => {
 
 		const event = createRequestEvent({
 			request,
-			locals: { auth, db, schema },
+			locals: {},
 			routeId: "/webhook/elevenlabs/post-call",
 		});
 		await expect(POST(event)).rejects.toMatchObject({ status: 401 });
 	});
 
-	it("throws 400 for invalid JSON", async ({ auth, db, expect, schema }) => {
+	it("throws 400 for invalid JSON", async ({ expect }) => {
 		const invalidBody = "invalid-json";
 		const invalidSig = crypto
 			.createHmac("sha256", secret)
@@ -116,7 +114,7 @@ describe("ElevenLabs Webhook", () => {
 
 		const event = createRequestEvent({
 			request,
-			locals: { auth, db, schema },
+			locals: {},
 			routeId: "/webhook/elevenlabs/post-call",
 		});
 		await expect(POST(event)).rejects.toMatchObject({ status: 400 });

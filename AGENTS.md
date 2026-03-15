@@ -11,6 +11,7 @@
 - **Linting & Formatting**: Always run `pnpm run lint:fix` every time source files are changed to ensure consistent style and apply safe fixes.
 - **Type Checking**: After source files are changed, run `pnpm run check` and fix any TypeScript errors.
 - **TypeScript**: NEVER use the non-null assertion operator (`!`). Always use proper null checks, optional chaining, or type guards.
+- **TypeScript**: Use `satisfies` when possible. Keep inputs narrowly typed while exporting or returning exact framework types by adding `satisfies` constraints.
 
 ## PR Guidelines
 

@@ -36,7 +36,7 @@ beforeAll(async () => {
 
 type CreateRequestEventInput<RouteId extends RequestEvent["route"]["id"]> = {
 	request: Request;
-	locals: App.Locals;
+	locals: Partial<App.Locals>;
 	url?: URL;
 	params?: Record<string, never>;
 	routeId?: RouteId;
@@ -58,7 +58,7 @@ export function createRequestEvent<
 	};
 	return {
 		request,
-		locals,
+		locals: locals as App.Locals,
 		cookies: {
 			get: () => undefined,
 			getAll: () => [],
