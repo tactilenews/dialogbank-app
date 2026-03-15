@@ -4,6 +4,10 @@ import { defineConfig } from "@playwright/test";
  * Force e2e tests to use the dedicated e2e database on port 5433.
  */
 const E2E_DATABASE_URL = "postgres://user:password@localhost:5433/neondb";
+const E2E_ORIGIN = "http://localhost:4173";
+
+process.env.ORIGIN ??= E2E_ORIGIN;
+process.env.BETTER_AUTH_SECRET ??= "test-only-better-auth-secret";
 
 export default defineConfig({
 	webServer: {

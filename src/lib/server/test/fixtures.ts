@@ -8,7 +8,10 @@ import { getDb } from "$lib/server/db";
 import * as schema from "$lib/server/db/schema";
 
 const db = getDb();
-const auth = getAuth(db);
+const auth = getAuth(db, {
+	ORIGIN: "http://localhost:4173",
+	BETTER_AUTH_SECRET: "test-only-better-auth-secret",
+});
 
 export const it = baseTest.extend<{ db: typeof db; schema: typeof schema; auth: typeof auth }>({
 	// biome-ignore lint/correctness/noEmptyPattern: Vitest fixture requires destructuring pattern

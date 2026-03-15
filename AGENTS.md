@@ -15,6 +15,7 @@
 ## PR Guidelines
 
 - **PR Titles**: Must follow the Conventional Commits specification (e.g., `feat: add pglite-backed integration tests`).
+- **Commit Messages**: Must explain the motivation for the change (why) in the body. The subject should remain a concise summary.
 
 ## Secrets & Environment Variables
 
