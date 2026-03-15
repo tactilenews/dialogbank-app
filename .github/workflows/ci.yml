@@ -54,7 +54,6 @@ jobs:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ELEVENLABS_AGENT_ID: ${{ secrets.ELEVENLABS_AGENT_ID }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
-          ELEVENLABS_WEBHOOK_SECRET: ${{ secrets.ELEVENLABS_WEBHOOK_SECRET }}
 
   build:
     runs-on: ubuntu-latest
