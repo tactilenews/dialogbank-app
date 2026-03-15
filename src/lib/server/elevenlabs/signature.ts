@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
-import { error, type RequestEvent } from "@sveltejs/kit";
+import { error, type RequestEvent, type RequestHandler } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
+import type { RequestEventWithLocals } from "$lib/server/kit";
 
 export function verifyElevenLabsSignature(body: string, header: string): boolean {
 	const webhookSecret = env.ELEVENLABS_WEBHOOK_SECRET;
@@ -34,8 +35,11 @@ export function verifyElevenLabsSignature(body: string, header: string): boolean
 /**
  * Higher-order function to protect ElevenLabs webhook endpoints
  */
-export function withElevenLabsVerification(handler: (event: RequestEvent) => Promise<Response>) {
-	return async (event: RequestEvent) => {
+export function withElevenLabsVerification<
+	Locals extends Partial<App.Locals> = App.Locals,
+	RouteId extends RequestEvent["route"]["id"] = RequestEvent["route"]["id"],
+>(handler: (event: RequestEventWithLocals<Locals, RouteId>) => ReturnType<RequestHandler>) {
+	return async (event: RequestEventWithLocals<Locals, RouteId>) => {
 		const signatureHeader = event.request.headers.get("ElevenLabs-Signature");
 		if (!signatureHeader) {
 			throw error(401, "Missing signature");
@@ -49,6 +53,6 @@ export function withElevenLabsVerification(handler: (event: RequestEvent) => Pro
 			throw error(401, "Invalid signature");
 		}
 
-		return handler(event);
+		return handler(event) as ReturnType<RequestHandler>;
 	};
 }

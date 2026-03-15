@@ -3,9 +3,12 @@ import { error, json } from "@sveltejs/kit";
 import { consola } from "consola";
 import { withElevenLabsVerification } from "$lib/server/elevenlabs/signature";
 import { processElevenLabsPostCall } from "$lib/server/elevenlabs/storage";
+import type { LocalsSubset, RequestHandlerWithLocals } from "$lib/server/kit";
 import type { RequestHandler } from "./$types";
 
-export const POST: RequestHandler = withElevenLabsVerification(async ({ request, locals }) => {
+type PostCallLocals = LocalsSubset<"db">;
+
+const handlePostCall: RequestHandlerWithLocals<PostCallLocals> = async ({ request, locals }) => {
 	const body = await request.text();
 
 	let payload: unknown;
@@ -28,4 +31,6 @@ export const POST: RequestHandler = withElevenLabsVerification(async ({ request,
 	}
 
 	return json({ success: true });
-});
+};
+
+export const POST = withElevenLabsVerification(handlePostCall) satisfies RequestHandler;
