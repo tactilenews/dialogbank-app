@@ -4,7 +4,10 @@ import { getAuth } from "$lib/server/auth";
 import { getDb } from "$lib/server/db";
 import * as schema from "$lib/server/db/schema";
 
-const baseAuth = getAuth(getDb());
+const baseAuth = getAuth(getDb(), {
+	ORIGIN: "http://localhost:5173",
+	BETTER_AUTH_SECRET: "development-only-better-auth-secret",
+});
 const auth = betterAuth({
 	...baseAuth.options,
 	...{
