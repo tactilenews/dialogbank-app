@@ -51,3 +51,28 @@ npm run build
 You can preview the production build with `npm run preview`.
 
 > To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+
+## Dependabot secrets
+
+Dependabot-triggered workflow runs cannot read regular GitHub Actions secrets. This repository includes a sync script that copies selected values into the repository's Dependabot secret store.
+
+Run it locally with Infisical-loaded environment variables:
+
+```sh
+infisical run --env test -- pnpm run sync:dependabot-secrets
+```
+
+Required environment variables:
+
+- `GITHUB_TOKEN`, using a token that can manage repository Dependabot secrets
+- The secret values to sync, by default:
+  - `DATABASE_URL`
+  - `ELEVENLABS_AGENT_ID`
+  - `ELEVENLABS_API_KEY`
+  - `NEON_API_KEY`
+  - `NEON_PROJECT_ID`
+  - `PARENT_BRANCH_ID`
+
+Optional environment variables:
+
+- `DEPENDABOT_SECRET_NAMES`, a comma-separated override list for which secret names to sync
