@@ -26,7 +26,7 @@
 	},
 	"devDependencies": {
 		"@better-auth/cli": "~1.4.21",
-		"@biomejs/biome": "^2.4.6",
+		"@biomejs/biome": "^2.4.7",
 		"@chromatic-com/storybook": "^5.0.1",
 		"@electric-sql/pglite": "^0.3.16",
 		"@elevenlabs/elevenlabs-js": "^2.39.0",
