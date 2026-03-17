@@ -1,14 +1,14 @@
-import { answers, conversations } from "./legacy-dashboard.spec/data";
+import { answers, conversations } from "./dashboard.spec/data";
 import { schema } from "./lib/db";
 import { expect, test } from "./lib/fixtures";
 import { createElevenLabsSignature } from "./lib/webhook";
 
-test.describe("Legacy Dashboard E2E", () => {
+test.describe("Dashboard E2E", () => {
 	test("shows stats counters and highlights the current classification", async ({ db, page }) => {
 		await db.insert(schema.conversations).values(conversations);
 		await db.insert(schema.answers).values(answers);
 
-		await page.goto("/legacy", { waitUntil: "networkidle" });
+		await page.goto("/dashboard", { waitUntil: "networkidle" });
 
 		await expect(page.getByTestId("stat-guests")).toContainText("1");
 		await expect(page.getByTestId("stat-answers")).toContainText("2");
@@ -39,7 +39,7 @@ test.describe("Legacy Dashboard E2E", () => {
 		await db.insert(schema.conversations).values(conversations);
 		await db.insert(schema.answers).values(answers);
 
-		await page.goto("/legacy", { waitUntil: "networkidle" });
+		await page.goto("/dashboard", { waitUntil: "networkidle" });
 
 		const quoteCard = page.locator('[data-testid="current-quote"]:not([inert])');
 		const initialText = (await quoteCard.textContent())?.trim() ?? "";
@@ -56,7 +56,7 @@ test.describe("Legacy Dashboard E2E", () => {
 		void db; // trigger database teardown because the following steps write to the database
 
 		// Navigate to empty dashboard
-		await page.goto("/legacy", { waitUntil: "networkidle" });
+		await page.goto("/dashboard", { waitUntil: "networkidle" });
 
 		// Verify baseline: guests stat shows 0
 		await expect(page.getByTestId("stat-guests")).toContainText("0");

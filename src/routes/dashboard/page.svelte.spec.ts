@@ -4,8 +4,8 @@ import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
 import { sampleLegacyPageData } from "./page.svelte.spec/data";
 
-describe("/legacy +page.svelte", () => {
-	it("renders the legacy header and stats", async () => {
+describe("/dashboard +page.svelte", () => {
+	it("renders the dashboard header and stats", async () => {
 		render(Page, { props: { data: sampleLegacyPageData } });
 
 		const heading = page.getByRole("heading", {

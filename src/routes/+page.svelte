@@ -64,5 +64,11 @@ $effect(() => {
 		>
 			Go to Agent Explorer
 		</a>
+		<a
+			href={resolve('/dashboard')}
+			class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
+		>
+			Open Dashboard
+		</a>
 	</div>
 </div>
