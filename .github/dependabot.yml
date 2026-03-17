@@ -10,8 +10,8 @@ updates:
     groups:
       linting:
         patterns:
-          - "eslint*"
-          - "prettier*"
+          - "@biomejs/*"
+          - "biome*"
           - "globals"
           - "typescript-eslint"
       testing:
