@@ -5,87 +5,67 @@ import logo from "$lib/assets/legacy-logo.svg";
 import type { LegacyClassification } from "./+page.server";
 import type { PageData } from "./$types";
 
-const classificationValues = ["proGelsenkirchen", "conGelsenkirchen", "ideaGelsenkirchen"] as const;
-
-const classificationStats = [
-	{
-		key: "proGelsenkirchen",
+const classificationMeta = {
+	proGelsenkirchen: {
 		singular: "gute Sache über Gelsenkirchen",
 		plural: "gute Dinge über Gelsenkirchen",
 		emoji: "❤️",
 	},
-	{
-		key: "conGelsenkirchen",
+	conGelsenkirchen: {
 		singular: "Problem in Gelsenkirchen",
 		plural: "Probleme in Gelsenkirchen",
 		emoji: "😤",
 	},
-	{
-		key: "ideaGelsenkirchen",
+	ideaGelsenkirchen: {
 		singular: "Idee für Gelsenkirchen",
 		plural: "Ideen für Gelsenkirchen",
 		emoji: "💡",
 	},
-] as const;
+} satisfies Record<LegacyClassification, { singular: string; plural: string; emoji: string }>;
+
+const classificationStats = Object.entries(classificationMeta).map(([key, value]) => ({
+	key: key as LegacyClassification,
+	...value,
+}));
 
 let { data }: { data: PageData } = $props();
 
 type Quote = PageData["quotes"][number];
 
-let currentIndex = $state(0);
-let visibleClassification = $state<LegacyClassification | null>(null);
-let shuffledQueue = $state<number[]>([]);
+let currentQuoteId = $state<number | null>(null);
 
-const newQuoteThreshold = 15;
 const intervalMs = 4500;
 
 const quotes = $derived(data.quotes ?? []);
+const currentQuote = $derived.by(
+	() => quotes.find((quote) => quote.id === currentQuoteId) ?? quotes[0] ?? null,
+);
+const visibleClassification = $derived.by(() => {
+	const classification = currentQuote?.classification;
+	return classification && classification in classificationMeta
+		? (classification as LegacyClassification)
+		: null;
+});
 
-const isLegacyClassification = (value: string | null | undefined): value is LegacyClassification =>
-	!!value && classificationValues.includes(value as LegacyClassification);
+const pickNextQuote = (quotesArray: Quote[], activeQuoteId: number | null) => {
+	if (quotesArray.length === 0) return null;
+	if (quotesArray.length === 1) return quotesArray[0]?.id ?? null;
 
-const createWeightedQueue = (quotesArray: Quote[]) => {
-	if (quotesArray.length === 0) return [];
+	const candidates = quotesArray.filter((quote) => quote.id !== activeQuoteId);
+	const totalWeight = candidates.reduce(
+		(sum, _quote, index) => sum + (candidates.length - index),
+		0,
+	);
+	let randomWeight = Math.random() * totalWeight;
 
-	const queue: number[] = [];
-	const threshold = Math.min(newQuoteThreshold, quotesArray.length);
-
-	for (let index = 0; index < threshold; index += 1) {
-		queue.push(index, index, index, index);
+	for (const [index, quote] of candidates.entries()) {
+		randomWeight -= candidates.length - index;
+		if (randomWeight <= 0) {
+			return quote.id;
+		}
 	}
 
-	for (let index = 0; index < quotesArray.length; index += 1) {
-		queue.push(index);
-	}
-
-	for (let index = queue.length - 1; index > 0; index -= 1) {
-		const swapIndex = Math.floor(Math.random() * (index + 1));
-		[queue[index], queue[swapIndex]] = [queue[swapIndex], queue[index]];
-	}
-
-	return queue;
-};
-
-const setVisibleForQuote = (index: number) => {
-	const classification = quotes[index]?.classification;
-	visibleClassification = isLegacyClassification(classification) ? classification : null;
-};
-
-const getNextQuoteIndex = () => {
-	if (quotes.length === 0) return 0;
-
-	if (shuffledQueue.length === 0) {
-		shuffledQueue = createWeightedQueue(quotes);
-	}
-
-	const nextIndex = shuffledQueue.shift();
-	return typeof nextIndex === "number" ? nextIndex : Math.floor(Math.random() * quotes.length);
-};
-
-const updateCurrent = () => {
-	if (quotes.length === 0) return;
-	currentIndex = getNextQuoteIndex();
-	setVisibleForQuote(currentIndex);
+	return candidates[0]?.id ?? quotesArray[0]?.id ?? null;
 };
 
 const formatName = (quote: Quote) => {
@@ -100,28 +80,17 @@ const formatName = (quote: Quote) => {
 	return name;
 };
 
-const emojiForClassification = (classification: string | null | undefined) => {
-	if (classification === "ideaGelsenkirchen") return "💡";
-	if (classification === "proGelsenkirchen") return "❤️";
-	if (classification === "conGelsenkirchen") return "😤";
-	return "";
-};
-
-$effect(() => {
-	currentIndex = 0;
-	shuffledQueue = createWeightedQueue(quotes);
-
-	if (quotes.length > 0) {
-		setVisibleForQuote(0);
-	} else {
-		visibleClassification = null;
-	}
-});
+const emojiForClassification = (classification: string | null | undefined) =>
+	classification && classification in classificationMeta
+		? classificationMeta[classification as LegacyClassification].emoji
+		: "";
 
 $effect(() => {
 	if (quotes.length === 0) return;
 
-	const interval = setInterval(updateCurrent, intervalMs);
+	const interval = setInterval(() => {
+		currentQuoteId = pickNextQuote(quotes, currentQuoteId);
+	}, intervalMs);
 	return () => clearInterval(interval);
 });
 
@@ -176,9 +145,8 @@ $effect(() => {
 				</div>
 
 				<div class="legacy-quotes">
-					{#if quotes.length > 0}
-						{#key currentIndex}
-							{@const currentQuote = quotes[currentIndex]}
+					{#if currentQuote}
+						{#key currentQuote.id}
 							<div class="legacy-quote-wrapper">
 								<div
 									in:fly={{ y: 600, duration: 1700 }}
@@ -187,9 +155,9 @@ $effect(() => {
 									data-testid="current-quote"
 								>
 									<div class="legacy-quote-text">
-										{emojiForClassification(currentQuote?.classification)}»{currentQuote?.text?.trim() ?? ""}«
+										{emojiForClassification(currentQuote.classification)}»{currentQuote.text?.trim() ?? ""}«
 									</div>
-									{#if currentQuote && formatName(currentQuote)}
+									{#if formatName(currentQuote)}
 										<div class="legacy-quote-meta">
 											{formatName(currentQuote)}
 										</div>
