@@ -36,7 +36,7 @@
 		"@sentry/sveltekit": "^10.43.0",
 		"@storybook/addon-a11y": "^10.2.19",
 		"@storybook/addon-docs": "^10.2.19",
-		"@storybook/addon-svelte-csf": "^5.0.11",
+		"@storybook/addon-svelte-csf": "^5.0.12",
 		"@storybook/addon-vitest": "^10.2.19",
 		"@storybook/sveltekit": "^10.2.19",
 		"@sveltejs/adapter-netlify": "^6.0.4",
