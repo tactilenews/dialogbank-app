@@ -1,4 +1,4 @@
-import { answers, conversations } from "./dashboard.spec/data";
+import { answers, classifications, conversations } from "./dashboard.spec/data";
 import { schema } from "./lib/db";
 import { expect, test } from "./lib/fixtures";
 import { createElevenLabsSignature } from "./lib/webhook";
@@ -6,6 +6,7 @@ import { createElevenLabsSignature } from "./lib/webhook";
 test.describe("Dashboard E2E", () => {
 	test("shows stats counters and highlights the current classification", async ({ db, page }) => {
 		await db.insert(schema.conversations).values(conversations);
+		await db.insert(schema.classifications).values(classifications);
 		await db.insert(schema.answers).values(answers);
 
 		await page.goto("/dashboard", { waitUntil: "networkidle" });
@@ -37,6 +38,7 @@ test.describe("Dashboard E2E", () => {
 
 	test("rotates the quote card", async ({ db, page }) => {
 		await db.insert(schema.conversations).values(conversations);
+		await db.insert(schema.classifications).values(classifications);
 		await db.insert(schema.answers).values(answers);
 
 		await page.goto("/dashboard", { waitUntil: "networkidle" });

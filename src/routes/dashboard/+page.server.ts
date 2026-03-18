@@ -13,7 +13,7 @@ const emptyClassificationCounts: Record<LegacyClassification, number> = {
 
 export const load: PageServerLoad = async (event) => {
 	const { db, schema } = event.locals;
-	const { answers, conversations } = schema;
+	const { answers, classifications, conversations } = schema;
 
 	const conversationCountResult = await db
 		.select({ count: sql<number>`count(*)` })
@@ -24,13 +24,14 @@ export const load: PageServerLoad = async (event) => {
 		.select({
 			id: answers.id,
 			value: answers.value,
-			classification: answers.classification,
+			classification: classifications.key,
 			firstName: conversations.firstName,
 			lastName: conversations.lastName,
 			age: conversations.age,
 		})
 		.from(answers)
 		.innerJoin(conversations, eq(answers.conversationId, conversations.conversationId))
+		.leftJoin(classifications, eq(answers.classificationId, classifications.id))
 		.where(eq(conversations.publicationAllowed, true))
 		.orderBy(desc(answers.id));
 
