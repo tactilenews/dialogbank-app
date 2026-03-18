@@ -2,6 +2,25 @@ import type { schema } from "../lib/db";
 
 type ConversationInsert = typeof schema.conversations.$inferInsert;
 type AnswerInsert = typeof schema.answers.$inferInsert;
+type ClassificationInsert = typeof schema.classifications.$inferInsert;
+
+export const classifications: ClassificationInsert[] = [
+	{
+		id: 1,
+		key: "proGelsenkirchen",
+		label: "Pro Gelsenkirchen",
+	},
+	{
+		id: 2,
+		key: "ideaGelsenkirchen",
+		label: "Idea Gelsenkirchen",
+	},
+	{
+		id: 3,
+		key: "conGelsenkirchen",
+		label: "Contra Gelsenkirchen",
+	},
+];
 
 export const conversations: ConversationInsert[] = [
 	{
@@ -25,7 +44,6 @@ export const answers: AnswerInsert[] = [
 			"Ich mag den WDR. Der hat zum Beispiel Quarks und die Sendung mit der Maus. Das sind ganz gute Formate.",
 		rationale:
 			"Der Nutzer antwortet auf die Frage 'Wie findest du den WDR im Allgemeinen?' mit 'Ich mag den WDR.'",
-		classification: null,
 	},
 	{
 		id: 202,
@@ -34,6 +52,6 @@ export const answers: AnswerInsert[] = [
 		value: "Ja, ist jetzt nicht so hübsch.",
 		rationale:
 			"Der Nutzer antwortet auf die Frage 'Wie gefällt dir die Innenstadt von Gelsenkirchen so?' mit 'Ja, ist jetzt nicht so hübsch.'.",
-		classification: "conGelsenkirchen",
+		classificationId: 3,
 	},
 ];
