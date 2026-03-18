@@ -13,7 +13,7 @@ process.env.ELEVENLABS_WEBHOOK_SECRET ??= E2E_ELEVENLABS_WEBHOOK_SECRET;
 
 export default defineConfig({
 	webServer: {
-		command: "pnpm run db:push && pnpm run build && pnpm run preview",
+		command: "pnpm run build && pnpm run preview",
 		port: 4173,
 		reuseExistingServer: !process.env.CI,
 		env: {
