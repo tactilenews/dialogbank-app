@@ -9,7 +9,7 @@ test.describe("Authentication", () => {
 		await expect(page).toHaveURL("/auth/sign-in");
 
 		// Verify sign-in page renders correctly
-		await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Sign-in" })).toBeVisible();
 	});
 
 	test("signs in successfully with valid credentials", async ({ auth, page }) => {
@@ -26,7 +26,7 @@ test.describe("Authentication", () => {
 		await page.goto("/auth/sign-in");
 		await page.getByLabel("Email address").fill("user@example.org");
 		await page.getByLabel("Password").fill("12341234");
-		await page.getByRole("button", { name: "Sign In" }).click();
+		await page.getByRole("button", { name: "Sign-in" }).click();
 
 		// Verify successful redirect to the start page
 		await expect(page).toHaveURL("/");
