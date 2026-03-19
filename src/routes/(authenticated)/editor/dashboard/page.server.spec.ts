@@ -7,7 +7,7 @@ import {
 	sampleConversations,
 } from "./page.server.spec/data";
 
-describe("/editor +page.server", () => {
+describe("/editor/dashboard +page.server", () => {
 	it("defaults invalid page params to the first page", async ({ db, expect, schema }) => {
 		await expect(
 			db.insert(schema.conversations).values(sampleConversations),
@@ -18,7 +18,7 @@ describe("/editor +page.server", () => {
 		await expect(db.insert(schema.answers).values(paginatedSupportAnswers)).resolves.toBeDefined();
 
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor?page_support=Infinity"),
+			request: new Request("http://localhost/editor/dashboard?page_support=Infinity"),
 			locals: {
 				user: null,
 				db,
@@ -55,7 +55,7 @@ describe("/editor +page.server", () => {
 		).resolves.toBeDefined();
 
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor"),
+			request: new Request("http://localhost/editor/dashboard"),
 			locals: {
 				user: null,
 				db,

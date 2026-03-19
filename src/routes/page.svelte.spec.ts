@@ -15,23 +15,40 @@ describe("/+page.svelte", () => {
 		const description = page.getByText("This is a public page for DialogBank.");
 		await expect.element(description).toBeVisible();
 
-		// Check for Agent Explorer button
-		const agentExplorerLink = page.getByRole("link", { name: "Go to Agent Explorer" });
-		await expect.element(agentExplorerLink).toBeVisible();
+		const dialogbankLink = page.getByRole("link", { name: "DialogBank" });
+		await expect.element(dialogbankLink).toHaveAttribute("href", "/dialogbank");
+
+		const signInButton = page.getByRole("link", { name: "Sign in" });
+		await expect.element(signInButton).toBeVisible();
 	});
 
 	it("displays sign in button when not authenticated", async () => {
 		render(Page, { props: { data: { user: null, answers: [] } } });
 
-		// Should show Sign in button
 		const signInButton = page.getByRole("link", { name: "Sign in" });
 		await expect.element(signInButton).toBeVisible();
+		await expect
+			.element(page.getByRole("link", { name: "DialogBank" }))
+			.toHaveAttribute("href", "/dialogbank");
+		await expect.element(page.getByRole("link", { name: "Editor Agent" })).not.toBeInTheDocument();
+		await expect
+			.element(page.getByRole("link", { name: "Editor Dashboard" }))
+			.not.toBeInTheDocument();
 	});
 
-	it("agent explorer link has correct href", async () => {
-		render(Page, { props: { data: { user: null, answers: [] } } });
+	it("displays direct editor links when authenticated", async () => {
+		render(Page, {
+			props: { data: { user: { id: "user-1" }, answers: [] } },
+		});
 
-		const agentExplorerLink = page.getByRole("link", { name: "Go to Agent Explorer" });
-		await expect.element(agentExplorerLink).toHaveAttribute("href", "/dialogbank");
+		const agentExplorerLink = page.getByRole("link", { name: "Editor Agent" });
+		await expect.element(agentExplorerLink).toHaveAttribute("href", "/editor/agent");
+
+		const dashboardLink = page.getByRole("link", { name: "Editor Dashboard" });
+		await expect.element(dashboardLink).toHaveAttribute("href", "/editor/dashboard");
+		await expect
+			.element(page.getByRole("link", { name: "DialogBank" }))
+			.toHaveAttribute("href", "/dialogbank");
+		await expect.element(page.getByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
 	});
 });

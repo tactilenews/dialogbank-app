@@ -7,7 +7,7 @@ let { data }: { data: PageData } = $props();
 
 <div class="mx-auto max-w-3xl p-6">
 	<div class="mb-6 flex items-center justify-between">
-		<h1 class="text-3xl font-bold">DialogBank Agent Explorer</h1>
+		<h1 class="text-3xl font-bold">Editor Agent</h1>
 		<form method="post" action="/auth/sign-out" use:enhance>
 			<button
 				class="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 transition hover:bg-gray-50"

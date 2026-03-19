@@ -4,7 +4,7 @@ import type { Actions, PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	if (event.locals.user) {
-		return redirect(302, "/dialogbank");
+		return redirect(302, "/");
 	}
 	return {};
 };
@@ -31,6 +31,6 @@ export const actions: Actions = {
 			return fail(500, { message: "Unexpected error" });
 		}
 
-		return redirect(302, "/dialogbank");
+		return redirect(302, "/");
 	},
 };

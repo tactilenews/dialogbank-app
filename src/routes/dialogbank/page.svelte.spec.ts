@@ -4,7 +4,7 @@ import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
 import { sampleLegacyPageData } from "./page.svelte.spec/data";
 
-describe("/dashboard +page.svelte", () => {
+describe("/dialogbank +page.svelte", () => {
 	it("renders the dashboard header and stats", async () => {
 		render(Page, { props: { data: sampleLegacyPageData } });
 
