@@ -1,6 +1,7 @@
 import type { PageData } from "../$types";
 
-export const sampleLegacyPageData = {
+export const sampleDialogbankPageData = {
+	user: null,
 	guests: 3,
 	answerCount: 4,
 	classificationCounts: {

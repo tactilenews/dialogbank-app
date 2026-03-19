@@ -1,15 +1,15 @@
 import { expect, test } from "./lib/fixtures";
 
 test.describe("Authentication", () => {
-	test("unauthenticated users cannot access /dialogbank and are redirected to sign-in", async ({
+	test("unauthenticated users cannot access /editor/agent and are redirected to sign in", async ({
 		page,
 	}) => {
 		// Attempt to access protected route
-		await page.goto("/dialogbank");
+		await page.goto("/editor/agent");
 		await expect(page).toHaveURL("/auth/sign-in");
 
-		// Verify sign-in page renders correctly
-		await expect(page.getByRole("heading", { name: "Sign In" })).toBeVisible();
+		// Verify sign in page renders correctly
+		await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 	});
 
 	test("signs in successfully with valid credentials", async ({ auth, page }) => {
@@ -26,10 +26,18 @@ test.describe("Authentication", () => {
 		await page.goto("/auth/sign-in");
 		await page.getByLabel("Email address").fill("user@example.org");
 		await page.getByLabel("Password").fill("12341234");
-		await page.getByRole("button", { name: "Sign In" }).click();
+		await page.getByRole("button", { name: "Sign in" }).click();
 
-		// Verify successful redirect to protected area
-		await expect(page).toHaveURL("/dialogbank");
-		await expect(page.getByRole("heading", { name: "DialogBank Agent Explorer" })).toBeVisible();
+		// Verify successful redirect to the start page
+		await expect(page).toHaveURL("/");
+		await expect(page.getByRole("heading", { name: "DialogBank" })).toBeVisible();
+		const topLevelNav = page.getByLabel("Top level");
+		await expect(topLevelNav.getByRole("link", { name: "DialogBank" })).toBeVisible();
+		await expect(topLevelNav.getByRole("link", { name: "Editor Agent" })).toBeVisible();
+		await expect(topLevelNav.getByRole("link", { name: "Editor Dashboard" })).toBeVisible();
+
+		await topLevelNav.getByRole("link", { name: "Editor Agent" }).click();
+		await expect(page).toHaveURL("/editor/agent");
+		await expect(page.getByRole("heading", { name: "Editor Agent" })).toBeVisible();
 	});
 });

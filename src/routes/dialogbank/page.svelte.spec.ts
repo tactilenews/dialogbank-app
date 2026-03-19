@@ -2,11 +2,11 @@ import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
-import { sampleLegacyPageData } from "./page.svelte.spec/data";
+import { sampleDialogbankPageData } from "./page.svelte.spec/data";
 
-describe("/dashboard +page.svelte", () => {
+describe("/dialogbank +page.svelte", () => {
 	it("renders the dashboard header and stats", async () => {
-		render(Page, { props: { data: sampleLegacyPageData } });
+		render(Page, { props: { data: sampleDialogbankPageData } });
 
 		const heading = page.getByRole("heading", {
 			name: "LIVE AUS DER FEEDBACKKABINE ÜBER GELSENKIRCHEN",
@@ -25,7 +25,7 @@ describe("/dashboard +page.svelte", () => {
 	});
 
 	it("highlights the classification for the visible quote", async () => {
-		render(Page, { props: { data: sampleLegacyPageData } });
+		render(Page, { props: { data: sampleDialogbankPageData } });
 
 		const highlightedStat = page.getByTestId("stat-proGelsenkirchen");
 		await expect.element(highlightedStat).toHaveAttribute("data-highlighted", "true");

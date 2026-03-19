@@ -4,7 +4,7 @@ import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
 import { sampleEditorPageData } from "./page.svelte.spec/data";
 
-describe("/editor +page.svelte", () => {
+describe("/editor/dashboard +page.svelte", () => {
 	it("renders summary stats and chart", async () => {
 		render(Page, { props: { data: sampleEditorPageData } });
 

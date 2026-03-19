@@ -1,6 +1,5 @@
 <script lang="ts">
 import { fade } from "svelte/transition";
-import { enhance } from "$app/forms";
 import { resolve } from "$app/paths";
 import type { PageData } from "./$types";
 
@@ -42,14 +41,25 @@ $effect(() => {
 	{/if}
 
 	<div class="mt-8 flex items-center gap-4">
+		<a
+			href={resolve('/dialogbank')}
+			class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
+		>
+			DialogBank
+		</a>
 		{#if data.user}
-			<form method="post" action="/auth/sign-out" use:enhance>
-				<button
-					class="rounded-lg bg-gray-200 px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-300 focus:outline-none"
-				>
-					Sign out
-				</button>
-			</form>
+			<a
+				href={resolve('/editor/agent')}
+				class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
+			>
+				Editor Agent
+			</a>
+			<a
+				href={resolve('/editor/dashboard')}
+				class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
+			>
+				Editor Dashboard
+			</a>
 		{:else}
 			<a
 				href={resolve('/auth/sign-in')}
@@ -58,17 +68,5 @@ $effect(() => {
 				Sign in
 			</a>
 		{/if}
-		<a
-			href={resolve('/dialogbank')}
-			class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
-		>
-			Go to Agent Explorer
-		</a>
-		<a
-			href={resolve('/dashboard')}
-			class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
-		>
-			Open Dashboard
-		</a>
 	</div>
 </div>

@@ -119,7 +119,7 @@ infisical --env test run -- pnpm run db:migrate
 
 ## Naming & Wording Mandates
 
-- **Authentication**: Always use the wording **"sign-in"** and **"sign-out"** (including for button labels, headings, and URLs). Avoid using "login", "logout", "Log in", or "Log out".
+- **Authentication**: Always use the wording **"Sign in"** and **"Sign out"** for button labels and headings. Avoid using "login", "logout", "Log in", or "Log out".
 - **Test Descriptions**: Use the present tense (e.g., "returns 200", "throws 401") and avoid repetitive wording like "should".
 
 ---
