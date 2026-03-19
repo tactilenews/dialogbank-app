@@ -1,15 +1,15 @@
 import { expect, test } from "./lib/fixtures";
 
 test.describe("Authentication", () => {
-	test("unauthenticated users cannot access /editor/agent and are redirected to sign-in", async ({
+	test("unauthenticated users cannot access /editor/agent and are redirected to sign in", async ({
 		page,
 	}) => {
 		// Attempt to access protected route
 		await page.goto("/editor/agent");
 		await expect(page).toHaveURL("/auth/sign-in");
 
-		// Verify sign-in page renders correctly
-		await expect(page.getByRole("heading", { name: "Sign-in" })).toBeVisible();
+		// Verify sign in page renders correctly
+		await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 	});
 
 	test("signs in successfully with valid credentials", async ({ auth, page }) => {
@@ -26,7 +26,7 @@ test.describe("Authentication", () => {
 		await page.goto("/auth/sign-in");
 		await page.getByLabel("Email address").fill("user@example.org");
 		await page.getByLabel("Password").fill("12341234");
-		await page.getByRole("button", { name: "Sign-in" }).click();
+		await page.getByRole("button", { name: "Sign in" }).click();
 
 		// Verify successful redirect to the start page
 		await expect(page).toHaveURL("/");

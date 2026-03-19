@@ -18,14 +18,14 @@ describe("/+page.svelte", () => {
 		const dialogbankLink = page.getByRole("link", { name: "DialogBank" });
 		await expect.element(dialogbankLink).toHaveAttribute("href", "/dialogbank");
 
-		const signInButton = page.getByRole("link", { name: "Sign-in" });
+		const signInButton = page.getByRole("link", { name: "Sign in" });
 		await expect.element(signInButton).toBeVisible();
 	});
 
-	it("displays sign-in button when not authenticated", async () => {
+	it("displays sign in button when not authenticated", async () => {
 		render(Page, { props: { data: { user: null, answers: [] } } });
 
-		const signInButton = page.getByRole("link", { name: "Sign-in" });
+		const signInButton = page.getByRole("link", { name: "Sign in" });
 		await expect.element(signInButton).toBeVisible();
 		await expect
 			.element(page.getByRole("link", { name: "DialogBank" }))
@@ -49,6 +49,6 @@ describe("/+page.svelte", () => {
 		await expect
 			.element(page.getByRole("link", { name: "DialogBank" }))
 			.toHaveAttribute("href", "/dialogbank");
-		await expect.element(page.getByRole("link", { name: "Sign-in" })).not.toBeInTheDocument();
+		await expect.element(page.getByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
 	});
 });

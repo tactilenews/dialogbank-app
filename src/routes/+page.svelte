@@ -65,7 +65,7 @@ $effect(() => {
 				href={resolve('/auth/sign-in')}
 				class="rounded-lg bg-blue-600 px-6 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:outline-none"
 			>
-				Sign-in
+				Sign in
 			</a>
 		{/if}
 	</div>

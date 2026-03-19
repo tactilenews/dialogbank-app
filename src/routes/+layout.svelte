@@ -52,7 +52,7 @@ const navigationLinks = $derived.by(() => {
 							type="submit"
 							class="inline-flex rounded-md bg-gray-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-gray-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
 						>
-							Sign-out
+							Sign out
 						</button>
 					</form>
 				{:else}
@@ -60,7 +60,7 @@ const navigationLinks = $derived.by(() => {
 						href={resolve("/auth/sign-in")}
 						class="inline-flex rounded-md bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
 					>
-						Sign-in
+						Sign in
 					</a>
 				{/if}
 			</div>

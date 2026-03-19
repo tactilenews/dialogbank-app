@@ -8,7 +8,7 @@ let { form }: { form: ActionData } = $props();
 <div class="flex min-h-screen items-center justify-center bg-gray-50 p-4">
 	<div class="w-full max-w-md space-y-8 rounded-xl bg-white p-8 shadow-lg">
 		<div class="text-center">
-			<h1 class="text-3xl font-bold text-gray-900">Sign-in</h1>
+			<h1 class="text-3xl font-bold text-gray-900">Sign in</h1>
 			<p class="mt-2 text-sm text-gray-600">Enter your credentials to access your account</p>
 		</div>
 
@@ -49,7 +49,7 @@ let { form }: { form: ActionData } = $props();
 					type="submit"
 					class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
 				>
-					Sign-in
+					Sign in
 				</button>
 			</div>
 		</form>
