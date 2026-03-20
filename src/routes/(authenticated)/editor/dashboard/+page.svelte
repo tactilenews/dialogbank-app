@@ -49,7 +49,7 @@ $: statItems = [
 			</div>
 		{:else}
 			<div class="grid gap-6">
-				{#each classificationGroups as group}
+				{#each classificationGroups as group (group.key)}
 					<DashboardClassificationGroup {group} {classificationOptions} {form} />
 				{/each}
 			</div>

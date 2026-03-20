@@ -56,7 +56,7 @@ const matchingForm = $derived(form?.answerId === answer.id ? form : undefined);
 				class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
 			>
 				<option value="">Unclassified</option>
-				{#each classificationOptions as option}
+				{#each classificationOptions as option (option.id)}
 					<option value={option.id}>{option.label}</option>
 				{/each}
 			</select>
