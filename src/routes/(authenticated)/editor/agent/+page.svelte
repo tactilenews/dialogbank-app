@@ -4,7 +4,11 @@ import type { PageData } from "./$types";
 let { data }: { data: PageData } = $props();
 </script>
 
-<div class="mx-auto max-w-3xl p-6">
+<svelte:head>
+	<title>Editor Agent | Dialogbank</title>
+</svelte:head>
+
+<div class="max-w-3xl">
 	<div class="mb-6">
 		<h1 class="text-3xl font-bold">Editor Agent</h1>
 	</div>

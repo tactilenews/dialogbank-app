@@ -18,6 +18,10 @@ const statItems = [
 ];
 </script>
 
+<svelte:head>
+	<title>Editor Dashboard | Dialogbank</title>
+</svelte:head>
+
 <div class="space-y-10">
 	<header class="space-y-2">
 		<p class="text-sm uppercase tracking-[0.2em] text-slate-500">Editor dashboard</p>

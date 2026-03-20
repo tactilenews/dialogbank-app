@@ -18,6 +18,10 @@ $effect(() => {
 });
 </script>
 
+<svelte:head>
+	<title>Dialogbank</title>
+</svelte:head>
+
 <div class="flex min-h-screen flex-col items-center justify-center bg-gray-50 p-4 text-center">
 	<h1 class="text-4xl font-extrabold text-gray-900">DialogBank</h1>
 	<p class="mt-4 text-lg text-gray-600">This is a public page for DialogBank.</p>

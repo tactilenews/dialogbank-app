@@ -5,6 +5,10 @@ import type { ActionData } from "./$types";
 let { form }: { form: ActionData } = $props();
 </script>
 
+<svelte:head>
+	<title>Sign in | Dialogbank</title>
+</svelte:head>
+
 <div class="flex min-h-screen items-center justify-center bg-gray-50 p-4">
 	<div class="w-full max-w-md space-y-8 rounded-xl bg-white p-8 shadow-lg">
 		<div class="text-center">
