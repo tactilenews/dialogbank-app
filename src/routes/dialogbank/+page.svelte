@@ -150,7 +150,7 @@ $effect(() => {
 						</div>
 					</div>
 
-					{#each classificationStats as stat}
+					{#each classificationStats as stat (stat.key)}
 						<div
 							class="legacy-stat"
 							class:legacy-stat-highlight={visibleClassification === stat.key}

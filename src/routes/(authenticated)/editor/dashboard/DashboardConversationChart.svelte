@@ -23,7 +23,7 @@ const maxConversations = $derived(Math.max(1, ...conversationsPerDay.map((item) 
 	{:else}
 		<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 			<div class="flex items-end gap-3 overflow-x-auto pb-2">
-				{#each conversationsPerDay as day}
+				{#each conversationsPerDay as day (day.day)}
 					<div class="flex w-16 flex-col items-center gap-2">
 						<div
 							class="w-full rounded-full bg-slate-900/80"

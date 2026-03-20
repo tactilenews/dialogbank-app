@@ -27,7 +27,7 @@ let { group, classificationOptions, form }: Props = $props();
 		</div>
 	</div>
 	<div class="mt-4 space-y-3">
-		{#each group.answers as answer}
+		{#each group.answers as answer (answer.id)}
 			<DashboardAnswerCard {answer} {classificationOptions} {form} />
 		{/each}
 	</div>

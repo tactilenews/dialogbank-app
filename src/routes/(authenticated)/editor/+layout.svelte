@@ -19,7 +19,7 @@ const navigationLinks = [
 		<div class="mx-auto flex max-w-7xl items-center justify-between gap-6 px-4 py-3 sm:px-6 lg:px-8">
 			<nav aria-label="Top level">
 				<ul class="flex flex-wrap items-center gap-2 sm:gap-3">
-					{#each navigationLinks as link}
+					{#each navigationLinks as link (link.href)}
 						<li>
 							<a
 								href={link.href}

@@ -55,8 +55,6 @@ describe("/editor/dashboard +page.svelte", () => {
 		render(Page, { props: { data: sampleEditorPageData } });
 
 		const unclassifiedCard = page.getByTestId("classification-unclassified");
-		await expect.element(unclassifiedCard.getByText("Field rationale")).toBeVisible();
-
 		await expect
 			.element(
 				unclassifiedCard.getByText(
@@ -73,7 +71,11 @@ describe("/editor/dashboard +page.svelte", () => {
 		await expect
 			.element(unclassifiedCard.getByText("Needs review before it can be categorized."))
 			.toBeVisible();
+		await expect
+			.element(unclassifiedCard.getByText("Another answer still waiting for classification."))
+			.toBeVisible();
 		await expect.element(page.getByTestId("answer-98-classification")).toHaveValue("");
+		await expect.element(page.getByTestId("answer-97-classification")).toHaveValue("");
 
 		await view.rerender({
 			data: sampleEditorPageDataAfterManualClassification,
@@ -84,7 +86,14 @@ describe("/editor/dashboard +page.svelte", () => {
 			.element(supportCard.getByText("Needs review before it can be categorized."))
 			.toBeVisible();
 		await expect.element(page.getByTestId("answer-98-classification")).toHaveValue("1");
-		await expect.element(page.getByTestId("classification-unclassified")).not.toBeInTheDocument();
+		await expect
+			.element(
+				page
+					.getByTestId("classification-unclassified")
+					.getByText("Another answer still waiting for classification."),
+			)
+			.toBeVisible();
+		await expect.element(page.getByTestId("answer-97-classification")).toHaveValue("");
 	});
 
 	it("shows per-classification pagination", async () => {
