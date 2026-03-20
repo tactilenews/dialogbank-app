@@ -5,7 +5,7 @@ import Page from "./+page.svelte";
 import { sampleDialogbankPageData } from "./page.svelte.spec/data";
 
 describe("/dialogbank +page.svelte", () => {
-	it("renders the dashboard header and stats", async () => {
+	it("renders the DialogBank header and stats", async () => {
 		render(Page, { props: { data: sampleDialogbankPageData } });
 
 		const heading = page.getByRole("heading", {
