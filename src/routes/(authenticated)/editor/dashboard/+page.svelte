@@ -105,7 +105,6 @@ const statItems = [
 							aria-label={`${group.classification} pagination`}
 						>
 							<a
-								data-sveltekit-noscroll
 								data-testid={`pagination-${group.key}-previous`}
 								class={`rounded-full border px-4 py-2 text-sm font-medium ${
 									group.pagination.page <= 1
@@ -117,7 +116,6 @@ const statItems = [
 								Previous
 							</a>
 							<a
-								data-sveltekit-noscroll
 								data-testid={`pagination-${group.key}-next`}
 								class={`rounded-full border px-4 py-2 text-sm font-medium ${
 									group.pagination.page >= group.pagination.totalPages
