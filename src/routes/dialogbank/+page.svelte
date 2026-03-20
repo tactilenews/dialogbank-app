@@ -103,6 +103,10 @@ $effect(() => {
 });
 </script>
 
+<svelte:head>
+	<title>Live view | Dialogbank</title>
+</svelte:head>
+
 <div class="legacy-root">
 	<div class="legacy-shell">
 		<div class="legacy-header">
