@@ -33,6 +33,7 @@ let { data }: { data: PageData } = $props();
 type Quote = PageData["quotes"][number];
 
 let currentQuoteId = $state<number | null>(null);
+let isRefreshing = $state(false);
 
 const intervalMs = 4500;
 
@@ -96,10 +97,25 @@ $effect(() => {
 
 $effect(() => {
 	const refreshIntervalMs = 15000;
+	let disposed = false;
+
 	const interval = setInterval(async () => {
-		await invalidateAll();
+		if (isRefreshing) return;
+
+		isRefreshing = true;
+		try {
+			await invalidateAll();
+		} finally {
+			if (!disposed) {
+				isRefreshing = false;
+			}
+		}
 	}, refreshIntervalMs);
-	return () => clearInterval(interval);
+
+	return () => {
+		disposed = true;
+		clearInterval(interval);
+	};
 });
 </script>
 
@@ -112,6 +128,10 @@ $effect(() => {
 		<div class="legacy-header">
 			<img src={logo} alt="Logo" class="legacy-logo" />
 			<h1 class="legacy-title">LIVE AUS DER FEEDBACKKABINE ÜBER GELSENKIRCHEN</h1>
+			<div class="legacy-status" data-testid="live-refresh-status" aria-live="polite">
+				<div class:legacy-status-dot-active={isRefreshing} class="legacy-status-dot"></div>
+				{isRefreshing ? "Aktualisiere Live-Daten…" : "Live-Daten verbunden"}
+			</div>
 		</div>
 
 		<div class="legacy-body">
@@ -224,6 +244,37 @@ $effect(() => {
 		justify-content: center;
 		gap: 0.75rem;
 		margin-bottom: 1rem;
+	}
+
+	.legacy-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.55rem;
+		width: fit-content;
+		padding: 0.45rem 0.8rem;
+		border: 1px solid rgb(0 52 94 / 0.12);
+		border-radius: 999px;
+		background: rgb(255 255 255 / 0.52);
+		color: var(--brand-font-secondary);
+		font-size: 0.75rem;
+		font-weight: 700;
+		letter-spacing: 0.08em;
+		text-transform: uppercase;
+		backdrop-filter: blur(8px);
+	}
+
+	.legacy-status-dot {
+		width: 0.55rem;
+		height: 0.55rem;
+		border-radius: 999px;
+		background: #009bae;
+		box-shadow: 0 0 0 0 rgb(0 155 174 / 0.35);
+		transition: background-color 160ms ease;
+	}
+
+	.legacy-status-dot-active {
+		background: #b37500;
+		animation: status-pulse 1.2s ease-in-out infinite;
 	}
 
 	.legacy-logo {
@@ -368,6 +419,20 @@ $effect(() => {
 
 		.legacy-quotes {
 			min-height: 280px;
+		}
+	}
+
+	@keyframes status-pulse {
+		0% {
+			box-shadow: 0 0 0 0 rgb(179 117 0 / 0.28);
+		}
+
+		70% {
+			box-shadow: 0 0 0 0.55rem rgb(179 117 0 / 0);
+		}
+
+		100% {
+			box-shadow: 0 0 0 0 rgb(179 117 0 / 0);
 		}
 	}
 </style>
