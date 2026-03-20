@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
-import { sampleEditorPageData } from "./page.svelte.spec/data";
+import {
+	sampleEditorPageData,
+	sampleEditorPageDataAfterManualClassification,
+} from "./page.svelte.spec/data";
 
 describe("/editor/dashboard +page.svelte", () => {
 	it("renders summary stats and chart", async () => {
@@ -35,6 +38,53 @@ describe("/editor/dashboard +page.svelte", () => {
 		await expect.element(supportCard.getByText("Mara Klein")).toBeVisible();
 		await expect.element(page.getByText("Start a weekly neighborhood market.")).toBeVisible();
 		await expect.element(page.getByRole("heading", { name: "Unclassified" })).toBeVisible();
+	});
+
+	it("renders a manual classification form for each answer", async () => {
+		render(Page, { props: { data: sampleEditorPageData } });
+
+		const unclassifiedSelect = page.getByTestId("answer-98-classification");
+		const saveButton = page.getByTestId("answer-98-save");
+
+		await expect.element(unclassifiedSelect).toBeVisible();
+		await expect.element(unclassifiedSelect).toHaveValue("");
+		await expect.element(saveButton).toBeVisible();
+	});
+
+	it("shows the field rationale inline", async () => {
+		render(Page, { props: { data: sampleEditorPageData } });
+
+		const unclassifiedCard = page.getByTestId("classification-unclassified");
+		await expect.element(unclassifiedCard.getByText("Field rationale")).toBeVisible();
+
+		await expect
+			.element(
+				unclassifiedCard.getByText(
+					"The source answer is ambiguous and needs editor review before classification.",
+				),
+			)
+			.toBeVisible();
+	});
+
+	it("recomputes classification sections when the page data updates", async () => {
+		const view = render(Page, { props: { data: sampleEditorPageData } });
+
+		const unclassifiedCard = page.getByTestId("classification-unclassified");
+		await expect
+			.element(unclassifiedCard.getByText("Needs review before it can be categorized."))
+			.toBeVisible();
+		await expect.element(page.getByTestId("answer-98-classification")).toHaveValue("");
+
+		await view.rerender({
+			data: sampleEditorPageDataAfterManualClassification,
+		});
+
+		const supportCard = page.getByTestId("classification-support");
+		await expect
+			.element(supportCard.getByText("Needs review before it can be categorized."))
+			.toBeVisible();
+		await expect.element(page.getByTestId("answer-98-classification")).toHaveValue("1");
+		await expect.element(page.getByTestId("classification-unclassified")).not.toBeInTheDocument();
 	});
 
 	it("shows per-classification pagination", async () => {

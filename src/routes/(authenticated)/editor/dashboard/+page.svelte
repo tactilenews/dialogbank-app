@@ -1,12 +1,17 @@
 <script lang="ts">
-import type { PageData } from "./$types";
+import type { ActionData, PageData } from "./$types";
+import DashboardClassificationGroup from "./DashboardClassificationGroup.svelte";
+import DashboardConversationChart from "./DashboardConversationChart.svelte";
+import DashboardSummaryStats from "./DashboardSummaryStats.svelte";
+import type { DashboardStatItem } from "./types";
 
 export let data: PageData;
+export let form: ActionData | undefined = undefined;
 
-const classificationGroups = data.classificationGroups ?? [];
-$: maxConversations = Math.max(1, ...data.conversationsPerDay.map((item) => item.count));
+$: classificationGroups = data.classificationGroups ?? [];
+$: classificationOptions = data.classificationOptions ?? [];
 
-const statItems = [
+$: statItems = [
 	{
 		label: "Successful conversations",
 		value: data.successfulConversations,
@@ -15,7 +20,7 @@ const statItems = [
 		label: "Total answers",
 		value: data.totalAnswers,
 	},
-];
+] satisfies DashboardStatItem[];
 </script>
 
 <svelte:head>
@@ -29,43 +34,9 @@ const statItems = [
 		<p class="text-slate-600">A focused view of conversation health and answer coverage.</p>
 	</header>
 
-	<section class="grid gap-6 md:grid-cols-2" aria-label="Summary statistics">
-		{#each statItems as item}
-			<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-				<div class="text-sm text-slate-500">{item.label}</div>
-				<div class="mt-4 text-3xl font-semibold text-slate-900">{item.value}</div>
-			</div>
-		{/each}
-	</section>
+	<DashboardSummaryStats {statItems} />
 
-	<section class="space-y-4">
-		<div class="flex items-center justify-between">
-			<h2 class="text-xl font-semibold text-slate-900">Conversations per day</h2>
-			<span class="text-xs uppercase tracking-[0.2em] text-slate-400">Last entries</span>
-		</div>
-
-		{#if data.conversationsPerDay.length === 0}
-			<div class="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-8 text-slate-500">
-				No conversations have been recorded yet.
-			</div>
-		{:else}
-			<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
-				<div class="flex items-end gap-3 overflow-x-auto pb-2">
-					{#each data.conversationsPerDay as day}
-						<div class="flex w-16 flex-col items-center gap-2">
-							<div
-								class="w-full rounded-full bg-slate-900/80"
-								style={`height: ${Math.max(12, (day.count / maxConversations) * 160)}px`}
-								title={`${day.count} conversations on ${day.day}`}
-							></div>
-							<div class="text-[0.7rem] text-slate-500">{day.day}</div>
-							<div class="text-sm font-medium text-slate-700">{day.count}</div>
-						</div>
-					{/each}
-				</div>
-			</div>
-		{/if}
-	</section>
+	<DashboardConversationChart conversationsPerDay={data.conversationsPerDay} />
 
 	<section class="space-y-6">
 		<div class="flex flex-wrap items-center justify-between gap-4">
@@ -79,58 +50,7 @@ const statItems = [
 		{:else}
 			<div class="grid gap-6">
 				{#each classificationGroups as group}
-					<div
-						id={`classification-${group.key}`}
-						data-testid={`classification-${group.key}`}
-						class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"
-					>
-						<div class="flex items-center justify-between">
-							<div>
-								<h3 class="text-lg font-semibold text-slate-900">{group.classification}</h3>
-								<p class="text-sm text-slate-500">
-									Page {group.pagination.page} of {group.pagination.totalPages}
-								</p>
-							</div>
-						</div>
-						<div class="mt-4 space-y-3">
-							{#each group.answers as answer}
-								<div class="rounded-xl border border-slate-100 bg-slate-50 p-4">
-									<div class="text-sm font-medium text-slate-700">{answer.name}</div>
-									<div class="mt-2 text-sm text-slate-600">{answer.value}</div>
-								</div>
-							{/each}
-						</div>
-						<nav
-							class="mt-4 flex items-center justify-between"
-							aria-label={`${group.classification} pagination`}
-						>
-							<a
-								data-testid={`pagination-${group.key}-previous`}
-								class={`rounded-full border px-4 py-2 text-sm font-medium ${
-									group.pagination.page <= 1
-										? "pointer-events-none border-slate-200 text-slate-300"
-										: "border-slate-300 text-slate-700 hover:border-slate-400"
-								}`}
-								href={`?page_${group.key}=${Math.max(1, group.pagination.page - 1)}#classification-${group.key}`}
-							>
-								Previous
-							</a>
-							<a
-								data-testid={`pagination-${group.key}-next`}
-								class={`rounded-full border px-4 py-2 text-sm font-medium ${
-									group.pagination.page >= group.pagination.totalPages
-										? "pointer-events-none border-slate-200 text-slate-300"
-										: "border-slate-300 text-slate-700 hover:border-slate-400"
-								}`}
-								href={`?page_${group.key}=${Math.min(
-									group.pagination.totalPages,
-									group.pagination.page + 1,
-								)}#classification-${group.key}`}
-							>
-								Next
-							</a>
-						</nav>
-					</div>
+					<DashboardClassificationGroup {group} {classificationOptions} {form} />
 				{/each}
 			</div>
 		{/if}

@@ -1,5 +1,7 @@
+import { fail } from "@sveltejs/kit";
 import { and, desc, eq, isNull, sql } from "drizzle-orm";
-import type { PageServerLoad } from "./$types";
+import { withAuthenticatedActions, withAuthenticatedLoad } from "$lib/server/require-user";
+import type { Actions, PageServerLoad } from "./$types";
 
 const PAGE_SIZE = 20;
 const SUCCESS_STATUS = "success";
@@ -17,7 +19,37 @@ function parsePageParam(value: string | null) {
 	return Number.isInteger(page) && Number.isFinite(page) && page > 0 ? page : 1;
 }
 
-export const load: PageServerLoad = async (event) => {
+function parseRequiredInteger(value: FormDataEntryValue | null) {
+	if (typeof value !== "string" || value.trim() === "") {
+		return null;
+	}
+
+	const parsed = Number(value);
+	return Number.isInteger(parsed) && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+function parseOptionalInteger(value: FormDataEntryValue | null) {
+	if (value === null) {
+		return null;
+	}
+
+	if (typeof value !== "string") {
+		return null;
+	}
+
+	const trimmed = value.trim();
+	if (trimmed === "") {
+		return null;
+	}
+
+	const parsed = Number(trimmed);
+	return Number.isInteger(parsed) && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export const load = withAuthenticatedLoad<
+	Parameters<PageServerLoad>[0],
+	ReturnType<PageServerLoad>
+>(async (event) => {
 	const { db, schema } = event.locals;
 	const { answers, classifications, conversations } = schema;
 
@@ -41,6 +73,21 @@ export const load: PageServerLoad = async (event) => {
 		.orderBy(dayExpression);
 
 	const answerHasValuePredicate = sql`${answers.value} IS NOT NULL AND trim(${answers.value}) <> ''`;
+
+	const classificationRows = await db
+		.select({
+			id: classifications.id,
+			key: classifications.key,
+			label: classifications.label,
+		})
+		.from(classifications)
+		.orderBy(classifications.label, classifications.key);
+
+	const classificationOptions = classificationRows.map((classification) => ({
+		id: classification.id,
+		key: classification.key,
+		label: classification.label,
+	}));
 
 	const buildClassificationGroup = async ({
 		key,
@@ -67,6 +114,8 @@ export const load: PageServerLoad = async (event) => {
 			.select({
 				id: answers.id,
 				value: answers.value,
+				rationale: answers.rationale,
+				classificationId: answers.classificationId,
 				firstName: conversations.firstName,
 				lastName: conversations.lastName,
 			})
@@ -83,6 +132,8 @@ export const load: PageServerLoad = async (event) => {
 			answers: pagedAnswers.map((answer) => ({
 				id: answer.id,
 				classification: label,
+				classificationId: answer.classificationId,
+				rationale: answer.rationale,
 				value: answer.value ?? "",
 				name: [answer.firstName, answer.lastName].filter(Boolean).join(" ") || "Unknown",
 			})),
@@ -95,26 +146,17 @@ export const load: PageServerLoad = async (event) => {
 		};
 	};
 
-	const classificationRows = await db
-		.selectDistinct({
-			id: classifications.id,
-			key: classifications.key,
-			label: classifications.label,
-		})
-		.from(answers)
-		.innerJoin(classifications, eq(answers.classificationId, classifications.id))
-		.where(answerHasValuePredicate)
-		.orderBy(classifications.label, classifications.key);
-
-	const classifiedGroups = await Promise.all(
-		classificationRows.map(({ id, key, label }) =>
-			buildClassificationGroup({
-				key,
-				label,
-				predicate: eq(answers.classificationId, id),
-			}),
-		),
-	);
+	const classifiedGroups = (
+		await Promise.all(
+			classificationRows.map(({ id, key, label }) =>
+				buildClassificationGroup({
+					key,
+					label,
+					predicate: eq(answers.classificationId, id),
+				}),
+			),
+		)
+	).filter((group) => group.pagination.total > 0);
 
 	const unclassifiedGroup = await buildClassificationGroup({
 		key: UNCLASSIFIED_GROUP.key,
@@ -135,5 +177,80 @@ export const load: PageServerLoad = async (event) => {
 			count: Number(row.count ?? 0),
 		})),
 		classificationGroups,
+		classificationOptions,
 	};
-};
+});
+
+export const actions = withAuthenticatedActions<Parameters<Actions["default"]>[0], Actions>({
+	default: async (event) => {
+		const { db, schema } = event.locals;
+		const { answers, classifications } = schema;
+		const formData = await event.request.formData();
+
+		const answerId = parseRequiredInteger(formData.get("answerId"));
+		if (answerId === null) {
+			return fail(400, {
+				message: "A valid answer is required.",
+			});
+		}
+
+		const requestedClassificationId = formData.get("classificationId");
+		const classificationId = parseOptionalInteger(requestedClassificationId);
+		if (
+			requestedClassificationId !== null &&
+			typeof requestedClassificationId === "string" &&
+			requestedClassificationId.trim() !== "" &&
+			classificationId === null
+		) {
+			return fail(400, {
+				answerId,
+				message: "A valid classification is required.",
+			});
+		}
+
+		const [answerRecord] = await db
+			.select({ id: answers.id })
+			.from(answers)
+			.where(eq(answers.id, answerId))
+			.limit(1);
+
+		if (!answerRecord) {
+			return fail(404, {
+				answerId,
+				message: "Answer not found.",
+			});
+		}
+
+		let classificationLabel: string | null = null;
+		if (classificationId !== null) {
+			const [classificationRecord] = await db
+				.select({
+					id: classifications.id,
+					label: classifications.label,
+				})
+				.from(classifications)
+				.where(eq(classifications.id, classificationId))
+				.limit(1);
+
+			if (!classificationRecord) {
+				return fail(400, {
+					answerId,
+					message: "Classification not found.",
+				});
+			}
+
+			classificationLabel = classificationRecord.label;
+		}
+
+		await db.update(answers).set({ classificationId }).where(eq(answers.id, answerId));
+
+		return {
+			answerId,
+			message:
+				classificationLabel === null
+					? "Answer moved to Unclassified."
+					: `Answer assigned to ${classificationLabel}.`,
+			success: true,
+		};
+	},
+});

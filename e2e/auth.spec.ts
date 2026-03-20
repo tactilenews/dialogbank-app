@@ -12,6 +12,34 @@ test.describe("Authentication", () => {
 		await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
 	});
 
+	test("unauthenticated users cannot post to /editor/dashboard", async ({ page }) => {
+		await page.goto("/", { waitUntil: "networkidle" });
+
+		await page.evaluate(() => {
+			const form = document.createElement("form");
+			form.method = "POST";
+			form.action = "/editor/dashboard";
+
+			const answerId = document.createElement("input");
+			answerId.type = "hidden";
+			answerId.name = "answerId";
+			answerId.value = "1";
+			form.append(answerId);
+
+			const classificationId = document.createElement("input");
+			classificationId.type = "hidden";
+			classificationId.name = "classificationId";
+			classificationId.value = "1";
+			form.append(classificationId);
+
+			document.body.append(form);
+			form.submit();
+		});
+
+		await expect(page).toHaveURL("/auth/sign-in");
+		await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+	});
+
 	test("signs in successfully with valid credentials", async ({ auth, page }) => {
 		// Create a user account
 		await auth.api.signUpEmail({
