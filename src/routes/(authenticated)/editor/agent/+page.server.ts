@@ -1,9 +1,13 @@
 import { ElevenLabsClient, ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error } from "@sveltejs/kit";
 import { env } from "$env/dynamic/private";
+import { withAuthenticatedLoad } from "$lib/server/require-user";
 import type { PageServerLoad } from "./$types";
 
-export const load: PageServerLoad = async () => {
+export const load = withAuthenticatedLoad<
+	Parameters<PageServerLoad>[0],
+	ReturnType<PageServerLoad>
+>(async () => {
 	const apiKey = env.ELEVENLABS_API_KEY;
 	const agentId = env.ELEVENLABS_AGENT_ID;
 
@@ -42,4 +46,4 @@ export const load: PageServerLoad = async () => {
 		}
 		throw error(e.statusCode || 500, `Failed to fetch agent: ${e.message || "Unknown error"}`);
 	}
-};
+});

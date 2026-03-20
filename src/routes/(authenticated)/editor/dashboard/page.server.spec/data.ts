@@ -40,6 +40,7 @@ export const sampleConversations: InsertConversation[] = [
 
 export const sampleAnswersWithSlugCollisions: InsertAnswer[] = [
 	{
+		id: 1,
 		conversationId: "conv-editor-1",
 		dataCollectionId: "answer-support-1",
 		value: "Support answer one",
@@ -47,6 +48,7 @@ export const sampleAnswersWithSlugCollisions: InsertAnswer[] = [
 		rationale: "Support",
 	},
 	{
+		id: 2,
 		conversationId: "conv-editor-2",
 		dataCollectionId: "answer-support-2",
 		value: "Support answer two",
@@ -54,6 +56,7 @@ export const sampleAnswersWithSlugCollisions: InsertAnswer[] = [
 		rationale: "Support",
 	},
 	{
+		id: 3,
 		conversationId: "conv-editor-1",
 		dataCollectionId: "answer-a-b-1",
 		value: "AB answer one",
@@ -61,6 +64,7 @@ export const sampleAnswersWithSlugCollisions: InsertAnswer[] = [
 		rationale: "Idea",
 	},
 	{
+		id: 4,
 		conversationId: "conv-editor-2",
 		dataCollectionId: "answer-a-b-2",
 		value: "AB answer two",
@@ -68,6 +72,7 @@ export const sampleAnswersWithSlugCollisions: InsertAnswer[] = [
 		rationale: "Idea",
 	},
 	{
+		id: 5,
 		conversationId: "conv-editor-1",
 		dataCollectionId: "answer-unclassified-1",
 		value: "This answer still needs a classification.",
