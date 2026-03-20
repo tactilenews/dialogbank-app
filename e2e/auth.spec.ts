@@ -31,13 +31,15 @@ test.describe("Authentication", () => {
 		// Verify successful redirect to the start page
 		await expect(page).toHaveURL("/");
 		await expect(page.getByRole("heading", { name: "DialogBank" })).toBeVisible();
+		await expect(page.getByRole("link", { name: "Editor Agent" })).toBeVisible();
+		await expect(page.getByRole("link", { name: "Editor Dashboard" })).toBeVisible();
+
+		await page.getByRole("link", { name: "Editor Agent" }).click();
+		await expect(page).toHaveURL("/editor/agent");
 		const topLevelNav = page.getByLabel("Top level");
 		await expect(topLevelNav.getByRole("link", { name: "DialogBank" })).toBeVisible();
 		await expect(topLevelNav.getByRole("link", { name: "Editor Agent" })).toBeVisible();
 		await expect(topLevelNav.getByRole("link", { name: "Editor Dashboard" })).toBeVisible();
-
-		await topLevelNav.getByRole("link", { name: "Editor Agent" }).click();
-		await expect(page).toHaveURL("/editor/agent");
 		await expect(page.getByRole("heading", { name: "Editor Agent" })).toBeVisible();
 	});
 });
