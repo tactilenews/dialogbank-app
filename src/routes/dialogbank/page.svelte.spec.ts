@@ -1,8 +1,16 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
 import { sampleDialogbankPageData } from "./page.svelte.spec/data";
+
+const itWithSpies = it.extend<{ spyOn: typeof vi.spyOn }>({
+	// biome-ignore lint/correctness/noEmptyPattern: Vitest fixture requires destructuring pattern
+	spyOn: async ({}, use) => {
+		await use(vi.spyOn);
+		vi.restoreAllMocks();
+	},
+});
 
 describe("/dialogbank +page.svelte", () => {
 	it("renders the DialogBank header and stats", async () => {
@@ -24,7 +32,8 @@ describe("/dialogbank +page.svelte", () => {
 		await expect.element(page.getByText("Antworten")).toBeVisible();
 	});
 
-	it("highlights the classification for the visible quote", async () => {
+	itWithSpies("highlights the classification for the visible quote", async ({ spyOn }) => {
+		spyOn(Math, "random").mockReturnValue(0);
 		render(Page, { props: { data: sampleDialogbankPageData } });
 
 		const highlightedStat = page.getByTestId("stat-proGelsenkirchen");

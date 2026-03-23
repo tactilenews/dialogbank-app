@@ -45,4 +45,50 @@ describe("/dialogbank +page.server", () => {
 			}),
 		);
 	});
+
+	it("filters out published answers without visible text", async ({ db, expect, schema }) => {
+		await expect(
+			db.insert(schema.conversations).values(sampleConversations),
+		).resolves.toBeDefined();
+		await expect(
+			db.insert(schema.classifications).values(sampleClassifications),
+		).resolves.toBeDefined();
+		await expect(
+			db.insert(schema.answers).values([
+				...sampleAnswers,
+				{
+					conversationId: "conv-legacy-1",
+					dataCollectionId: "answer_3",
+					value: "   ",
+					classificationId: 3,
+					rationale: "Blank answer",
+				},
+			]),
+		).resolves.toBeDefined();
+
+		const resultPromise = load({
+			locals: {
+				user: null,
+				db,
+				schema,
+			},
+		} as unknown as Parameters<typeof load>[0]);
+
+		await expect(resultPromise).resolves.toEqual(
+			expect.objectContaining({
+				answerCount: 2,
+				classificationCounts: expect.objectContaining({
+					conGelsenkirchen: 0,
+				}),
+				quotes: expect.arrayContaining([
+					expect.objectContaining({
+						text: "Schalke hat Herz.",
+					}),
+					expect.objectContaining({
+						text: "Mehr Parks in der Stadt.",
+					}),
+				]),
+			}),
+		);
+	});
 });
