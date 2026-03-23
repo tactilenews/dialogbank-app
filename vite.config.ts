@@ -10,12 +10,30 @@ import { defineConfig } from "vitest/config";
 
 const dirname =
 	typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
+const sentryRelease = process.env.COMMIT_REF ?? process.env.SENTRY_RELEASE ?? null;
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 
 const isTest = process.env.VITEST === "true" || process.env.PLAYWRIGHT_TEST === "1";
 export default defineConfig({
-	plugins: [isTest ? null : sentrySvelteKit(), tailwindcss(), sveltekit(), devtoolsJson()],
+	define: {
+		__SENTRY_RELEASE__: JSON.stringify(sentryRelease),
+	},
+	plugins: [
+		isTest
+			? null
+			: sentrySvelteKit({
+					sourceMapsUploadOptions: {
+						authToken: process.env.SENTRY_AUTH_TOKEN,
+						org: process.env.SENTRY_ORG,
+						project: process.env.SENTRY_PROJECT,
+						release: sentryRelease ? { inject: true, name: sentryRelease } : undefined,
+					},
+				}),
+		tailwindcss(),
+		sveltekit(),
+		devtoolsJson(),
+	],
 	test: {
 		expect: {
 			requireAssertions: true,
