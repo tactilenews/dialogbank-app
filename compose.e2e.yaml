@@ -1,6 +1,6 @@
 services:
   db_e2e:
-    image: neondatabase/neon_local:latest
+    image: neondatabase/neon_local:v1.5
     ports:
       - "5433:5432"
     environment:
