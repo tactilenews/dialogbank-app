@@ -5,7 +5,7 @@ import Page from "./+page.svelte";
 
 describe("/+page.svelte", () => {
 	it("displays the page header and navigation", async () => {
-		render(Page, { props: { data: { user: null, answers: [] } } });
+		render(Page, { props: { data: { user: null } } });
 
 		// Check for main heading
 		const heading = page.getByRole("heading", { name: "DialogBank" });
@@ -23,7 +23,7 @@ describe("/+page.svelte", () => {
 	});
 
 	it("displays sign in button when not authenticated", async () => {
-		render(Page, { props: { data: { user: null, answers: [] } } });
+		render(Page, { props: { data: { user: null } } });
 
 		const signInButton = page.getByRole("link", { name: "Sign in" });
 		await expect.element(signInButton).toBeVisible();
@@ -38,7 +38,7 @@ describe("/+page.svelte", () => {
 
 	it("displays direct editor links when authenticated", async () => {
 		render(Page, {
-			props: { data: { user: { id: "user-1" }, answers: [] } },
+			props: { data: { user: { id: "user-1" } } },
 		});
 
 		const agentExplorerLink = page.getByRole("link", { name: "Editor Agent" });
