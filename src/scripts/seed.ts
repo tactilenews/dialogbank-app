@@ -1,8 +1,6 @@
 import { betterAuth } from "better-auth/minimal";
-import { reset } from "drizzle-seed";
 import { getAuth } from "$lib/server/auth";
 import { getDb } from "$lib/server/db";
-import * as schema from "$lib/server/db/schema";
 
 function getSeedPassword(): string {
 	const password = process.env.SEED_USER_PASSWORD?.trim();
@@ -28,9 +26,6 @@ const auth = betterAuth({
 		plugins: undefined,
 	},
 });
-
-const db = getDb();
-await reset(db, schema); // Wipes existing data
 
 await auth.api.signUpEmail({
 	body: {
