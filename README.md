@@ -242,6 +242,16 @@ This supports two distinct flows:
 - production secrets are synced from Infisical to Netlify
 - testing secrets are synced from Infisical to GitHub so workflows can run against the test environment
 
+## Database Seeding
+
+The seed script creates a default user with `user@example.org` and requires the password to be provided through `SEED_USER_PASSWORD`.
+
+Example:
+
+```sh
+SEED_USER_PASSWORD='replace-me' infisical run --env dev -- pnpm run db:seed
+```
+
 ## Project Status
 
 Current state:
