@@ -6,6 +6,7 @@ if (env.PUBLIC_SENTRY_DSN) {
 	Sentry.init({
 		dsn: env.PUBLIC_SENTRY_DSN,
 		enableLogs: true,
+		release: __SENTRY_RELEASE__ ?? undefined,
 	});
 }
 

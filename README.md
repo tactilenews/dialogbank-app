@@ -55,6 +55,7 @@ These variables are used by the application:
 - `SENTRY_AUTH_TOKEN`: Sentry auth token used during Netlify builds for sourcemap upload
 - `SENTRY_ORG`: Sentry organization slug used during Netlify builds
 - `SENTRY_PROJECT`: Sentry project slug used during Netlify builds
+- `SENTRY_RELEASE`: optional fallback release identifier when `COMMIT_REF` is unavailable
 
 Infisical is the source of truth for application secrets:
 
@@ -199,7 +200,7 @@ Relevant Netlify behavior in this repository:
 
 - Netlify builds the app with `pnpm run build`
 - Production deploys run `pnpm run db:migrate && pnpm run build`
-- The Sentry Netlify build plugin is enabled to upload sourcemaps during builds
+- The Sentry Vite integration uploads sourcemaps during builds and uses `COMMIT_REF` as the release when available
 
 In practice, Netlify receives the production runtime variables from Infisical sync, especially:
 
@@ -217,6 +218,7 @@ To upload sourcemaps from Netlify builds, the deployment environment also needs:
 - `SENTRY_AUTH_TOKEN`
 - `SENTRY_ORG`
 - `SENTRY_PROJECT`
+- Netlify `COMMIT_REF` or a fallback `SENTRY_RELEASE` value so the release name can be set consistently
 
 ## CI and Secret Sync
 
