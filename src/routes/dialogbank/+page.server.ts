@@ -1,5 +1,6 @@
 import { desc, eq, sql } from "drizzle-orm";
 import type { PageServerLoad } from "./$types";
+import { hasVisibleQuoteText } from "./quotes";
 
 const classificationValues = ["proGelsenkirchen", "conGelsenkirchen", "ideaGelsenkirchen"] as const;
 
@@ -35,8 +36,12 @@ export const load: PageServerLoad = async (event) => {
 		.where(eq(conversations.publicationAllowed, true))
 		.orderBy(desc(answers.id));
 
+	const visibleAnswers = publishedAnswers.flatMap((answer) =>
+		hasVisibleQuoteText(answer.value) ? [{ ...answer, value: answer.value.trim() }] : [],
+	);
+
 	const classificationCounts = { ...emptyClassificationCounts };
-	for (const answer of publishedAnswers) {
+	for (const answer of visibleAnswers) {
 		const classification = answer.classification;
 		if (classification && classification in classificationCounts) {
 			classificationCounts[classification as LegacyClassification] += 1;
@@ -45,11 +50,11 @@ export const load: PageServerLoad = async (event) => {
 
 	return {
 		guests,
-		answerCount: publishedAnswers.length,
+		answerCount: visibleAnswers.length,
 		classificationCounts,
-		quotes: publishedAnswers.map((answer) => ({
+		quotes: visibleAnswers.map((answer) => ({
 			id: answer.id,
-			text: answer.value ?? "",
+			text: answer.value,
 			classification: answer.classification,
 			firstName: answer.firstName,
 			lastName: answer.lastName,

@@ -4,6 +4,7 @@ import { invalidateAll } from "$app/navigation";
 import logo from "$lib/assets/legacy-logo.svg";
 import type { LegacyClassification } from "./+page.server";
 import type { PageData } from "./$types";
+import { pickWeightedQuoteId } from "./quotes";
 
 const classificationMeta = {
 	proGelsenkirchen: {
@@ -38,36 +39,13 @@ let isRefreshing = $state(false);
 const intervalMs = 4500;
 
 const quotes = $derived(data.quotes ?? []);
-const currentQuote = $derived.by(
-	() => quotes.find((quote) => quote.id === currentQuoteId) ?? quotes[0] ?? null,
-);
+const currentQuote = $derived.by(() => quotes.find((quote) => quote.id === currentQuoteId) ?? null);
 const visibleClassification = $derived.by(() => {
 	const classification = currentQuote?.classification;
 	return classification && classification in classificationMeta
 		? (classification as LegacyClassification)
 		: null;
 });
-
-const pickNextQuote = (quotesArray: Quote[], activeQuoteId: number | null) => {
-	if (quotesArray.length === 0) return null;
-	if (quotesArray.length === 1) return quotesArray[0]?.id ?? null;
-
-	const candidates = quotesArray.filter((quote) => quote.id !== activeQuoteId);
-	const totalWeight = candidates.reduce(
-		(sum, _quote, index) => sum + (candidates.length - index),
-		0,
-	);
-	let randomWeight = Math.random() * totalWeight;
-
-	for (const [index, quote] of candidates.entries()) {
-		randomWeight -= candidates.length - index;
-		if (randomWeight <= 0) {
-			return quote.id;
-		}
-	}
-
-	return candidates[0]?.id ?? quotesArray[0]?.id ?? null;
-};
 
 const formatName = (quote: Quote) => {
 	const nameParts = [quote.firstName, quote.lastName].filter(
@@ -87,10 +65,21 @@ const emojiForClassification = (classification: string | null | undefined) =>
 		: "";
 
 $effect(() => {
+	if (quotes.length === 0) {
+		currentQuoteId = null;
+		return;
+	}
+
+	if (currentQuoteId === null || !quotes.some((quote) => quote.id === currentQuoteId)) {
+		currentQuoteId = pickWeightedQuoteId(quotes, null);
+	}
+});
+
+$effect(() => {
 	if (quotes.length === 0) return;
 
 	const interval = setInterval(() => {
-		currentQuoteId = pickNextQuote(quotes, currentQuoteId);
+		currentQuoteId = pickWeightedQuoteId(quotes, currentQuoteId);
 	}, intervalMs);
 	return () => clearInterval(interval);
 });

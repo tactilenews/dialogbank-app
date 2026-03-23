@@ -1,10 +1,14 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { page } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
 import { sampleDialogbankPageData } from "./page.svelte.spec/data";
 
 describe("/dialogbank +page.svelte", () => {
+	afterEach(() => {
+		vi.restoreAllMocks();
+	});
+
 	it("renders the DialogBank header and stats", async () => {
 		render(Page, { props: { data: sampleDialogbankPageData } });
 
@@ -25,6 +29,7 @@ describe("/dialogbank +page.svelte", () => {
 	});
 
 	it("highlights the classification for the visible quote", async () => {
+		vi.spyOn(Math, "random").mockReturnValue(0);
 		render(Page, { props: { data: sampleDialogbankPageData } });
 
 		const highlightedStat = page.getByTestId("stat-proGelsenkirchen");
