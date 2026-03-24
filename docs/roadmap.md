@@ -43,6 +43,10 @@ Create and edit classification types in the app.
 
 Configure which classifications and answers are shown in the public Dialogbank UI.
 
+### Scopes
+
+Use the Dialogbank across multiple events or locations with the public `/dialogbank` route showing only answers and conversations from the current scope.
+
 ### Infrastructure As Code For DNS And Sentry
 
 Manage DNS records and Sentry configuration as infrastructure code so environment changes do not require manual reconfiguration such as updating webhook targets.
