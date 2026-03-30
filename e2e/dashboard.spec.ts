@@ -21,9 +21,9 @@ test.describe("Editor Dashboard E2E", () => {
 		});
 
 		await page.goto("/auth/sign-in", { waitUntil: "networkidle" });
-		await page.getByLabel("Email address").fill("editor@example.org");
-		await page.getByLabel("Password").fill("12341234");
-		await page.getByRole("button", { name: "Sign in" }).click();
+		await page.getByLabel("E-Mail-Adresse").fill("editor@example.org");
+		await page.getByLabel("Passwort").fill("12341234");
+		await page.getByRole("button", { name: "Anmelden" }).click();
 
 		await expect(page).toHaveURL("/");
 
@@ -39,7 +39,7 @@ test.describe("Editor Dashboard E2E", () => {
 		await page.getByTestId("answer-301-classification").selectOption("3");
 		await page.getByTestId("answer-301-save").click();
 
-		await expect(page.getByText("Answer assigned to Contra Gelsenkirchen.")).toBeVisible();
+		await expect(page.getByText("Antwort wurde Contra Gelsenkirchen zugeordnet.")).toBeVisible();
 		await expect(page.getByTestId("answer-301-classification")).toHaveValue("3");
 		await expect(contraSection.getByText(movedAnswer)).toBeVisible();
 		await expect(unclassifiedSection).toHaveCount(0);

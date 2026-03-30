@@ -66,12 +66,12 @@ export const sampleEditorPageData: PageData = {
 			},
 		},
 		{
-			classification: "Unclassified",
+			classification: "Nicht klassifiziert",
 			key: "unclassified",
 			answers: [
 				{
 					id: 98,
-					classification: "Unclassified",
+					classification: "Nicht klassifiziert",
 					classificationId: null,
 					rationale:
 						"The source answer is ambiguous and needs editor review before classification.",
@@ -80,7 +80,7 @@ export const sampleEditorPageData: PageData = {
 				},
 				{
 					id: 97,
-					classification: "Unclassified",
+					classification: "Nicht klassifiziert",
 					classificationId: null,
 					rationale: "This answer still has no manual classification.",
 					value: "Another answer still waiting for classification.",
@@ -158,12 +158,12 @@ export const sampleEditorPageDataAfterManualClassification: PageData = {
 			},
 		},
 		{
-			classification: "Unclassified",
+			classification: "Nicht klassifiziert",
 			key: "unclassified",
 			answers: [
 				{
 					id: 97,
-					classification: "Unclassified",
+					classification: "Nicht klassifiziert",
 					classificationId: null,
 					rationale: "This answer still has no manual classification.",
 					value: "Another answer still waiting for classification.",

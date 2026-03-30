@@ -22,7 +22,7 @@ describe("DashboardAnswerCard", () => {
 		await expect
 			.element(page.getByText("Needs review before it can be categorized."))
 			.toBeVisible();
-		await expect.element(page.getByText("Field rationale")).toBeVisible();
+		await expect.element(page.getByText("Begründung")).toBeVisible();
 		await expect
 			.element(
 				page.getByText(
@@ -43,6 +43,8 @@ describe("DashboardAnswerCard", () => {
 
 		await expect.element(page.getByTestId("answer-98-classification")).toHaveValue("");
 		await expect.element(page.getByTestId("answer-98-save")).toBeVisible();
-		await expect.element(page.getByText("Answer moved to Unclassified.")).toBeVisible();
+		await expect
+			.element(page.getByText("Antwort wurde als nicht klassifiziert markiert."))
+			.toBeVisible();
 	});
 });

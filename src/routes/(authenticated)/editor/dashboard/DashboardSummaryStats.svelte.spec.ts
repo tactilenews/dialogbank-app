@@ -8,7 +8,7 @@ describe("DashboardSummaryStats", () => {
 	it("renders all stat cards", async () => {
 		render(DashboardSummaryStats, { props: { statItems: sampleDashboardStatItems } });
 
-		await expect.element(page.getByText(/Successful conversations\s*3/)).toBeVisible();
-		await expect.element(page.getByText(/Total answers\s*6/)).toBeVisible();
+		await expect.element(page.getByText(/Erfolgreiche Gespräche\s*3/)).toBeVisible();
+		await expect.element(page.getByText(/Antworten insgesamt\s*6/)).toBeVisible();
 	});
 });

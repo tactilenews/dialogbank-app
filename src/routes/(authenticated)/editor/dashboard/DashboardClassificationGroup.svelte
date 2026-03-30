@@ -23,7 +23,9 @@ let { group, classificationOptions, form }: Props = $props();
 	<div class="flex items-center justify-between">
 		<div>
 			<h3 class="text-lg font-semibold text-slate-900">{group.classification}</h3>
-			<p class="text-sm text-slate-500">Page {group.pagination.page} of {group.pagination.totalPages}</p>
+			<p class="text-sm text-slate-500">
+				Seite {group.pagination.page} von {group.pagination.totalPages}
+			</p>
 		</div>
 	</div>
 	<div class="mt-4 space-y-3">
@@ -31,7 +33,7 @@ let { group, classificationOptions, form }: Props = $props();
 			<DashboardAnswerCard {answer} {classificationOptions} {form} />
 		{/each}
 	</div>
-	<nav class="mt-4 flex items-center justify-between" aria-label={`${group.classification} pagination`}>
+	<nav class="mt-4 flex items-center justify-between" aria-label={`${group.classification} Seitennavigation`}>
 		<a
 			data-sveltekit-noscroll
 			data-sveltekit-reload
@@ -43,7 +45,7 @@ let { group, classificationOptions, form }: Props = $props();
 			}`}
 			href={`?page_${group.key}=${Math.max(1, group.pagination.page - 1)}#classification-${group.key}`}
 		>
-			Previous
+			Zurück
 		</a>
 		<a
 			data-sveltekit-noscroll
@@ -56,7 +58,7 @@ let { group, classificationOptions, form }: Props = $props();
 			}`}
 			href={`?page_${group.key}=${Math.min(group.pagination.totalPages, group.pagination.page + 1)}#classification-${group.key}`}
 		>
-			Next
+			Weiter
 		</a>
 	</nav>
 </div>

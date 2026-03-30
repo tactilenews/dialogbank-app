@@ -2,11 +2,11 @@ import type { DashboardStatItem } from "../types";
 
 export const sampleDashboardStatItems = [
 	{
-		label: "Successful conversations",
+		label: "Erfolgreiche Gespräche",
 		value: 3,
 	},
 	{
-		label: "Total answers",
+		label: "Antworten insgesamt",
 		value: 6,
 	},
 ] satisfies DashboardStatItem[];

@@ -28,7 +28,7 @@ const matchingForm = $derived(form?.answerId === answer.id ? form : undefined);
 			{#if answer.rationale}
 				<div class="mt-3 rounded-xl border border-slate-200 bg-white/80 px-3 py-3">
 					<div class="text-xs font-semibold uppercase tracking-[0.2em] text-slate-500">
-						Field rationale
+						Begründung
 					</div>
 					<p data-testid={`answer-${answer.id}-rationale`} class="mt-3 text-sm leading-6 text-slate-600">
 						{answer.rationale}
@@ -46,7 +46,7 @@ const matchingForm = $derived(form?.answerId === answer.id ? form : undefined);
 				for={`classification-select-${answer.id}`}
 				class="block text-xs font-semibold uppercase tracking-[0.2em] text-slate-500"
 			>
-				Classification
+				Klassifizierung
 			</label>
 			<select
 				id={`classification-select-${answer.id}`}
@@ -55,19 +55,19 @@ const matchingForm = $derived(form?.answerId === answer.id ? form : undefined);
 				data-testid={`answer-${answer.id}-classification`}
 				class="w-full rounded-xl border border-slate-300 bg-white px-3 py-2 text-sm text-slate-700"
 			>
-				<option value="">Unclassified</option>
+				<option value="">Nicht klassifiziert</option>
 				{#each classificationOptions as option (option.id)}
 					<option value={option.id}>{option.label}</option>
 				{/each}
 			</select>
 			<div class="flex items-center justify-between gap-3">
-				<div class="text-xs text-slate-500">Current: {answer.classification}</div>
+				<div class="text-xs text-slate-500">Aktuell: {answer.classification}</div>
 				<button
 					type="submit"
 					data-testid={`answer-${answer.id}-save`}
 					class="rounded-full border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:border-slate-400"
 				>
-					Save
+					Speichern
 				</button>
 			</div>
 			{#if matchingForm}

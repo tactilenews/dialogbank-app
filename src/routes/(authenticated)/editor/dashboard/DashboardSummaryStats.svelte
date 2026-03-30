@@ -8,7 +8,7 @@ type Props = {
 let { statItems }: Props = $props();
 </script>
 
-<section class="grid gap-6 md:grid-cols-2" aria-label="Summary statistics">
+<section class="grid gap-6 md:grid-cols-2" aria-label="Übersichtsstatistiken">
 	{#each statItems as item (item.label)}
 		<div class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
 			<div class="text-sm text-slate-500">{item.label}</div>

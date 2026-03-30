@@ -11,16 +11,16 @@ describe("/editor/dashboard +page.svelte", () => {
 	it("renders summary stats and chart", async () => {
 		render(Page, { props: { data: sampleEditorPageData } });
 
-		const heading = page.getByRole("heading", { name: "Answer overview" });
+		const heading = page.getByRole("heading", { name: "Antworten im Überblick" });
 		await expect.element(heading).toBeVisible();
 
-		const successfulConversationsCard = page.getByText(/Successful conversations\s*3/);
+		const successfulConversationsCard = page.getByText(/Erfolgreiche Gespräche\s*3/);
 		await expect.element(successfulConversationsCard).toBeVisible();
 
-		const totalAnswersCard = page.getByText(/Total answers\s*6/);
+		const totalAnswersCard = page.getByText(/Antworten insgesamt\s*6/);
 		await expect.element(totalAnswersCard).toBeVisible();
 
-		await expect.element(page.getByText("Conversations per day")).toBeVisible();
+		await expect.element(page.getByText("Gespräche pro Tag")).toBeVisible();
 		await expect.element(page.getByText("2026-03-12")).toBeVisible();
 	});
 
@@ -37,7 +37,7 @@ describe("/editor/dashboard +page.svelte", () => {
 
 		await expect.element(supportCard.getByText("Mara Klein")).toBeVisible();
 		await expect.element(page.getByText("Start a weekly neighborhood market.")).toBeVisible();
-		await expect.element(page.getByRole("heading", { name: "Unclassified" })).toBeVisible();
+		await expect.element(page.getByRole("heading", { name: "Nicht klassifiziert" })).toBeVisible();
 	});
 
 	it("renders a manual classification form for each answer", async () => {

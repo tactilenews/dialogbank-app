@@ -20,12 +20,12 @@ const { Story } = defineMeta({
 	name="Logged In"
 	play={async ({ canvasElement }) => {
 		const canvas = within(canvasElement);
-		const signInButton = canvas.getByRole('button', { name: /Sign in/i });
+		const signInButton = canvas.getByRole('button', { name: /Anmelden/i });
 		await expect(signInButton).toBeInTheDocument();
 		await userEvent.click(signInButton);
 		await waitFor(() => expect(signInButton).not.toBeInTheDocument());
 
-		const signOutButton = canvas.getByRole('button', { name: /Sign out/i });
+		const signOutButton = canvas.getByRole('button', { name: /Abmelden/i });
 		await expect(signOutButton).toBeInTheDocument();
 	}}
 />

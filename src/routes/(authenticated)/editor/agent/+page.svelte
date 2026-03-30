@@ -5,12 +5,12 @@ let { data }: { data: PageData } = $props();
 </script>
 
 <svelte:head>
-	<title>Editor Agent | Dialogbank</title>
+	<title>Redaktions-Agent | Dialogbank</title>
 </svelte:head>
 
 <div class="max-w-3xl">
 	<div class="mb-6">
-		<h1 class="text-3xl font-bold">Editor Agent</h1>
+		<h1 class="text-3xl font-bold">Redaktions-Agent</h1>
 	</div>
 
 	{#if data.agent}
@@ -20,7 +20,7 @@ let { data }: { data: PageData } = $props();
 			</h2>
 
 			<div class="mt-4">
-				<h3 class="text-sm font-medium tracking-wider text-gray-500 uppercase">System Prompt</h3>
+				<h3 class="text-sm font-medium tracking-wider text-gray-500 uppercase">System-Prompt</h3>
 				<div
 					class="mt-2 rounded bg-gray-50 p-4 font-serif whitespace-pre-wrap text-gray-700 italic"
 				>
@@ -29,13 +29,13 @@ let { data }: { data: PageData } = $props();
 			</div>
 
 			<div class="mt-6 text-sm text-gray-400">
-				Agent ID: {data.agent.id} (Configured via environment)
+				Agent-ID: {data.agent.id} (Über die Umgebung konfiguriert)
 			</div>
 		</div>
 	{:else}
 		<div class="rounded-lg border border-dashed border-gray-300 p-12 text-center text-gray-500">
-			Could not load agent details. Please ensure ELEVENLABS_AGENT_ID and ELEVENLABS_API_KEY are
-			configured.
+			Agentendetails konnten nicht geladen werden. Bitte stellen Sie sicher, dass
+			ELEVENLABS_AGENT_ID und ELEVENLABS_API_KEY konfiguriert sind.
 		</div>
 	{/if}
 </div>

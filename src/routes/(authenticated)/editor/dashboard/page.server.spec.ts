@@ -89,7 +89,7 @@ describe("/editor/dashboard +page.server", () => {
 		expect(result.classificationGroups).toEqual(
 			expect.arrayContaining([
 				expect.objectContaining({
-					classification: "Unclassified",
+					classification: "Nicht klassifiziert",
 					key: "unclassified",
 					pagination: expect.objectContaining({
 						total: 1,
@@ -139,7 +139,7 @@ describe("/editor/dashboard +page.server", () => {
 
 		await expect(actions.default(event as Parameters<typeof actions.default>[0])).resolves.toEqual({
 			answerId: 1,
-			message: "Answer assigned to Support.",
+			message: "Antwort wurde Support zugeordnet.",
 			success: true,
 		});
 
@@ -186,7 +186,7 @@ describe("/editor/dashboard +page.server", () => {
 
 		await expect(actions.default(event as Parameters<typeof actions.default>[0])).resolves.toEqual({
 			answerId: 1,
-			message: "Answer moved to Unclassified.",
+			message: "Antwort wurde als nicht klassifiziert markiert.",
 			success: true,
 		});
 
