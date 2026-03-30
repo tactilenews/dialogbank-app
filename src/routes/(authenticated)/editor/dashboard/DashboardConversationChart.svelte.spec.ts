@@ -11,7 +11,7 @@ describe("DashboardConversationChart", () => {
 	it("renders conversation bars", async () => {
 		render(DashboardConversationChart, { props: { conversationsPerDay: sampleConversationDays } });
 
-		await expect.element(page.getByText("Conversations per day")).toBeVisible();
+		await expect.element(page.getByText("Gespräche pro Tag")).toBeVisible();
 		await expect.element(page.getByText("2026-03-12")).toBeVisible();
 		await expect.element(page.getByText("4")).toBeVisible();
 	});
@@ -19,6 +19,6 @@ describe("DashboardConversationChart", () => {
 	it("renders the empty state", async () => {
 		render(DashboardConversationChart, { props: { conversationsPerDay: emptyConversationDays } });
 
-		await expect.element(page.getByText("No conversations have been recorded yet.")).toBeVisible();
+		await expect.element(page.getByText("Es wurden noch keine Gespräche erfasst.")).toBeVisible();
 	});
 });

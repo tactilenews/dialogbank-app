@@ -6,20 +6,20 @@ let { form }: { form: ActionData } = $props();
 </script>
 
 <svelte:head>
-	<title>Sign in | Dialogbank</title>
+	<title>Anmelden | Dialogbank</title>
 </svelte:head>
 
 <div class="flex min-h-screen items-center justify-center bg-gray-50 p-4">
 	<div class="w-full max-w-md space-y-8 rounded-xl bg-white p-8 shadow-lg">
 		<div class="text-center">
-			<h1 class="text-3xl font-bold text-gray-900">Sign in</h1>
-			<p class="mt-2 text-sm text-gray-600">Enter your credentials to access your account</p>
+			<h1 class="text-3xl font-bold text-gray-900">Anmelden</h1>
+			<p class="mt-2 text-sm text-gray-600">Melden Sie sich mit Ihren Zugangsdaten an.</p>
 		</div>
 
 		<form method="post" action="?/signInEmail" use:enhance class="mt-8 space-y-6">
 			<div class="space-y-4 rounded-md shadow-xs">
 				<div class="flex flex-col gap-1.5">
-					<label for="email" class="text-sm font-medium text-gray-700"> Email address </label>
+					<label for="email" class="text-sm font-medium text-gray-700"> E-Mail-Adresse </label>
 					<input
 						id="email"
 						type="email"
@@ -30,7 +30,7 @@ let { form }: { form: ActionData } = $props();
 					/>
 				</div>
 				<div class="flex flex-col gap-1.5">
-					<label for="password" class="text-sm font-medium text-gray-700"> Password </label>
+					<label for="password" class="text-sm font-medium text-gray-700"> Passwort </label>
 					<input
 						id="password"
 						type="password"
@@ -53,7 +53,7 @@ let { form }: { form: ActionData } = $props();
 					type="submit"
 					class="w-full rounded-lg bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 focus:outline-none"
 				>
-					Sign in
+					Anmelden
 				</button>
 			</div>
 		</form>

@@ -7,7 +7,7 @@ const PAGE_SIZE = 20;
 const SUCCESS_STATUS = "success";
 const UNCLASSIFIED_GROUP = {
 	key: "unclassified",
-	label: "Unclassified",
+	label: "Nicht klassifiziert",
 } as const;
 
 function parsePageParam(value: string | null) {
@@ -135,7 +135,7 @@ export const load = withAuthenticatedLoad<
 				classificationId: answer.classificationId,
 				rationale: answer.rationale,
 				value: answer.value ?? "",
-				name: [answer.firstName, answer.lastName].filter(Boolean).join(" ") || "Unknown",
+				name: [answer.firstName, answer.lastName].filter(Boolean).join(" ") || "Unbekannt",
 			})),
 			pagination: {
 				page: currentPage,
@@ -190,7 +190,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["default"]>[0
 		const answerId = parseRequiredInteger(formData.get("answerId"));
 		if (answerId === null) {
 			return fail(400, {
-				message: "A valid answer is required.",
+				message: "Eine gültige Antwort ist erforderlich.",
 			});
 		}
 
@@ -204,7 +204,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["default"]>[0
 		) {
 			return fail(400, {
 				answerId,
-				message: "A valid classification is required.",
+				message: "Eine gültige Klassifizierung ist erforderlich.",
 			});
 		}
 
@@ -217,7 +217,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["default"]>[0
 		if (!answerRecord) {
 			return fail(404, {
 				answerId,
-				message: "Answer not found.",
+				message: "Antwort nicht gefunden.",
 			});
 		}
 
@@ -235,7 +235,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["default"]>[0
 			if (!classificationRecord) {
 				return fail(400, {
 					answerId,
-					message: "Classification not found.",
+					message: "Klassifizierung nicht gefunden.",
 				});
 			}
 
@@ -248,8 +248,8 @@ export const actions = withAuthenticatedActions<Parameters<Actions["default"]>[0
 			answerId,
 			message:
 				classificationLabel === null
-					? "Answer moved to Unclassified."
-					: `Answer assigned to ${classificationLabel}.`,
+					? "Antwort wurde als nicht klassifiziert markiert."
+					: `Antwort wurde ${classificationLabel} zugeordnet.`,
 			success: true,
 		};
 	},

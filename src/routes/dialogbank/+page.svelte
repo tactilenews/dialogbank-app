@@ -109,7 +109,7 @@ $effect(() => {
 </script>
 
 <svelte:head>
-	<title>Live view | Dialogbank</title>
+	<title>Live-Ansicht | Dialogbank</title>
 </svelte:head>
 
 <div class="legacy-root">

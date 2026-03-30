@@ -18,7 +18,7 @@ describe("DashboardClassificationGroup", () => {
 		});
 
 		await expect.element(page.getByRole("heading", { name: "Support" })).toBeVisible();
-		await expect.element(page.getByText("Page 1 of 2")).toBeVisible();
+		await expect.element(page.getByText("Seite 1 von 2")).toBeVisible();
 		await expect.element(page.getByText("Mara Klein")).toBeVisible();
 		await expect
 			.element(page.getByTestId("pagination-support-next"))

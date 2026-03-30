@@ -7,7 +7,7 @@ export const sampleClassificationOptions = [
 
 export const sampleAnswer = {
 	id: 98,
-	classification: "Unclassified",
+	classification: "Nicht klassifiziert",
 	classificationId: null,
 	rationale: "The source answer is ambiguous and needs editor review before classification.",
 	value: "Needs review before it can be categorized.",
@@ -16,6 +16,6 @@ export const sampleAnswer = {
 
 export const successForm = {
 	answerId: 98,
-	message: "Answer moved to Unclassified.",
+	message: "Antwort wurde als nicht klassifiziert markiert.",
 	success: true,
 } satisfies Exclude<DashboardForm, undefined>;

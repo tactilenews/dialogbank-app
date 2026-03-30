@@ -9,7 +9,7 @@ test.describe("Authentication", () => {
 		await expect(page).toHaveURL("/auth/sign-in");
 
 		// Verify sign in page renders correctly
-		await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Anmelden" })).toBeVisible();
 	});
 
 	test("unauthenticated users cannot post to /editor/dashboard", async ({ page }) => {
@@ -37,7 +37,7 @@ test.describe("Authentication", () => {
 		});
 
 		await expect(page).toHaveURL("/auth/sign-in");
-		await expect(page.getByRole("heading", { name: "Sign in" })).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Anmelden" })).toBeVisible();
 	});
 
 	test("signs in successfully with valid credentials", async ({ auth, page }) => {
@@ -52,22 +52,22 @@ test.describe("Authentication", () => {
 
 		// Sign in with the created user
 		await page.goto("/auth/sign-in");
-		await page.getByLabel("Email address").fill("user@example.org");
-		await page.getByLabel("Password").fill("12341234");
-		await page.getByRole("button", { name: "Sign in" }).click();
+		await page.getByLabel("E-Mail-Adresse").fill("user@example.org");
+		await page.getByLabel("Passwort").fill("12341234");
+		await page.getByRole("button", { name: "Anmelden" }).click();
 
 		// Verify successful redirect to the start page
 		await expect(page).toHaveURL("/");
 		await expect(page.getByRole("heading", { name: "DialogBank" })).toBeVisible();
-		await expect(page.getByRole("link", { name: "Editor Agent" })).toBeVisible();
-		await expect(page.getByRole("link", { name: "Editor Dashboard" })).toBeVisible();
+		await expect(page.getByRole("link", { name: "Redaktions-Agent" })).toBeVisible();
+		await expect(page.getByRole("link", { name: "Redaktions-Dashboard" })).toBeVisible();
 
-		await page.getByRole("link", { name: "Editor Agent" }).click();
+		await page.getByRole("link", { name: "Redaktions-Agent" }).click();
 		await expect(page).toHaveURL("/editor/agent");
-		const topLevelNav = page.getByLabel("Top level");
+		const topLevelNav = page.getByLabel("Hauptnavigation");
 		await expect(topLevelNav.getByRole("link", { name: "DialogBank" })).toBeVisible();
-		await expect(topLevelNav.getByRole("link", { name: "Editor Agent" })).toBeVisible();
-		await expect(topLevelNav.getByRole("link", { name: "Editor Dashboard" })).toBeVisible();
-		await expect(page.getByRole("heading", { name: "Editor Agent" })).toBeVisible();
+		await expect(topLevelNav.getByRole("link", { name: "Redaktions-Agent" })).toBeVisible();
+		await expect(topLevelNav.getByRole("link", { name: "Redaktions-Dashboard" })).toBeVisible();
+		await expect(page.getByRole("heading", { name: "Redaktions-Agent" })).toBeVisible();
 	});
 });

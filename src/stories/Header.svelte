@@ -33,12 +33,12 @@ const { user, onSignIn, onSignOut, onCreateAccount }: Props = $props();
 		<div>
 			{#if user}
 				<span class="welcome">
-					Welcome, <b>{user.name}</b>!
+					Willkommen, <b>{user.name}</b>!
 				</span>
-				<Button size="small" onclick={onSignOut} label="Sign out" />
+				<Button size="small" onclick={onSignOut} label="Abmelden" />
 			{:else}
-				<Button size="small" onclick={onSignIn} label="Sign in" />
-				<Button primary size="small" onclick={onCreateAccount} label="Sign up" />
+				<Button size="small" onclick={onSignIn} label="Anmelden" />
+				<Button primary size="small" onclick={onCreateAccount} label="Registrieren" />
 			{/if}
 		</div>
 	</div>

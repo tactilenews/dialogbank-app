@@ -12,27 +12,29 @@ describe("/+page.svelte", () => {
 		await expect.element(heading).toBeInTheDocument();
 
 		// Check for description
-		const description = page.getByText("This is a public page for DialogBank.");
+		const description = page.getByText("Dies ist die öffentliche Seite der DialogBank.");
 		await expect.element(description).toBeVisible();
 
 		const dialogbankLink = page.getByRole("link", { name: "DialogBank" });
 		await expect.element(dialogbankLink).toHaveAttribute("href", "/dialogbank");
 
-		const signInButton = page.getByRole("link", { name: "Sign in" });
+		const signInButton = page.getByRole("link", { name: "Anmelden" });
 		await expect.element(signInButton).toBeVisible();
 	});
 
 	it("displays sign in button when not authenticated", async () => {
 		render(Page, { props: { data: { user: null } } });
 
-		const signInButton = page.getByRole("link", { name: "Sign in" });
+		const signInButton = page.getByRole("link", { name: "Anmelden" });
 		await expect.element(signInButton).toBeVisible();
 		await expect
 			.element(page.getByRole("link", { name: "DialogBank" }))
 			.toHaveAttribute("href", "/dialogbank");
-		await expect.element(page.getByRole("link", { name: "Editor Agent" })).not.toBeInTheDocument();
 		await expect
-			.element(page.getByRole("link", { name: "Editor Dashboard" }))
+			.element(page.getByRole("link", { name: "Redaktions-Agent" }))
+			.not.toBeInTheDocument();
+		await expect
+			.element(page.getByRole("link", { name: "Redaktions-Dashboard" }))
 			.not.toBeInTheDocument();
 	});
 
@@ -41,14 +43,14 @@ describe("/+page.svelte", () => {
 			props: { data: { user: { id: "user-1" } } },
 		});
 
-		const agentExplorerLink = page.getByRole("link", { name: "Editor Agent" });
+		const agentExplorerLink = page.getByRole("link", { name: "Redaktions-Agent" });
 		await expect.element(agentExplorerLink).toHaveAttribute("href", "/editor/agent");
 
-		const dashboardLink = page.getByRole("link", { name: "Editor Dashboard" });
+		const dashboardLink = page.getByRole("link", { name: "Redaktions-Dashboard" });
 		await expect.element(dashboardLink).toHaveAttribute("href", "/editor/dashboard");
 		await expect
 			.element(page.getByRole("link", { name: "DialogBank" }))
 			.toHaveAttribute("href", "/dialogbank");
-		await expect.element(page.getByRole("link", { name: "Sign in" })).not.toBeInTheDocument();
+		await expect.element(page.getByRole("link", { name: "Anmelden" })).not.toBeInTheDocument();
 	});
 });
