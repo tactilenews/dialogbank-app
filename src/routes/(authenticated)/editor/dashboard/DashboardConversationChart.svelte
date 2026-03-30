@@ -8,6 +8,10 @@ type Props = {
 let { conversationsPerDay }: Props = $props();
 
 const maxConversations = $derived(Math.max(1, ...conversationsPerDay.map((item) => item.count)));
+
+function formatDayLabel(day: string) {
+	return day.split(/[T ]/, 1)[0] ?? day;
+}
 </script>
 
 <section class="space-y-4">
@@ -28,9 +32,9 @@ const maxConversations = $derived(Math.max(1, ...conversationsPerDay.map((item) 
 						<div
 							class="w-full rounded-full bg-slate-900/80"
 							style={`height: ${Math.max(12, (day.count / maxConversations) * 160)}px`}
-							title={`${day.count} Gespräche am ${day.day}`}
+							title={`${day.count} Gespräche am ${formatDayLabel(day.day)}`}
 						></div>
-						<div class="text-[0.7rem] text-slate-500">{day.day}</div>
+						<div class="text-[0.7rem] text-slate-500">{formatDayLabel(day.day)}</div>
 						<div class="text-sm font-medium text-slate-700">{day.count}</div>
 					</div>
 				{/each}
