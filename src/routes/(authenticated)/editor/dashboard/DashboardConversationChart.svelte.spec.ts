@@ -12,8 +12,10 @@ describe("DashboardConversationChart", () => {
 		render(DashboardConversationChart, { props: { conversationsPerDay: sampleConversationDays } });
 
 		await expect.element(page.getByText("Gespräche pro Tag")).toBeVisible();
-		await expect.element(page.getByText("2026-03-12")).toBeVisible();
-		await expect.element(page.getByText("4")).toBeVisible();
+		await expect.element(page.getByText("2026-03-14")).toBeVisible();
+		await expect.element(page.getByText("4", { exact: true })).toBeVisible();
+		await expect.element(page.getByText("2026-03-14T10:45:00.000Z")).not.toBeInTheDocument();
+		await expect.element(page.getByText("2026-03-14 00:00:00")).not.toBeInTheDocument();
 	});
 
 	it("renders the empty state", async () => {
