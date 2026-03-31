@@ -15,7 +15,7 @@
 		"lint:fix": "biome check --error-on-warnings --write .",
 		"test:unit": "vitest",
 		"test": "npm run test:unit -- --run && npm run test:e2e",
-		"test:e2e": "playwright test",
+		"test:e2e": "bash ./e2e/test-e2e.sh",
 		"db:push": "drizzle-kit push",
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",

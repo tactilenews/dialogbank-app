@@ -1,4 +1,4 @@
-import { answers, classifications, conversations } from "./dialogbank.spec/data";
+import { answers, classifications, conversations } from "./dialogbank.e2e.spec/data";
 import { schema } from "./lib/db";
 import { expect, test } from "./lib/fixtures";
 import { createElevenLabsSignature } from "./lib/webhook";

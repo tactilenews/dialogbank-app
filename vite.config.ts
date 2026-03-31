@@ -11,16 +11,18 @@ import { defineConfig } from "vitest/config";
 const dirname =
 	typeof __dirname !== "undefined" ? __dirname : path.dirname(fileURLToPath(import.meta.url));
 const sentryRelease = process.env.COMMIT_REF ?? process.env.SENTRY_RELEASE ?? null;
+const isVitest = process.env.VITEST === "true";
+const isPlaywright = process.env.PLAYWRIGHT_TEST === "1";
+const disableSentry = isVitest || isPlaywright;
 
 // More info at: https://storybook.js.org/docs/next/writing-tests/integrations/vitest-addon
 
-const isTest = process.env.VITEST === "true" || process.env.PLAYWRIGHT_TEST === "1";
 export default defineConfig({
 	define: {
 		__SENTRY_RELEASE__: JSON.stringify(sentryRelease),
 	},
 	plugins: [
-		isTest
+		disableSentry
 			? null
 			: sentrySvelteKit({
 					sourceMapsUploadOptions: {
@@ -63,7 +65,7 @@ export default defineConfig({
 					name: "server",
 					environment: "node",
 					setupFiles: ["./vitest.setup.ts"],
-					include: ["src/**/*.spec.ts"],
+					include: ["src/**/*.spec.ts", "e2e/lib/**/*.spec.ts"],
 					exclude: ["src/**/*.svelte.spec.ts", "**/*.e2e.spec.ts"],
 				},
 			},

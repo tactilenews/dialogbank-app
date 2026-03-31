@@ -1,6 +1,10 @@
-import { ElevenLabsClient, ElevenLabsError } from "@elevenlabs/elevenlabs-js";
+import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error } from "@sveltejs/kit";
-import { env } from "$env/dynamic/private";
+import {
+	createElevenLabsAgentReader,
+	getElevenLabsEditorAgent,
+	resolveElevenLabsAgentTarget,
+} from "$lib/server/elevenlabs/agent";
 import { withAuthenticatedLoad } from "$lib/server/require-user";
 import type { PageServerLoad } from "./$types";
 
@@ -8,31 +12,11 @@ export const load = withAuthenticatedLoad<
 	Parameters<PageServerLoad>[0],
 	ReturnType<PageServerLoad>
 >(async () => {
-	const apiKey = env.ELEVENLABS_API_KEY;
-	const agentId = env.ELEVENLABS_AGENT_ID;
-
-	if (!apiKey) {
-		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
-	}
-
-	if (!agentId) {
-		throw error(500, "ELEVENLABS_AGENT_ID is not configured on the server.");
-	}
-
-	const client = new ElevenLabsClient({
-		apiKey,
-	});
-
+	const agentTarget = resolveElevenLabsAgentTarget(process.env);
+	const reader = createElevenLabsAgentReader(process.env);
 	try {
-		const agent = await client.conversationalAi.agents.get(agentId);
-
 		return {
-			agent: {
-				id: agentId,
-				name: agent.name ?? "Unnamed Agent",
-				systemPrompt:
-					agent.conversationConfig?.agent?.prompt?.prompt ?? "No system prompt configured.",
-			},
+			agent: await getElevenLabsEditorAgent(agentTarget, reader),
 		};
 	} catch (e: unknown) {
 		if (!(e instanceof ElevenLabsError)) {
@@ -42,7 +26,7 @@ export const load = withAuthenticatedLoad<
 			throw error(401, "Unauthorized: Invalid ElevenLabs API Key.");
 		}
 		if (e.statusCode === 404) {
-			throw error(404, `Agent with ID "${agentId}" not found.`);
+			throw error(404, `Agent with ID "${agentTarget.agentId}" not found.`);
 		}
 		throw error(e.statusCode || 500, `Failed to fetch agent: ${e.message || "Unknown error"}`);
 	}

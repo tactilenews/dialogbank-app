@@ -21,7 +21,7 @@ export default defineConfig({
 		},
 	},
 	testDir: "e2e",
-	testMatch: /(.+\.)?spec\.[jt]s/,
+	testMatch: /(.+\.)?e2e\.spec\.[jt]s/,
 	// Run tests in isolation.
 	workers: 1,
 	// Fail the build on CI if you accidentally left test.only in the source code.
