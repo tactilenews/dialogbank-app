@@ -51,7 +51,7 @@
 		"better-auth": "~1.5.6",
 		"consola": "^3.4.2",
 		"drizzle-kit": "^0.31.10",
-		"drizzle-orm": "^0.45.1",
+		"drizzle-orm": "^0.45.2",
 		"drizzle-seed": "^0.3.1",
 		"mdsvex": "^0.12.7",
 		"playwright": "^1.58.2",
