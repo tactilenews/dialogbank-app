@@ -14,7 +14,7 @@ export function verifyElevenLabsSignature(body: string, header: string): boolean
 	const tPart = parts.find((p) => p.startsWith("t="));
 	const vPart = parts.find((p) => p.startsWith("v0="));
 
-	if (!tPart || !vPart || !vPart.startsWith("v0=")) return false;
+	if (!tPart || !vPart?.startsWith("v0=")) return false;
 
 	const timestamp = tPart.split("=")[1];
 	const signature = vPart.split("=")[1];
