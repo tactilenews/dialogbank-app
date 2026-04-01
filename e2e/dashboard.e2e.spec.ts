@@ -1,4 +1,4 @@
-import { answers, classifications, conversations } from "./dashboard.spec/data";
+import { answers, classifications, conversations } from "./dashboard.e2e.spec/data";
 import { schema } from "./lib/db";
 import { expect, test } from "./lib/fixtures";
 
