@@ -3,3 +3,10 @@ packages:
 
 onlyBuiltDependencies:
   - esbuild
+  - "@sentry/cli"
+
+ignoredBuiltDependencies:
+  - "@prisma/client"
+  - "@prisma/engines"
+  - better-sqlite3
+  - prisma
