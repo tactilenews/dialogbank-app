@@ -21,8 +21,8 @@ importers:
         specifier: ^0.4.2
         version: 0.4.2
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.41.1
-        version: 2.41.1
+        specifier: ^2.42.0
+        version: 2.42.0
       '@neondatabase/serverless':
         specifier: ^1.0.2
         version: 1.0.2
@@ -498,8 +498,8 @@ packages:
   '@electric-sql/pglite@0.4.2':
     resolution: {integrity: sha512-1GUUl/MZpy5QWgWisD3Epho3GkJrZ1MzVgQpo2pifQWUs96F9rXKZxeVLPhkwFYck34CH/kQ8lis6wX9ifn3kg==}
 
-  '@elevenlabs/elevenlabs-js@2.41.1':
-    resolution: {integrity: sha512-rYpQq49avDjpTtgeOI2sYoMmjyj01egCaPx/bzxemtX8TP1AXOJt3jLYAydOcTz/SBQDBWIOIoNW1tozLROUoA==}
+  '@elevenlabs/elevenlabs-js@2.42.0':
+    resolution: {integrity: sha512-SNql5kYylTJ6u2xEHBfE+DkM1K6bttqwGIlJUshqdvNlbxDGtXaf5Ot59cJJ/YS2+LP85cjSdQ2/49nyC0IG9w==}
     engines: {node: '>=18.0.0'}
 
   '@emnapi/core@1.9.1':
@@ -2469,8 +2469,8 @@ packages:
   defu@6.1.4:
     resolution: {integrity: sha512-mEQCMmwJu317oSz8CwdIOdwf3xMif1ttiM8LTufzc3g6kR+9Pe236twL8j3IYT1F7GfRgGcW6MWxzZjLIkuHIg==}
 
-  defu@6.1.6:
-    resolution: {integrity: sha512-f8mefEW4WIVg4LckePx3mALjQSPQgFlg9U8yaPdlsbdYcHQyj9n2zL2LJEA52smeYxOvmd/nB7TpMtHGMTHcug==}
+  defu@6.1.7:
+    resolution: {integrity: sha512-7z22QmUWiQ/2d0KkdYmANbRUVABpZ9SNYyH5vx6PZ+nE5bcC0l7uFvEfHlyld/HcGBFTL536ClDt3DEcSlEJAQ==}
 
   denque@2.1.0:
     resolution: {integrity: sha512-HVQE3AAb/pxF8fQAoiqpvg9i3evqug3hoiwakOyZAwJm+6vZehbkYXZ0l4JxS+I3QxM97v5aaRNhj8v5oBhekw==}
@@ -4440,7 +4440,7 @@ snapshots:
 
   '@electric-sql/pglite@0.4.2': {}
 
-  '@elevenlabs/elevenlabs-js@2.41.1':
+  '@elevenlabs/elevenlabs-js@2.42.0':
     dependencies:
       command-exists: 1.2.9
       node-fetch: 2.7.0
@@ -6097,7 +6097,7 @@ snapshots:
     dependencies:
       chokidar: 4.0.3
       confbox: 0.2.4
-      defu: 6.1.6
+      defu: 6.1.7
       dotenv: 16.6.1
       exsolve: 1.0.8
       giget: 2.0.0
@@ -6234,7 +6234,7 @@ snapshots:
 
   defu@6.1.4: {}
 
-  defu@6.1.6:
+  defu@6.1.7:
     optional: true
 
   denque@2.1.0:
