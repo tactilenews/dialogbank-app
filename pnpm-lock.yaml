@@ -21,8 +21,8 @@ importers:
         specifier: ^0.4.4
         version: 0.4.4
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.41.1
-        version: 2.41.1
+        specifier: ^2.43.0
+        version: 2.43.0
       '@neondatabase/serverless':
         specifier: ^1.0.2
         version: 1.0.2
@@ -498,8 +498,8 @@ packages:
   '@electric-sql/pglite@0.4.4':
     resolution: {integrity: sha512-g/6CWAJ4XOkObWCWAQ2IReZD8VvsDy3poRHSKvpRR2F96F8WJ3HVbjpso3gN7l0q6QPPgvxSSpl/qo5k8a7mkQ==}
 
-  '@elevenlabs/elevenlabs-js@2.41.1':
-    resolution: {integrity: sha512-rYpQq49avDjpTtgeOI2sYoMmjyj01egCaPx/bzxemtX8TP1AXOJt3jLYAydOcTz/SBQDBWIOIoNW1tozLROUoA==}
+  '@elevenlabs/elevenlabs-js@2.43.0':
+    resolution: {integrity: sha512-+1eqTvVjEdgzr8L+u/3ebavWXx/sd06zuTTAKb1wwcar3NNQBYjqmMxuVOH6iUjSUvQUWvwK7sFWZEEcE8wp6A==}
     engines: {node: '>=18.0.0'}
 
   '@emnapi/core@1.9.1':
@@ -4447,7 +4447,7 @@ snapshots:
 
   '@electric-sql/pglite@0.4.4': {}
 
-  '@elevenlabs/elevenlabs-js@2.41.1':
+  '@elevenlabs/elevenlabs-js@2.43.0':
     dependencies:
       command-exists: 1.2.9
       node-fetch: 2.7.0
