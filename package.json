@@ -33,7 +33,7 @@
 		"@elevenlabs/elevenlabs-js": "^2.41.1",
 		"@neondatabase/serverless": "^1.0.2",
 		"@playwright/test": "^1.59.1",
-		"@sentry/sveltekit": "^10.47.0",
+		"@sentry/sveltekit": "^10.48.0",
 		"@storybook/addon-a11y": "^10.2.19",
 		"@storybook/addon-docs": "^10.2.19",
 		"@storybook/addon-svelte-csf": "^5.0.11",
