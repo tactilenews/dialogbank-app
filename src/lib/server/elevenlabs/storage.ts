@@ -34,18 +34,25 @@ export async function processElevenLabsPostCall({ db, payload }: StorageInput): 
 	try {
 		// Use dbAtomic to run both inserts in the best available atomic mode
 		if (data.answers.length > 0) {
-			const answerRecords = await Promise.all(
-				data.answers.map(async ({ classificationKey, ...answerData }) => {
-					const classificationId = classificationKey
-						? await findOrCreateClassification(db, classificationKey)
-						: null;
-					return {
-						conversationId: data.conversation.conversationId,
-						...answerData,
-						classificationId,
-					};
-				}),
-			);
+			const classificationIdByKey = new Map<string, number>();
+			const classificationKeys = [
+				...new Set(data.answers.flatMap((answer) => answer.classificationKey ?? [])),
+			];
+
+			for (const classificationKey of classificationKeys) {
+				classificationIdByKey.set(
+					classificationKey,
+					await findOrCreateClassification(db, classificationKey),
+				);
+			}
+
+			const answerRecords = data.answers.map(({ classificationKey, ...answerData }) => ({
+				conversationId: data.conversation.conversationId,
+				...answerData,
+				classificationId: classificationKey
+					? (classificationIdByKey.get(classificationKey) ?? null)
+					: null,
+			}));
 
 			await dbAtomic(db, (client) => [
 				client.insert(conversations).values(data.conversation),
