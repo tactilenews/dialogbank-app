@@ -1,6 +1,8 @@
+import { rmSync } from "node:fs";
 import {
 	createElevenLabsBranchClient,
 	deleteElevenLabsBranch,
+	ELEVENLABS_SNAPSHOT_PATH,
 	resolveElevenLabsBranchContext,
 } from "./lib/elevenlabs-branch.ts";
 
@@ -14,6 +16,8 @@ async function main() {
 	const client = createElevenLabsBranchClient(context.apiKey);
 
 	await deleteElevenLabsBranch(client, context, branchId);
+
+	rmSync(ELEVENLABS_SNAPSHOT_PATH, { force: true });
 }
 
 await main();

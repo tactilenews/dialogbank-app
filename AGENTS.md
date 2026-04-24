@@ -117,6 +117,10 @@ infisical --env test run -- pnpm run db:migrate
 - Use the `db` fixture to guarantee clean state at test start
 - Avoid implicit dependencies on previous test data
 
+## Component Location
+
+- **All Svelte components** (reusable UI pieces) must be placed in `src/lib/components/`. Never co-locate components next to route files.
+
 ## Naming & Wording Mandates
 
 - **Authentication**: Always use the wording **"Sign in"** and **"Sign out"** for button labels and headings. Avoid using "login", "logout", "Log in", or "Log out".

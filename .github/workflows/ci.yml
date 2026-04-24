@@ -55,6 +55,7 @@ jobs:
           ELEVENLABS_AGENT_ID: ${{ secrets.ELEVENLABS_AGENT_ID }}
           ELEVENLABS_AGENT_PARENT_BRANCH_ID: ${{ secrets.ELEVENLABS_AGENT_PARENT_BRANCH_ID }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          ELEVENLABS_WORKFLOW_NODE_ID: ${{ secrets.ELEVENLABS_WORKFLOW_NODE_ID }}
 
   build:
     runs-on: ubuntu-latest

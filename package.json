@@ -20,6 +20,7 @@
 		"db:generate": "drizzle-kit generate",
 		"db:migrate": "drizzle-kit migrate",
 		"db:studio": "drizzle-kit studio",
+		"send-elevenlabs-payload": "node --experimental-strip-types src/scripts/send-elevenlabs-payload.ts",
 		"db:seed": "vite-node  --options.transformMode.ssr='/.*/' src/scripts/seed.ts",
 		"auth:schema": "better-auth generate --config src/lib/server/auth.ts --output src/lib/server/db/auth.schema.ts --yes",
 		"storybook": "storybook dev -p 6006",

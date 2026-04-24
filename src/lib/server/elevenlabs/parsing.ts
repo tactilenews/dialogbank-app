@@ -60,7 +60,8 @@ export function parseElevenLabsWebhook(payload: unknown) {
 	let age: number | null = null;
 	let publicationAllowed: boolean | null = null;
 
-	const otherAnswers: {
+	const classificationByIndex: Record<number, string> = {};
+	const rawAnswers: {
 		dataCollectionId: string;
 		value: string | null;
 		rationale: string;
@@ -71,6 +72,14 @@ export function parseElevenLabsWebhook(payload: unknown) {
 	for (const result of results) {
 		const id = result.data_collection_id.toLowerCase();
 		const val = result.value;
+
+		const classificationMatch = id.match(/^classification_(\d+)$/);
+		if (classificationMatch) {
+			if (typeof val === "string" && val) {
+				classificationByIndex[parseInt(classificationMatch[1], 10)] = val;
+			}
+			continue;
+		}
 
 		switch (id) {
 			case "first_name":
@@ -88,13 +97,22 @@ export function parseElevenLabsWebhook(payload: unknown) {
 				}
 				break;
 			default:
-				otherAnswers.push({
+				rawAnswers.push({
 					dataCollectionId: result.data_collection_id,
 					value: val !== null ? String(val) : null,
 					rationale: result.rationale,
 				});
 		}
 	}
+
+	const otherAnswers = rawAnswers.map((a) => {
+		const questionMatch = a.dataCollectionId.toLowerCase().match(/^question_(\d+)$/);
+		if (questionMatch) {
+			const idx = parseInt(questionMatch[1], 10);
+			return { ...a, classificationKey: classificationByIndex[idx] ?? null };
+		}
+		return { ...a, classificationKey: null as string | null };
+	});
 
 	return {
 		conversation: {
