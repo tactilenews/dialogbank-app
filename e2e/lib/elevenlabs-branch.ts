@@ -1,4 +1,9 @@
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import type { GetAgentResponseModel } from "@elevenlabs/elevenlabs-js/api";
+
+export const ELEVENLABS_SNAPSHOT_PATH = "e2e/.elevenlabs-snapshot.json";
+
+export type AgentSnapshot = Pick<GetAgentResponseModel, "workflow" | "platformSettings">;
 
 type ElevenLabsBranchMethods = Pick<
 	ElevenLabsClient["conversationalAi"]["agents"]["branches"],
@@ -9,6 +14,8 @@ type ElevenLabsBranchClient = {
 	conversationalAi: {
 		agents: {
 			branches: ElevenLabsBranchMethods;
+			get: (agentId: string, request?: { branchId?: string }) => Promise<AgentSnapshot>;
+			update: (agentId: string, request: { branchId?: string } & AgentSnapshot) => Promise<void>;
 		};
 	};
 };
@@ -64,9 +71,41 @@ export function createElevenLabsBranchClient(apiKey: string): ElevenLabsBranchCl
 					update: async (agentId, branchId, request) =>
 						client.conversationalAi.agents.branches.update(agentId, branchId, request),
 				},
+				get: async (agentId, request): Promise<AgentSnapshot> => {
+					const response = await client.conversationalAi.agents.get(agentId, request);
+					return {
+						workflow: response.workflow,
+						platformSettings: response.platformSettings,
+					};
+				},
+				update: async (agentId, request): Promise<void> => {
+					await (
+						client.conversationalAi.agents.update as unknown as (
+							id: string,
+							req: unknown,
+						) => Promise<void>
+					)(agentId, request);
+				},
 			},
 		},
 	};
+}
+
+export async function fetchAgentSnapshot(
+	client: ElevenLabsBranchClient,
+	agentId: string,
+	branchId: string,
+): Promise<AgentSnapshot> {
+	return client.conversationalAi.agents.get(agentId, { branchId });
+}
+
+export async function restoreAgentSnapshot(
+	client: ElevenLabsBranchClient,
+	agentId: string,
+	branchId: string,
+	snapshot: AgentSnapshot,
+): Promise<void> {
+	await client.conversationalAi.agents.update(agentId, { branchId, ...snapshot });
 }
 
 export function createEphemeralBranchName(now: Date) {
