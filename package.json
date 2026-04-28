@@ -49,7 +49,7 @@
 		"@types/node": "^25",
 		"@vitest/browser-playwright": "^4.1.5",
 		"@vitest/coverage-v8": "^4.1.5",
-		"better-auth": "~1.6.8",
+		"better-auth": "~1.6.9",
 		"consola": "^3.4.2",
 		"drizzle-kit": "^0.31.10",
 		"drizzle-orm": "^0.45.2",
