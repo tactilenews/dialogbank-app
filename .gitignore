@@ -27,3 +27,5 @@ e2e/.elevenlabs-snapshot.json
 
 *storybook.log
 storybook-static
+
+.codex
