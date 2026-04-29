@@ -1,15 +1,15 @@
-import { answers, classifications, conversations } from "./dialogbank.e2e.spec/data";
 import { schema } from "./lib/db";
 import { expect, test } from "./lib/fixtures";
 import { createElevenLabsSignature } from "./lib/webhook";
+import { answers, classifications, conversations } from "./showcase.e2e.spec/data";
 
-test.describe("DialogBank E2E", () => {
+test.describe("Showcase E2E", () => {
 	test("shows stats counters and highlights the current classification", async ({ db, page }) => {
 		await db.insert(schema.conversations).values(conversations);
 		await db.insert(schema.classifications).values(classifications);
 		await db.insert(schema.answers).values(answers);
 
-		await page.goto("/dialogbank", { waitUntil: "networkidle" });
+		await page.goto("/showcase", { waitUntil: "networkidle" });
 
 		await expect(page.getByTestId("stat-guests")).toContainText("1");
 		await expect(page.getByTestId("stat-answers")).toContainText("2");
@@ -41,7 +41,7 @@ test.describe("DialogBank E2E", () => {
 		await db.insert(schema.classifications).values(classifications);
 		await db.insert(schema.answers).values(answers);
 
-		await page.goto("/dialogbank", { waitUntil: "networkidle" });
+		await page.goto("/showcase", { waitUntil: "networkidle" });
 
 		const quoteCard = page.locator('[data-testid="current-quote"]:not([inert])');
 		const initialText = (await quoteCard.textContent())?.trim() ?? "";
@@ -57,8 +57,8 @@ test.describe("DialogBank E2E", () => {
 	test("auto-refreshes stats after webhook fires", async ({ db, page, request }) => {
 		void db; // trigger database teardown because the following steps write to the database
 
-		// Navigate to an empty DialogBank page
-		await page.goto("/dialogbank", { waitUntil: "networkidle" });
+		// Navigate to an empty showcase page
+		await page.goto("/showcase", { waitUntil: "networkidle" });
 
 		// Verify baseline: guests stat shows 0
 		await expect(page.getByTestId("stat-guests")).toContainText("0");

@@ -1,0 +1,1 @@
+-- snapshot sync only; no new DDL

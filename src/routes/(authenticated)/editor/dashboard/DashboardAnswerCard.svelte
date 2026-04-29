@@ -17,7 +17,9 @@ const enhanceClassificationForm = (() => {
 	};
 }) satisfies SubmitFunction;
 
-const matchingForm = $derived(form?.answerId === answer.id ? form : undefined);
+const matchingForm = $derived(
+	form != null && "answerId" in form && form.answerId === answer.id ? form : undefined,
+);
 </script>
 
 <div class="rounded-xl border border-slate-100 bg-slate-50 p-4">
@@ -38,6 +40,7 @@ const matchingForm = $derived(form?.answerId === answer.id ? form : undefined);
 		</div>
 		<form
 			method="POST"
+			action="?/classifyAnswer"
 			use:enhance={enhanceClassificationForm}
 			class="w-full space-y-2 lg:min-w-[18rem]"
 		>

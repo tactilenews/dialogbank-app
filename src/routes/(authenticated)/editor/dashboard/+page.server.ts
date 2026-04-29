@@ -1,50 +1,11 @@
 import { fail } from "@sveltejs/kit";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { count, eq, isNull, sql } from "drizzle-orm";
 import { withAuthenticatedActions, withAuthenticatedLoad } from "$lib/server/require-user";
+import { slugify } from "$lib/slugify";
 import type { Actions, PageServerLoad } from "./$types";
 
-const PAGE_SIZE = 20;
 const SUCCESS_STATUS = "success";
-const UNCLASSIFIED_GROUP = {
-	key: "unclassified",
-	label: "Nicht klassifiziert",
-} as const;
-
-function parsePageParam(value: string | null) {
-	if (value === null) {
-		return 1;
-	}
-
-	const page = Number(value);
-	return Number.isInteger(page) && Number.isFinite(page) && page > 0 ? page : 1;
-}
-
-function parseRequiredInteger(value: FormDataEntryValue | null) {
-	if (typeof value !== "string" || value.trim() === "") {
-		return null;
-	}
-
-	const parsed = Number(value);
-	return Number.isInteger(parsed) && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
-
-function parseOptionalInteger(value: FormDataEntryValue | null) {
-	if (value === null) {
-		return null;
-	}
-
-	if (typeof value !== "string") {
-		return null;
-	}
-
-	const trimmed = value.trim();
-	if (trimmed === "") {
-		return null;
-	}
-
-	const parsed = Number(trimmed);
-	return Number.isInteger(parsed) && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
-}
+const UNCLASSIFIED_KEY = "unclassified";
 
 export const load = withAuthenticatedLoad<
 	Parameters<PageServerLoad>[0],
@@ -72,102 +33,30 @@ export const load = withAuthenticatedLoad<
 		.groupBy(dayExpression)
 		.orderBy(dayExpression);
 
-	const answerHasValuePredicate = sql`${answers.value} IS NOT NULL AND trim(${answers.value}) <> ''`;
-
 	const classificationRows = await db
 		.select({
 			id: classifications.id,
 			key: classifications.key,
 			label: classifications.label,
+			answerCount: count(answers.id),
 		})
 		.from(classifications)
+		.leftJoin(answers, eq(answers.classificationId, classifications.id))
+		.groupBy(classifications.id, classifications.key, classifications.label)
 		.orderBy(classifications.label, classifications.key);
 
-	const classificationOptions = classificationRows.map((classification) => ({
-		id: classification.id,
-		key: classification.key,
-		label: classification.label,
+	const classificationOptions = classificationRows.map((c) => ({
+		id: c.id,
+		key: c.key,
+		label: c.label,
+		answerCount: Number(c.answerCount),
 	}));
 
-	const buildClassificationGroup = async ({
-		key,
-		label,
-		predicate,
-	}: {
-		key: string;
-		label: string;
-		predicate: ReturnType<typeof eq> | ReturnType<typeof isNull>;
-	}) => {
-		const totalResult = await db
-			.select({ count: sql<number>`count(*)` })
-			.from(answers)
-			.where(and(predicate, answerHasValuePredicate));
-		const total = Number(totalResult[0]?.count ?? 0);
-		const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
-		const currentPage = Math.min(
-			parsePageParam(event.url.searchParams.get(`page_${key}`)),
-			totalPages,
-		);
-		const offset = (currentPage - 1) * PAGE_SIZE;
-
-		const pagedAnswers = await db
-			.select({
-				id: answers.id,
-				value: answers.value,
-				rationale: answers.rationale,
-				classificationId: answers.classificationId,
-				firstName: conversations.firstName,
-				lastName: conversations.lastName,
-			})
-			.from(answers)
-			.innerJoin(conversations, eq(answers.conversationId, conversations.conversationId))
-			.where(and(predicate, answerHasValuePredicate))
-			.orderBy(desc(answers.id))
-			.limit(PAGE_SIZE)
-			.offset(offset);
-
-		return {
-			classification: label,
-			key,
-			answers: pagedAnswers.map((answer) => ({
-				id: answer.id,
-				classification: label,
-				classificationId: answer.classificationId,
-				rationale: answer.rationale,
-				value: answer.value ?? "",
-				name: [answer.firstName, answer.lastName].filter(Boolean).join(" ") || "Unbekannt",
-			})),
-			pagination: {
-				page: currentPage,
-				pageSize: PAGE_SIZE,
-				total,
-				totalPages,
-			},
-		};
-	};
-
-	const classifiedGroups = (
-		await Promise.all(
-			classificationRows.map(({ id, key, label }) =>
-				buildClassificationGroup({
-					key,
-					label,
-					predicate: eq(answers.classificationId, id),
-				}),
-			),
-		)
-	).filter((group) => group.pagination.total > 0);
-
-	const unclassifiedGroup = await buildClassificationGroup({
-		key: UNCLASSIFIED_GROUP.key,
-		label: UNCLASSIFIED_GROUP.label,
-		predicate: isNull(answers.classificationId),
-	});
-
-	const classificationGroups =
-		unclassifiedGroup.pagination.total > 0
-			? [...classifiedGroups, unclassifiedGroup]
-			: classifiedGroups;
+	const unclassifiedResult = await db
+		.select({ count: sql<number>`count(*)` })
+		.from(answers)
+		.where(isNull(answers.classificationId));
+	const unclassifiedCount = Number(unclassifiedResult[0]?.count ?? 0);
 
 	return {
 		successfulConversations,
@@ -176,69 +65,48 @@ export const load = withAuthenticatedLoad<
 			day: row.day instanceof Date ? row.day.toISOString().slice(0, 10) : String(row.day),
 			count: Number(row.count ?? 0),
 		})),
-		classificationGroups,
 		classificationOptions,
+		unclassifiedCount,
 	};
 });
 
-export const actions = withAuthenticatedActions<Parameters<Actions["default"]>[0], Actions>({
-	default: async (event) => {
+function parseRequiredInteger(value: FormDataEntryValue | null) {
+	if (typeof value !== "string" || value.trim() === "") return null;
+	const parsed = Number(value);
+	return Number.isInteger(parsed) && Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+}
+
+export const actions = withAuthenticatedActions<Parameters<Actions["classifyAnswer"]>[0], Actions>({
+	classifyAnswer: async (event) => {
 		const { db, schema } = event.locals;
 		const { answers, classifications } = schema;
 		const formData = await event.request.formData();
 
 		const answerId = parseRequiredInteger(formData.get("answerId"));
-		if (answerId === null) {
-			return fail(400, {
-				message: "Eine gültige Antwort ist erforderlich.",
-			});
-		}
+		if (answerId === null) return fail(400, { message: "Eine gültige Antwort ist erforderlich." });
 
 		const requestedClassificationId = formData.get("classificationId");
-		const classificationId = parseOptionalInteger(requestedClassificationId);
-		if (
-			requestedClassificationId !== null &&
-			typeof requestedClassificationId === "string" &&
-			requestedClassificationId.trim() !== "" &&
-			classificationId === null
-		) {
-			return fail(400, {
-				answerId,
-				message: "Eine gültige Klassifizierung ist erforderlich.",
-			});
-		}
+		const classificationId =
+			typeof requestedClassificationId === "string" && requestedClassificationId.trim() !== ""
+				? parseRequiredInteger(requestedClassificationId)
+				: null;
 
 		const [answerRecord] = await db
 			.select({ id: answers.id })
 			.from(answers)
 			.where(eq(answers.id, answerId))
 			.limit(1);
-
-		if (!answerRecord) {
-			return fail(404, {
-				answerId,
-				message: "Antwort nicht gefunden.",
-			});
-		}
+		if (!answerRecord) return fail(404, { answerId, message: "Antwort nicht gefunden." });
 
 		let classificationLabel: string | null = null;
 		if (classificationId !== null) {
 			const [classificationRecord] = await db
-				.select({
-					id: classifications.id,
-					label: classifications.label,
-				})
+				.select({ id: classifications.id, label: classifications.label })
 				.from(classifications)
 				.where(eq(classifications.id, classificationId))
 				.limit(1);
-
-			if (!classificationRecord) {
-				return fail(400, {
-					answerId,
-					message: "Klassifizierung nicht gefunden.",
-				});
-			}
-
+			if (!classificationRecord)
+				return fail(400, { answerId, message: "Klassifizierung nicht gefunden." });
 			classificationLabel = classificationRecord.label;
 		}
 
@@ -252,5 +120,64 @@ export const actions = withAuthenticatedActions<Parameters<Actions["default"]>[0
 					: `Antwort wurde ${classificationLabel} zugeordnet.`,
 			success: true,
 		};
+	},
+
+	createClassification: async (event) => {
+		const { db, schema } = event.locals;
+		const formData = await event.request.formData();
+		const label = (formData.get("label") as string | null)?.trim();
+		if (!label) return fail(400, { classificationMessage: "Bezeichnung ist erforderlich." });
+		const key = slugify(label);
+		try {
+			await db.insert(schema.classifications).values({ key, label });
+		} catch {
+			return fail(409, {
+				classificationMessage: `Klassifizierung mit Key "${key}" existiert bereits.`,
+			});
+		}
+		return { classificationSuccess: true, classificationMessage: "Klassifizierung angelegt." };
+	},
+
+	updateClassification: async (event) => {
+		const { db, schema } = event.locals;
+		const formData = await event.request.formData();
+		const id = Number(formData.get("id"));
+		if (!Number.isInteger(id) || id <= 0)
+			return fail(400, { classificationMessage: "Ungültige ID." });
+		const label = (formData.get("label") as string | null)?.trim();
+		if (!label) return fail(400, { classificationMessage: "Bezeichnung ist erforderlich." });
+		const [updated] = await db
+			.update(schema.classifications)
+			.set({ label })
+			.where(eq(schema.classifications.id, id))
+			.returning();
+		if (!updated) return fail(404, { classificationMessage: "Klassifizierung nicht gefunden." });
+		return { classificationSuccess: true, classificationMessage: "Klassifizierung aktualisiert." };
+	},
+
+	deleteClassification: async (event) => {
+		const { db, schema } = event.locals;
+		const formData = await event.request.formData();
+		const id = Number(formData.get("id"));
+		if (!Number.isInteger(id) || id <= 0)
+			return fail(400, { classificationMessage: "Ungültige ID." });
+		const confirmed = formData.get("confirmed") === "true";
+
+		if (!confirmed) {
+			const [countResult] = await db
+				.select({ count: count(schema.answers.id) })
+				.from(schema.answers)
+				.where(eq(schema.answers.classificationId, id));
+			const answerCount = Number(countResult?.count ?? 0);
+			if (answerCount > 0) {
+				return fail(409, {
+					classificationWarning: `Diese Klassifizierung enthält ${answerCount} Antwort${answerCount === 1 ? "" : "en"}. Beim Löschen werden diese als "${UNCLASSIFIED_KEY === "unclassified" ? "Nicht klassifiziert" : UNCLASSIFIED_KEY}" markiert.`,
+					confirmDeleteId: id,
+				});
+			}
+		}
+
+		await db.delete(schema.classifications).where(eq(schema.classifications.id, id));
+		return { classificationSuccess: true, classificationMessage: "Klassifizierung gelöscht." };
 	},
 });

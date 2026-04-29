@@ -21,6 +21,7 @@ export const sampleConversations: InsertConversation[] = [
 	{
 		conversationId: "conv-editor-1",
 		agentId: "agent-editor",
+		assignmentId: 1,
 		firstName: "Mara",
 		lastName: "Klein",
 		publicationAllowed: true,
@@ -30,6 +31,7 @@ export const sampleConversations: InsertConversation[] = [
 	{
 		conversationId: "conv-editor-2",
 		agentId: "agent-editor",
+		assignmentId: 1,
 		firstName: "Jonas",
 		lastName: "Becker",
 		publicationAllowed: true,

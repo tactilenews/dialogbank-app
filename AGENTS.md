@@ -1,3 +1,41 @@
+## Repository Layout
+
+This repo uses **git worktrees**. Each feature branch is checked out as its own directory alongside `main/`:
+
+```
+dialogbank-app/
+├── main/         ← main branch
+└── einsaetze/   ← feature branch (example)
+```
+
+**Always write files to the worktree you were invoked from.** Never modify files in a sibling directory — changes land on the wrong branch and corrupt the other developer's working copy. When in doubt, verify with `pwd` before editing.
+
+## AI Agent Setup
+
+`.claude/` and `.gemini/` are gitignored; configure them locally after cloning.
+
+**Claude Code** — enable the Svelte MCP plugin in `.claude/settings.json`:
+
+```json
+{
+  "enabledPlugins": {
+    "svelte@svelte": true
+  }
+}
+```
+
+**Gemini CLI** — configure MCP servers in `.gemini/settings.json`:
+
+```json
+{
+  "$schema": "https://raw.githubusercontent.com/google-gemini/gemini-cli/main/schemas/settings.schema.json",
+  "mcpServers": {
+    "svelte": { "url": "https://mcp.svelte.dev/mcp" },
+    "better-auth": { "url": "https://mcp.inkeep.com/better-auth/mcp", "type": "http" }
+  }
+}
+```
+
 ## Package Management
 
 - **Development Dependencies**: Unless there is a good reason, always install new dependencies as a development dependency (`-D` or `--save-dev`) because Svelte/Vite handles bundling.
@@ -59,6 +97,19 @@ infisical --env test run -- pnpm run test:watch
 - **Audit Columns**: All new tables in the database MUST include `createdAt` and `updatedAt` columns with automatic population.
   - `createdAt`: Set to `defaultNow()` and `notNull()`.
   - `updatedAt`: Set to `defaultNow()`, `notNull()`, and `$onUpdate(() => new Date())`.
+
+### Creating migrations
+
+**Never hand-write SQL migration files.** Drizzle Kit maintains schema snapshots in `drizzle/meta/` that it uses to diff against the current schema. Hand-written SQL leaves those snapshots out of sync, breaking future `db:generate` runs.
+
+The correct workflow:
+1. Update `src/lib/server/db/schema.ts`
+2. **Stop and ask the user** to run the generate command in their terminal — it requires an interactive TTY and may prompt about ambiguous column renames:
+   ```sh
+   infisical run --env dev -- pnpm run db:generate --name <descriptive_name>
+   ```
+3. Review the generated SQL in `drizzle/` before applying
+4. Apply with `db:migrate`
 
 For database operations, always use the appropriate environment:
 

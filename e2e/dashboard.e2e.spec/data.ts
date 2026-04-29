@@ -7,18 +7,18 @@ type ClassificationInsert = typeof schema.classifications.$inferInsert;
 export const classifications: ClassificationInsert[] = [
 	{
 		id: 1,
-		key: "proGelsenkirchen",
-		label: "Pro Gelsenkirchen",
+		key: "gute-sache-ueber-gelsenkirchen",
+		label: "Gute Sache über Gelsenkirchen",
 	},
 	{
 		id: 2,
-		key: "ideaGelsenkirchen",
-		label: "Idea Gelsenkirchen",
+		key: "idee-fuer-gelsenkirchen",
+		label: "Idee für Gelsenkirchen",
 	},
 	{
 		id: 3,
-		key: "conGelsenkirchen",
-		label: "Contra Gelsenkirchen",
+		key: "problem-mit-gelsenkirchen",
+		label: "Problem mit Gelsenkirchen",
 	},
 ];
 
@@ -31,6 +31,7 @@ export const conversations: ConversationInsert[] = [
 		publicationAllowed: true,
 		callSuccessful: "success",
 		summary: "Dashboard conversation one",
+		assignmentId: 1,
 	},
 	{
 		conversationId: "conv-dashboard-2",
@@ -40,6 +41,7 @@ export const conversations: ConversationInsert[] = [
 		publicationAllowed: true,
 		callSuccessful: "success",
 		summary: "Dashboard conversation two",
+		assignmentId: 1,
 	},
 ];
 
@@ -54,7 +56,7 @@ export const answers: AnswerInsert[] = [
 	{
 		id: 302,
 		conversationId: "conv-dashboard-2",
-		dataCollectionId: "answer-con",
+		dataCollectionId: "answer-problem",
 		value: "The city center feels neglected.",
 		rationale: "The answer clearly expresses a negative assessment.",
 		classificationId: 3,
