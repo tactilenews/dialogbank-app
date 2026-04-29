@@ -10,7 +10,7 @@ describe("hasPendingNavigation", () => {
 		expect(
 			hasPendingNavigation({
 				to: {
-					url: new URL("https://example.com/editor/agent"),
+					url: new URL("https://example.com/editor/assignments"),
 				},
 			}),
 		).toBe(true);

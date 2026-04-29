@@ -1,6 +1,6 @@
 import type { PageData } from "../$types";
 
-export const sampleDialogbankPageData = {
+export const sampleShowcasePageData = {
 	user: null,
 	guests: 3,
 	answerCount: 4,

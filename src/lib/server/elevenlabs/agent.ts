@@ -122,9 +122,13 @@ export function parseQuestionsFromWorkflowNodePrompt(additionalPrompt: string): 
 		.filter(Boolean);
 }
 
-export function buildWorkflowNodeAdditionalPrompt(questions: string[]): string {
+export function buildWorkflowNodeAdditionalPrompt(
+	questions: string[],
+	promptSupplement?: string | null,
+): string {
 	const list = questions.map((q, i) => `${i + 1}. ${q}`).join("\n");
-	return `${WORKFLOW_NODE_PROMPT_PREAMBLE}${list}`;
+	const base = `${WORKFLOW_NODE_PROMPT_PREAMBLE}${list}`;
+	return promptSupplement ? `${base}\n\n${promptSupplement}` : base;
 }
 
 function parseClassificationsFromDataCollection(
@@ -220,6 +224,7 @@ export async function updateElevenLabsAgentQuestions(
 	questions: Question[],
 	existingAgent: AgentReaderResponse,
 	writer: AgentWriter,
+	options?: { promptSupplement?: string | null },
 ): Promise<void> {
 	const existingWorkflow = existingAgent.workflow;
 	const existingNode = existingWorkflow?.nodes[target.workflowNodeId];
@@ -238,7 +243,10 @@ export async function updateElevenLabsAgentQuestions(
 			[target.workflowNodeId]: {
 				...existingNode,
 				type: "override_agent" as const,
-				additionalPrompt: buildWorkflowNodeAdditionalPrompt(questions.map((q) => q.text)),
+				additionalPrompt: buildWorkflowNodeAdditionalPrompt(
+					questions.map((q) => q.text),
+					options?.promptSupplement,
+				),
 			},
 		},
 		edges: existingWorkflow.edges as AgentWorkflowRequestModel["edges"],
@@ -247,7 +255,10 @@ export async function updateElevenLabsAgentQuestions(
 	const existingDataCollection = existingAgent.platformSettings?.dataCollection;
 	const baseDataCollection = Object.fromEntries(
 		Object.entries(existingDataCollection ?? {}).filter(
-			([key]) => !key.startsWith(QUESTION_KEY_PREFIX) && !key.startsWith(CLASSIFICATION_KEY_PREFIX),
+			([key]) =>
+				!key.startsWith(QUESTION_KEY_PREFIX) &&
+				!key.startsWith(CLASSIFICATION_KEY_PREFIX) &&
+				key !== "assignment_id",
 		),
 	);
 	const newDataCollection = {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { getQuoteWeight, hasVisibleQuoteText, pickWeightedQuoteId } from "./quotes";
 
-describe("dialogbank quote helpers", () => {
+describe("showcase quote helpers", () => {
 	it("filters out null, empty, and whitespace-only quote text", () => {
 		expect(hasVisibleQuoteText(null)).toBe(false);
 		expect(hasVisibleQuoteText("")).toBe(false);
