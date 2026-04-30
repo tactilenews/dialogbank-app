@@ -32,6 +32,7 @@ export const conversations: ConversationInsert[] = [
 		publicationAllowed: true,
 		callSuccessful: "success",
 		summary: "The WDR AI, Nadia, interviewed Robert, who is from Cologne.",
+		assignmentId: 1,
 	},
 ];
 

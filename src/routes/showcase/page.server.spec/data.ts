@@ -26,6 +26,7 @@ export const sampleConversations: InsertConversation[] = [
 	{
 		conversationId: "conv-legacy-1",
 		agentId: "agent-legacy",
+		assignmentId: 1,
 		firstName: "Mara",
 		lastName: "Klein",
 		age: 32,
@@ -36,6 +37,7 @@ export const sampleConversations: InsertConversation[] = [
 	{
 		conversationId: "conv-legacy-2",
 		agentId: "agent-legacy",
+		assignmentId: 1,
 		firstName: "Jonas",
 		lastName: "Becker",
 		age: 44,

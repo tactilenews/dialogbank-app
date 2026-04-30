@@ -8,9 +8,9 @@ let { children, data }: { children: Snippet; data: LayoutData } = $props();
 
 const navigationLinks = [
 	{ href: resolve("/"), label: "Startseite" },
-	{ href: resolve("/dialogbank"), label: "DialogBank" },
-	{ href: resolve("/editor/agent"), label: "Redaktions-Agent" },
-	{ href: resolve("/editor/dashboard"), label: "Redaktions-Dashboard" },
+	{ href: resolve("/showcase"), label: "Schaufenster" },
+	{ href: resolve("/editor/assignments"), label: "Einsätze" },
+	{ href: resolve("/editor/dashboard"), label: "Auswertung" },
 ];
 </script>
 
