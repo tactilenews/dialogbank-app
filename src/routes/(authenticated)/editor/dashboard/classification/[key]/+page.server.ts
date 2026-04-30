@@ -90,10 +90,13 @@ export const actions = withAuthenticatedActions<Parameters<Actions["classifyAnsw
 		if (answerId === null) return fail(400, { message: "Eine gültige Antwort ist erforderlich." });
 
 		const requestedClassificationId = formData.get("classificationId");
-		const classificationId =
-			typeof requestedClassificationId === "string" && requestedClassificationId.trim() !== ""
-				? parseRequiredInteger(requestedClassificationId)
-				: null;
+		const hasClassificationId =
+			typeof requestedClassificationId === "string" && requestedClassificationId.trim() !== "";
+		const classificationId = hasClassificationId
+			? parseRequiredInteger(requestedClassificationId)
+			: null;
+		if (hasClassificationId && classificationId === null)
+			return fail(400, { answerId, message: "Eine gültige Klassifizierung ist erforderlich." });
 
 		const [answerRecord] = await db
 			.select({ id: answers.id })
