@@ -1,5 +1,5 @@
 import { fail } from "@sveltejs/kit";
-import { count, eq, isNull, sql } from "drizzle-orm";
+import { and, count, eq, isNull, sql } from "drizzle-orm";
 import { withAuthenticatedActions, withAuthenticatedLoad } from "$lib/server/require-user";
 import { slugify } from "$lib/slugify";
 import type { Actions, PageServerLoad } from "./$types";
@@ -33,6 +33,8 @@ export const load = withAuthenticatedLoad<
 		.groupBy(dayExpression)
 		.orderBy(dayExpression);
 
+	const answerHasValuePredicate = sql`${answers.value} IS NOT NULL AND trim(${answers.value}) <> ''`;
+
 	const classificationRows = await db
 		.select({
 			id: classifications.id,
@@ -41,7 +43,10 @@ export const load = withAuthenticatedLoad<
 			answerCount: count(answers.id),
 		})
 		.from(classifications)
-		.leftJoin(answers, eq(answers.classificationId, classifications.id))
+		.leftJoin(
+			answers,
+			and(eq(answers.classificationId, classifications.id), answerHasValuePredicate),
+		)
 		.groupBy(classifications.id, classifications.key, classifications.label)
 		.orderBy(classifications.label, classifications.key);
 
@@ -55,7 +60,7 @@ export const load = withAuthenticatedLoad<
 	const unclassifiedResult = await db
 		.select({ count: sql<number>`count(*)` })
 		.from(answers)
-		.where(isNull(answers.classificationId));
+		.where(and(isNull(answers.classificationId), answerHasValuePredicate));
 	const unclassifiedCount = Number(unclassifiedResult[0]?.count ?? 0);
 
 	return {
@@ -86,10 +91,13 @@ export const actions = withAuthenticatedActions<Parameters<Actions["classifyAnsw
 		if (answerId === null) return fail(400, { message: "Eine gültige Antwort ist erforderlich." });
 
 		const requestedClassificationId = formData.get("classificationId");
-		const classificationId =
-			typeof requestedClassificationId === "string" && requestedClassificationId.trim() !== ""
-				? parseRequiredInteger(requestedClassificationId)
-				: null;
+		const hasClassificationId =
+			typeof requestedClassificationId === "string" && requestedClassificationId.trim() !== "";
+		const classificationId = hasClassificationId
+			? parseRequiredInteger(requestedClassificationId)
+			: null;
+		if (hasClassificationId && classificationId === null)
+			return fail(400, { answerId, message: "Eine gültige Klassifizierung ist erforderlich." });
 
 		const [answerRecord] = await db
 			.select({ id: answers.id })

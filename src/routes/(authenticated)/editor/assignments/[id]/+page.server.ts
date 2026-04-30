@@ -314,8 +314,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			});
 		}
 
-		await event.locals.db.update(assignments).set({ isActive: false });
-		await event.locals.db.update(assignments).set({ isActive: true }).where(eq(assignments.id, id));
+		await event.locals.db.update(assignments).set({ isActive: sql`(${assignments.id} = ${id})` });
 
 		return {
 			success: true,
