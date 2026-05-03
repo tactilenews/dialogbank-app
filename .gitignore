@@ -28,4 +28,7 @@ e2e/.elevenlabs-snapshot.json
 *storybook.log
 storybook-static
 
+# AI agent local config (shared setup documented in AGENTS.md)
 .codex
+.claude/
+.gemini/

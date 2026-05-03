@@ -2,7 +2,7 @@ import { describe, it } from "$lib/server/test/fixtures";
 import { load } from "./+page.server";
 import { sampleAnswers, sampleClassifications, sampleConversations } from "./page.server.spec/data";
 
-describe("/dialogbank +page.server", () => {
+describe("/showcase +page.server", () => {
 	it("returns counts and published quotes", async ({ db, expect, schema }) => {
 		await expect(
 			db.insert(schema.conversations).values(sampleConversations),

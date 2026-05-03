@@ -15,23 +15,23 @@ let { data }: { data: PageData } = $props();
 
 	<div class="mt-8 flex items-center gap-4">
 		<a
-			href={resolve('/dialogbank')}
+			href={resolve('/showcase')}
 			class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
 		>
-			DialogBank
+			Aktives Schaufenster
 		</a>
 		{#if data.user}
 			<a
-				href={resolve('/editor/agent')}
+				href={resolve('/editor/assignments')}
 				class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
 			>
-				Redaktions-Agent
+				Einsätze
 			</a>
 			<a
 				href={resolve('/editor/dashboard')}
 				class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
 			>
-				Redaktions-Dashboard
+				Auswertung
 			</a>
 		{:else}
 			<a

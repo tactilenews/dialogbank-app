@@ -15,8 +15,8 @@ describe("/+page.svelte", () => {
 		const description = page.getByText("Dies ist die öffentliche Seite der DialogBank.");
 		await expect.element(description).toBeVisible();
 
-		const dialogbankLink = page.getByRole("link", { name: "DialogBank" });
-		await expect.element(dialogbankLink).toHaveAttribute("href", "/dialogbank");
+		const showcaseLink = page.getByRole("link", { name: "Aktives Schaufenster" });
+		await expect.element(showcaseLink).toHaveAttribute("href", "/showcase");
 
 		const signInButton = page.getByRole("link", { name: "Anmelden" });
 		await expect.element(signInButton).toBeVisible();
@@ -28,14 +28,10 @@ describe("/+page.svelte", () => {
 		const signInButton = page.getByRole("link", { name: "Anmelden" });
 		await expect.element(signInButton).toBeVisible();
 		await expect
-			.element(page.getByRole("link", { name: "DialogBank" }))
-			.toHaveAttribute("href", "/dialogbank");
-		await expect
-			.element(page.getByRole("link", { name: "Redaktions-Agent" }))
-			.not.toBeInTheDocument();
-		await expect
-			.element(page.getByRole("link", { name: "Redaktions-Dashboard" }))
-			.not.toBeInTheDocument();
+			.element(page.getByRole("link", { name: "Aktives Schaufenster" }))
+			.toHaveAttribute("href", "/showcase");
+		await expect.element(page.getByRole("link", { name: "Einsätze" })).not.toBeInTheDocument();
+		await expect.element(page.getByRole("link", { name: "Auswertung" })).not.toBeInTheDocument();
 	});
 
 	it("displays direct editor links when authenticated", async () => {
@@ -43,14 +39,14 @@ describe("/+page.svelte", () => {
 			props: { data: { user: { id: "user-1" } } },
 		});
 
-		const agentExplorerLink = page.getByRole("link", { name: "Redaktions-Agent" });
-		await expect.element(agentExplorerLink).toHaveAttribute("href", "/editor/agent");
+		const einsaetzeLink = page.getByRole("link", { name: "Einsätze" });
+		await expect.element(einsaetzeLink).toHaveAttribute("href", "/editor/assignments");
 
-		const dashboardLink = page.getByRole("link", { name: "Redaktions-Dashboard" });
-		await expect.element(dashboardLink).toHaveAttribute("href", "/editor/dashboard");
+		const auswertungLink = page.getByRole("link", { name: "Auswertung" });
+		await expect.element(auswertungLink).toHaveAttribute("href", "/editor/dashboard");
 		await expect
-			.element(page.getByRole("link", { name: "DialogBank" }))
-			.toHaveAttribute("href", "/dialogbank");
+			.element(page.getByRole("link", { name: "Aktives Schaufenster" }))
+			.toHaveAttribute("href", "/showcase");
 		await expect.element(page.getByRole("link", { name: "Anmelden" })).not.toBeInTheDocument();
 	});
 });
