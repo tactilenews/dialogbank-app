@@ -136,6 +136,8 @@ export const actions = withAuthenticatedActions<Parameters<Actions["classifyAnsw
 		const label = (formData.get("label") as string | null)?.trim();
 		if (!label) return fail(400, { classificationMessage: "Bezeichnung ist erforderlich." });
 		const key = slugify(label);
+		if (key === "unclassified")
+			return fail(400, { classificationMessage: 'Der Schlüssel "unclassified" ist reserviert.' });
 		try {
 			await db.insert(schema.classifications).values({ key, label });
 		} catch {

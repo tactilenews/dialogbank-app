@@ -2,6 +2,7 @@ import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error, fail } from "@sveltejs/kit";
 import { asc, eq, sql } from "drizzle-orm";
 import type { DbClient } from "$lib/server/db";
+import { dbAtomic } from "$lib/server/db";
 import {
 	assignments,
 	classifications,
@@ -99,45 +100,54 @@ async function persistQuestions(
 		}
 	}
 
-	await db.delete(questions).where(eq(questions.assignmentId, assignmentId));
+	if (questionItems.length === 0) {
+		await db.delete(questions).where(eq(questions.assignmentId, assignmentId));
+		return { savedRows: [], newClassificationRows };
+	}
+
+	// Pre-fetch IDs from the sequence so all queries can be pre-built for dbAtomic.
+	const seqRows = (
+		await db.execute(
+			sql`SELECT nextval('questions_id_seq') FROM generate_series(1, ${questionItems.length})`,
+		)
+	).rows as { nextval: string }[];
+	const questionIds = seqRows.map((r) => Number(r.nextval));
 
 	const savedRows: { questionId: number; text: string; classificationIds: number[] }[] = [];
+	const qcRows: { questionId: number; classificationId: number }[] = [];
 
-	if (questionItems.length > 0) {
-		const inserted = await db
-			.insert(questions)
-			.values(
-				questionItems.map((q) => ({
+	for (let i = 0; i < questionItems.length; i++) {
+		const qItem = questionItems[i];
+		const questionId = questionIds[i];
+		const allIds = [...qItem.selectedIds];
+		for (const label of qItem.newLabels) {
+			const newId = newLabelIdMap.get(label);
+			if (newId) allIds.push(newId);
+		}
+		const uniqueIds = [...new Set(allIds)];
+		for (const classificationId of uniqueIds) {
+			qcRows.push({ questionId, classificationId });
+		}
+		savedRows.push({ questionId, text: qItem.text, classificationIds: uniqueIds });
+	}
+
+	await dbAtomic(db, (client) => {
+		const batch: [PromiseLike<unknown>, PromiseLike<unknown>, ...PromiseLike<unknown>[]] = [
+			client.delete(questions).where(eq(questions.assignmentId, assignmentId)),
+			client.insert(questions).values(
+				questionItems.map((q, i) => ({
+					id: questionIds[i],
 					assignmentId,
 					text: q.text,
 					displayOrder: q.displayOrder,
 				})),
-			)
-			.returning();
-
-		const qcRows: { questionId: number; classificationId: number }[] = [];
-		for (let i = 0; i < inserted.length; i++) {
-			const qItem = questionItems[i];
-			const insertedQ = inserted[i];
-			const allIds = [...qItem.selectedIds];
-			for (const label of qItem.newLabels) {
-				const newId = newLabelIdMap.get(label);
-				if (newId) allIds.push(newId);
-			}
-			const uniqueIds = [...new Set(allIds)];
-			for (const classificationId of uniqueIds) {
-				qcRows.push({ questionId: insertedQ.id, classificationId });
-			}
-			savedRows.push({
-				questionId: insertedQ.id,
-				text: insertedQ.text,
-				classificationIds: uniqueIds,
-			});
-		}
+			),
+		];
 		if (qcRows.length > 0) {
-			await db.insert(questionClassifications).values(qcRows);
+			batch.push(client.insert(questionClassifications).values(qcRows));
 		}
-	}
+		return batch;
+	});
 
 	return { savedRows, newClassificationRows };
 }
