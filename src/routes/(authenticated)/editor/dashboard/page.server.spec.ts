@@ -39,8 +39,8 @@ describe("/editor/dashboard +page.server", () => {
 		>;
 
 		expect(result.classificationOptions).toEqual([
-			{ id: 2, key: "idea", label: "Idea", answerCount: 2 },
-			{ id: 1, key: "support", label: "Support", answerCount: 2 },
+			{ id: 2, key: "idea", label: "Idea", emoji: null, answerCount: 2 },
+			{ id: 1, key: "support", label: "Support", emoji: null, answerCount: 2 },
 		]);
 		expect(result.unclassifiedCount).toBe(1);
 	});

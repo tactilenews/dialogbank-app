@@ -1,5 +1,6 @@
 import { fail, redirect } from "@sveltejs/kit";
 import { count, eq } from "drizzle-orm";
+import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import { assignments, questions } from "$lib/server/db/schema";
 import { withAuthenticatedActions, withAuthenticatedLoad } from "$lib/server/require-user";
 import type { Actions, PageServerLoad } from "./$types";
@@ -12,6 +13,7 @@ export const load = withAuthenticatedLoad<
 		.select({
 			id: assignments.id,
 			name: assignments.name,
+			slug: assignments.slug,
 			location: assignments.location,
 			client: assignments.client,
 			isActive: assignments.isActive,
@@ -35,7 +37,8 @@ export const actions = withAuthenticatedActions<Parameters<Actions["default"]>[0
 			return fail(400, { message: "Name ist erforderlich." });
 		}
 
-		const [created] = await event.locals.db.insert(assignments).values({ name }).returning();
+		const slug = await createUniqueAssignmentSlug(event.locals.db, name);
+		const [created] = await event.locals.db.insert(assignments).values({ name, slug }).returning();
 
 		redirect(303, `/editor/assignments/${created.id}`);
 	},

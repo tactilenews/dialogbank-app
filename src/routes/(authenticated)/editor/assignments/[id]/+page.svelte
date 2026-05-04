@@ -3,6 +3,7 @@ import type { LiteralJsonSchemaProperty } from "@elevenlabs/elevenlabs-js/api";
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
 import { resolve } from "$app/paths";
+import EmojiPicker from "$lib/components/EmojiPicker.svelte";
 import type { ActionData, PageData } from "./$types";
 
 function sortedDataCollectionEntries(
@@ -16,12 +17,15 @@ let { data, form }: { data: PageData; form: ActionData } = $props();
 let nextId = $state(0);
 let submitting = $state(false);
 
+type NewClassification = { label: string; emoji: string | null };
+
 type QuestionItem = {
 	id: number;
 	text: string;
 	selectedClassificationIds: number[];
-	newLabels: string[];
+	newClassifications: NewClassification[];
 	newLabelInput: string;
+	newEmojiInput: string | null;
 };
 
 let questionItems = $state<QuestionItem[]>(
@@ -30,8 +34,9 @@ let questionItems = $state<QuestionItem[]>(
 			id: nextId++,
 			text: q.text,
 			selectedClassificationIds: q.classifications.map((c: { id: number }) => c.id),
-			newLabels: [],
+			newClassifications: [],
 			newLabelInput: "",
+			newEmojiInput: null,
 		})),
 	),
 );
@@ -41,8 +46,9 @@ function addQuestion() {
 		id: nextId++,
 		text: "",
 		selectedClassificationIds: [],
-		newLabels: [],
+		newClassifications: [],
 		newLabelInput: "",
+		newEmojiInput: null,
 	});
 }
 
@@ -62,20 +68,21 @@ function toggleClassification(questionId: number, classificationId: number) {
 	}
 }
 
-function addNewLabel(questionId: number) {
+function addNewClassification(questionId: number) {
 	const q = questionItems.find((q) => q.id === questionId);
 	if (!q) return;
 	const label = q.newLabelInput.trim();
-	if (!label || q.newLabels.includes(label)) return;
-	q.newLabels.push(label);
+	if (!label || q.newClassifications.some((c) => c.label === label)) return;
+	q.newClassifications.push({ label, emoji: q.newEmojiInput });
 	q.newLabelInput = "";
+	q.newEmojiInput = null;
 }
 
-function removeNewLabel(questionId: number, label: string) {
+function removeNewClassification(questionId: number, label: string) {
 	const q = questionItems.find((q) => q.id === questionId);
 	if (!q) return;
-	const idx = q.newLabels.indexOf(label);
-	if (idx !== -1) q.newLabels.splice(idx, 1);
+	const idx = q.newClassifications.findIndex((c) => c.label === label);
+	if (idx !== -1) q.newClassifications.splice(idx, 1);
 }
 
 function makeEnhancer() {
@@ -197,8 +204,8 @@ function makeEnhancer() {
 								/>
 								<input
 									type="hidden"
-									name="question_new_labels"
-									value={JSON.stringify(item.newLabels)}
+									name="question_new_classifications"
+									value={JSON.stringify(item.newClassifications)}
 								/>
 
 								<!-- Classification section -->
@@ -217,22 +224,24 @@ function makeEnhancer() {
 														checked={item.selectedClassificationIds.includes(cls.id)}
 														onchange={() => toggleClassification(item.id, cls.id)}
 													/>
+													{#if cls.emoji}<span>{cls.emoji}</span>{/if}
 													{cls.label}
 												</label>
 											{/each}
 										</div>
 									{/if}
 
-									<!-- New labels already added -->
-									{#if item.newLabels.length > 0}
+									<!-- New classifications already added -->
+									{#if item.newClassifications.length > 0}
 										<div class="mt-2 flex flex-wrap gap-2">
-											{#each item.newLabels as label (label)}
+											{#each item.newClassifications as nc (nc.label)}
 												<span class="flex items-center gap-1 rounded border border-blue-300 bg-blue-50 px-2 py-1 text-sm text-blue-700">
-													{label} <span class="font-mono text-xs text-blue-400">(neu)</span>
+													{#if nc.emoji}<span>{nc.emoji}</span>{/if}
+													{nc.label} <span class="font-mono text-xs text-blue-400">(neu)</span>
 													<button
 														type="button"
-														aria-label="{label} entfernen"
-														onclick={() => removeNewLabel(item.id, label)}
+														aria-label="{nc.label} entfernen"
+														onclick={() => removeNewClassification(item.id, nc.label)}
 														class="ml-1 text-blue-400 hover:text-blue-700"
 													>✕</button>
 												</span>
@@ -240,18 +249,19 @@ function makeEnhancer() {
 										</div>
 									{/if}
 
-									<!-- Input to create a new classification -->
+									<!-- Input to create a new classification inline -->
 									<div class="mt-2 flex items-center gap-2">
+										<EmojiPicker bind:value={item.newEmojiInput} />
 										<input
 											type="text"
 											bind:value={item.newLabelInput}
 											placeholder="Neue Klassifizierung…"
-											onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNewLabel(item.id); } }}
+											onkeydown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addNewClassification(item.id); } }}
 											class="rounded border border-gray-300 px-3 py-1.5 text-sm disabled:cursor-not-allowed"
 										/>
 										<button
 											type="button"
-											onclick={() => addNewLabel(item.id)}
+											onclick={() => addNewClassification(item.id)}
 											class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-600 hover:bg-gray-100 disabled:cursor-not-allowed"
 										>
 											Hinzufügen

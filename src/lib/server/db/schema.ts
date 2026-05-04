@@ -13,6 +13,7 @@ import {
 export const assignments = pgTable("assignments", {
 	id: serial("id").primaryKey(),
 	name: text("name").notNull(),
+	slug: text("slug").notNull().unique(),
 	location: text("location"),
 	client: text("client"),
 	promptSupplement: text("prompt_supplement"),
@@ -108,6 +109,7 @@ export const classifications = pgTable(
 		id: serial("id").primaryKey(),
 		key: text("key").notNull(),
 		label: text("label").notNull(),
+		emoji: text("emoji"),
 		createdAt: timestamp("created_at").defaultNow().notNull(),
 		updatedAt: timestamp("updated_at")
 			.defaultNow()

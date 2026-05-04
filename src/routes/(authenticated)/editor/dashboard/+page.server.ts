@@ -5,7 +5,7 @@ import { slugify } from "$lib/slugify";
 import type { Actions, PageServerLoad } from "./$types";
 
 const SUCCESS_STATUS = "success";
-const UNCLASSIFIED_KEY = "unclassified";
+const UNCLASSIFIED_KEY = "unklassifiziert";
 
 export const load = withAuthenticatedLoad<
 	Parameters<PageServerLoad>[0],
@@ -40,6 +40,7 @@ export const load = withAuthenticatedLoad<
 			id: classifications.id,
 			key: classifications.key,
 			label: classifications.label,
+			emoji: classifications.emoji,
 			answerCount: count(answers.id),
 		})
 		.from(classifications)
@@ -54,6 +55,7 @@ export const load = withAuthenticatedLoad<
 		id: c.id,
 		key: c.key,
 		label: c.label,
+		emoji: c.emoji,
 		answerCount: Number(c.answerCount),
 	}));
 
@@ -135,11 +137,12 @@ export const actions = withAuthenticatedActions<Parameters<Actions["classifyAnsw
 		const formData = await event.request.formData();
 		const label = (formData.get("label") as string | null)?.trim();
 		if (!label) return fail(400, { classificationMessage: "Bezeichnung ist erforderlich." });
+		const emoji = (formData.get("emoji") as string | null)?.trim() || null;
 		const key = slugify(label);
-		if (key === "unclassified")
-			return fail(400, { classificationMessage: 'Der Schlüssel "unclassified" ist reserviert.' });
+		if (key === UNCLASSIFIED_KEY)
+			return fail(400, { classificationMessage: `Der Schlüssel "${key}" ist reserviert.` });
 		try {
-			await db.insert(schema.classifications).values({ key, label });
+			await db.insert(schema.classifications).values({ key, label, emoji });
 		} catch {
 			return fail(409, {
 				classificationMessage: `Klassifizierung mit Key "${key}" existiert bereits.`,
@@ -156,9 +159,10 @@ export const actions = withAuthenticatedActions<Parameters<Actions["classifyAnsw
 			return fail(400, { classificationMessage: "Ungültige ID." });
 		const label = (formData.get("label") as string | null)?.trim();
 		if (!label) return fail(400, { classificationMessage: "Bezeichnung ist erforderlich." });
+		const emoji = (formData.get("emoji") as string | null)?.trim() || null;
 		const [updated] = await db
 			.update(schema.classifications)
-			.set({ label })
+			.set({ label, emoji })
 			.where(eq(schema.classifications.id, id))
 			.returning();
 		if (!updated) return fail(404, { classificationMessage: "Klassifizierung nicht gefunden." });
@@ -181,7 +185,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["classifyAnsw
 			const answerCount = Number(countResult?.count ?? 0);
 			if (answerCount > 0) {
 				return fail(409, {
-					classificationWarning: `Diese Klassifizierung enthält ${answerCount} Antwort${answerCount === 1 ? "" : "en"}. Beim Löschen werden diese als "${UNCLASSIFIED_KEY === "unclassified" ? "Nicht klassifiziert" : UNCLASSIFIED_KEY}" markiert.`,
+					classificationWarning: `Diese Klassifizierung enthält ${answerCount} Antwort${answerCount === 1 ? "" : "en"}. Beim Löschen werden diese als "Nicht klassifiziert" markiert.`,
 					confirmDeleteId: id,
 				});
 			}

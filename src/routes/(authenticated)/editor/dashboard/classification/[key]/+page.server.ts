@@ -3,7 +3,7 @@ import { and, desc, eq, isNull, sql } from "drizzle-orm";
 import { withAuthenticatedActions, withAuthenticatedLoad } from "$lib/server/require-user";
 import type { Actions, PageServerLoad } from "./$types";
 
-const UNCLASSIFIED_KEY = "unclassified";
+const UNCLASSIFIED_KEY = "unklassifiziert";
 
 export const load = withAuthenticatedLoad<
 	Parameters<PageServerLoad>[0],

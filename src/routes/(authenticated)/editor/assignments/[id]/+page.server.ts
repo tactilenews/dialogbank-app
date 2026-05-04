@@ -1,6 +1,7 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error, fail } from "@sveltejs/kit";
 import { asc, eq, sql } from "drizzle-orm";
+import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
 import {
@@ -23,17 +24,19 @@ import { withAuthenticatedActions, withAuthenticatedLoad } from "$lib/server/req
 import { slugify } from "$lib/slugify";
 import type { Actions, PageServerLoad } from "./$types";
 
+type NewClassification = { label: string; emoji: string | null };
+
 type QuestionItem = {
 	text: string;
 	selectedIds: number[];
-	newLabels: string[];
+	newClassifications: NewClassification[];
 	displayOrder: number;
 };
 
 function parseQuestionItems(formData: FormData): QuestionItem[] {
 	const rawTexts = formData.getAll("questions");
 	const rawClassificationIds = formData.getAll("question_classification_ids");
-	const rawNewLabels = formData.getAll("question_new_labels");
+	const rawNewClassifications = formData.getAll("question_new_classifications");
 
 	return rawTexts
 		.map((v, i) => {
@@ -55,22 +58,31 @@ function parseQuestionItems(formData: FormData): QuestionItem[] {
 				}
 			}
 
-			let newLabels: string[] = [];
-			const rawNew = rawNewLabels[i];
+			let newClassifications: NewClassification[] = [];
+			const rawNew = rawNewClassifications[i];
 			if (typeof rawNew === "string") {
 				try {
 					const parsed = JSON.parse(rawNew);
 					if (Array.isArray(parsed)) {
-						newLabels = parsed
-							.filter((l): l is string => typeof l === "string" && l.trim() !== "")
-							.map((l) => l.trim());
+						newClassifications = parsed
+							.filter(
+								(c): c is { label: string; emoji?: string } =>
+									typeof c === "object" &&
+									c !== null &&
+									typeof c.label === "string" &&
+									c.label.trim() !== "",
+							)
+							.map((c) => ({
+								label: c.label.trim(),
+								emoji: typeof c.emoji === "string" && c.emoji.trim() ? c.emoji.trim() : null,
+							}));
 					}
 				} catch {
 					// ignore malformed JSON
 				}
 			}
 
-			return { text, selectedIds, newLabels, displayOrder: i };
+			return { text, selectedIds, newClassifications, displayOrder: i };
 		})
 		.filter((q): q is NonNullable<typeof q> => q !== null);
 }
@@ -85,18 +97,35 @@ async function persistQuestions(
 	assignmentId: number,
 	questionItems: QuestionItem[],
 ): Promise<PersistResult> {
-	const allNewLabels = [...new Set(questionItems.flatMap((q) => q.newLabels))];
-	let newClassificationRows: { id: number; key: string; label: string }[] = [];
-	const newLabelIdMap = new Map<string, number>();
+	const seenKeys = new Set<string>();
+	const deduplicatedNew = questionItems
+		.flatMap((q) => q.newClassifications)
+		.filter((c) => {
+			const key = slugify(c.label);
+			if (seenKeys.has(key)) return false;
+			seenKeys.add(key);
+			return true;
+		});
 
-	if (allNewLabels.length > 0) {
+	let newClassificationRows: { id: number; key: string; label: string }[] = [];
+	const newKeyIdMap = new Map<string, number>();
+
+	if (deduplicatedNew.length > 0) {
 		newClassificationRows = await db
 			.insert(classifications)
-			.values(allNewLabels.map((label) => ({ key: slugify(label), label })))
-			.onConflictDoUpdate({ target: classifications.key, set: { label: sql`EXCLUDED.label` } })
+			.values(
+				deduplicatedNew.map((c) => ({ key: slugify(c.label), label: c.label, emoji: c.emoji })),
+			)
+			.onConflictDoUpdate({
+				target: classifications.key,
+				set: {
+					label: sql`EXCLUDED.label`,
+					emoji: sql`COALESCE(EXCLUDED.emoji, ${classifications.emoji})`,
+				},
+			})
 			.returning();
 		for (const c of newClassificationRows) {
-			newLabelIdMap.set(c.label, c.id);
+			newKeyIdMap.set(c.key, c.id);
 		}
 	}
 
@@ -120,8 +149,8 @@ async function persistQuestions(
 		const qItem = questionItems[i];
 		const questionId = questionIds[i];
 		const allIds = [...qItem.selectedIds];
-		for (const label of qItem.newLabels) {
-			const newId = newLabelIdMap.get(label);
+		for (const c of qItem.newClassifications) {
+			const newId = newKeyIdMap.get(slugify(c.label));
 			if (newId) allIds.push(newId);
 		}
 		const uniqueIds = [...new Set(allIds)];
@@ -212,7 +241,12 @@ export const load = withAuthenticatedLoad<
 	const assignmentQuestions = [...questionsMap.values()];
 
 	const allClassifications = await event.locals.db
-		.select({ id: classifications.id, key: classifications.key, label: classifications.label })
+		.select({
+			id: classifications.id,
+			key: classifications.key,
+			label: classifications.label,
+			emoji: classifications.emoji,
+		})
 		.from(classifications)
 		.orderBy(classifications.label);
 
@@ -240,10 +274,11 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const location = (formData.get("location") as string | null)?.trim() || null;
 		const client = (formData.get("client") as string | null)?.trim() || null;
 		const promptSupplement = (formData.get("promptSupplement") as string | null)?.trim() || null;
+		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
 
 		await event.locals.db
 			.update(assignments)
-			.set({ name, location, client, promptSupplement })
+			.set({ name, slug, location, client, promptSupplement })
 			.where(eq(assignments.id, id));
 
 		const questionItems = parseQuestionItems(formData);
@@ -263,10 +298,11 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const location = (formData.get("location") as string | null)?.trim() || null;
 		const client = (formData.get("client") as string | null)?.trim() || null;
 		const promptSupplement = (formData.get("promptSupplement") as string | null)?.trim() || null;
+		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
 
 		await event.locals.db
 			.update(assignments)
-			.set({ name, location, client, promptSupplement })
+			.set({ name, slug, location, client, promptSupplement })
 			.where(eq(assignments.id, id));
 
 		// Load existing classifications for label lookup

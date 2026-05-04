@@ -47,12 +47,16 @@ describe("/editor/dashboard/classification/[key] +page.server", () => {
 		).toBe(true);
 	});
 
-	it("returns unclassified answers for the special key", async ({ db, expect, schema }) => {
+	it("returns answers without classification for the special key", async ({
+		db,
+		expect,
+		schema,
+	}) => {
 		await seedData(db, schema);
 
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/dashboard/classification/unclassified"),
-			params: { key: "unclassified" } as never,
+			request: new Request("http://localhost/editor/dashboard/classification/unklassifiziert"),
+			params: { key: "unklassifiziert" } as never,
 			locals: { user: authenticatedUser, db, schema },
 		});
 		const result = (await load(event as unknown as Parameters<typeof load>[0])) as Exclude<
@@ -60,7 +64,7 @@ describe("/editor/dashboard/classification/[key] +page.server", () => {
 			void
 		>;
 
-		expect(result.classification).toEqual({ key: "unclassified", label: "Nicht klassifiziert" });
+		expect(result.classification).toEqual({ key: "unklassifiziert", label: "Nicht klassifiziert" });
 		expect(result.answers).toHaveLength(1);
 		expect(result.answers[0].classificationId).toBeNull();
 	});
@@ -85,15 +89,15 @@ describe("/editor/dashboard/classification/[key] +page.server", () => {
 		await seedData(db, schema);
 
 		const formData = new FormData();
-		formData.set("answerId", "1003"); // unclassified answer
+		formData.set("answerId", "1003"); // answer without classification
 		formData.set("classificationId", "101"); // move to support
 
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/dashboard/classification/unclassified", {
+			request: new Request("http://localhost/editor/dashboard/classification/unklassifiziert", {
 				method: "POST",
 				body: formData,
 			}),
-			params: { key: "unclassified" } as never,
+			params: { key: "unklassifiziert" } as never,
 			locals: { user: authenticatedUser, db, schema },
 		});
 
