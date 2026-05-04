@@ -14,12 +14,18 @@ let { data }: { data: PageData } = $props();
 	<p class="mt-4 text-lg text-gray-600">Dies ist die öffentliche Seite der DialogBank.</p>
 
 	<div class="mt-8 flex items-center gap-4">
-		<a
-			href={resolve('/showcase')}
-			class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
-		>
-			Aktives Schaufenster
-		</a>
+		{#if data.showcaseSlug}
+			<a
+				href={resolve(`/showcase/${data.showcaseSlug}`)}
+				class="rounded-lg border border-gray-300 bg-white px-6 py-2 text-sm font-semibold text-gray-700 shadow-sm transition hover:bg-gray-50 focus:outline-none"
+			>
+				Aktives Schaufenster
+			</a>
+		{:else}
+			<span class="rounded-lg border border-gray-200 bg-gray-100 px-6 py-2 text-sm font-semibold text-gray-400 cursor-not-allowed">
+				Kein aktiver Einsatz
+			</span>
+		{/if}
 		{#if data.user}
 			<a
 				href={resolve('/editor/assignments')}

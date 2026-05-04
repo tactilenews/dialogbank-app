@@ -1,6 +1,7 @@
 <script lang="ts">
 import type { SubmitFunction } from "@sveltejs/kit";
 import { enhance } from "$app/forms";
+import EmojiPicker from "$lib/components/EmojiPicker.svelte";
 import type { DashboardClassificationSummary, DashboardForm } from "./types";
 
 type Props = {
@@ -10,9 +11,23 @@ type Props = {
 
 let { classificationOptions, form }: Props = $props();
 
+let createSubmitting = $state(false);
+
 const enhanceInvalidate = (() => {
 	return async ({ update }) => {
-		await update({ invalidateAll: true, reset: true });
+		await update({ invalidateAll: true, reset: false });
+	};
+}) satisfies SubmitFunction;
+
+const enhanceCreateClassification = (() => {
+	createSubmitting = true;
+
+	return async ({ update }) => {
+		try {
+			await update({ invalidateAll: true, reset: false });
+		} finally {
+			createSubmitting = false;
+		}
 	};
 }) satisfies SubmitFunction;
 
@@ -45,7 +60,7 @@ const statusMessage = $derived(form && "classificationMessage" in form ? form : 
 		</p>
 	{/if}
 
-	<div class="overflow-hidden rounded-xl border border-slate-200">
+	<div class="overflow-visible rounded-xl border border-slate-200">
 		<table class="w-full text-sm">
 			<thead>
 				<tr class="border-b border-slate-200 bg-slate-50 text-left text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -59,9 +74,10 @@ const statusMessage = $derived(form && "classificationMessage" in form ? form : 
 				{#each classificationOptions as option (option.id)}
 					<tr class="bg-white">
 						<td class="px-4 py-3 font-mono text-xs text-slate-500">{option.key}</td>
-						<td class="px-4 py-3">
+						<td class="px-4 py-3" colspan="2">
 							<form method="POST" action="?/updateClassification" use:enhance={enhanceInvalidate} class="flex items-center gap-2">
 								<input type="hidden" name="id" value={option.id} />
+								<EmojiPicker name="emoji" value={option.emoji} />
 								<input
 									type="text"
 									name="label"
@@ -93,7 +109,7 @@ const statusMessage = $derived(form && "classificationMessage" in form ? form : 
 				{/each}
 				{#if classificationOptions.length === 0}
 					<tr>
-						<td colspan="4" class="px-4 py-6 text-center text-slate-400">
+						<td colspan="5" class="px-4 py-6 text-center text-slate-400">
 							Noch keine Klassifizierungen vorhanden.
 						</td>
 					</tr>
@@ -102,19 +118,28 @@ const statusMessage = $derived(form && "classificationMessage" in form ? form : 
 		</table>
 	</div>
 
-	<form method="POST" action="?/createClassification" use:enhance={enhanceInvalidate} class="flex items-center gap-3">
+	<form
+		method="POST"
+		action="?/createClassification"
+		use:enhance={enhanceCreateClassification}
+		aria-busy={createSubmitting}
+		class="flex items-center gap-3"
+	>
+		<EmojiPicker name="emoji" />
 		<input
 			type="text"
 			name="label"
 			placeholder="Neue Klassifizierung…"
 			required
-			class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400"
+			disabled={createSubmitting}
+			class="rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-700 placeholder:text-slate-400 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-500"
 		/>
 		<button
 			type="submit"
-			class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
+			disabled={createSubmitting}
+			class="rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:text-slate-400"
 		>
-			Anlegen
+			{createSubmitting ? "Wird angelegt…" : "Anlegen"}
 		</button>
 	</form>
 </section>

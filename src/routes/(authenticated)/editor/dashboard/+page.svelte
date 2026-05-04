@@ -57,12 +57,12 @@ $: statItems = [
 
 			<!-- Nicht klassifiziert – always shown, not deletable -->
 			<a
-				href={resolve("/editor/dashboard/classification/unclassified")}
+				href={resolve("/editor/dashboard/classification/unklassifiziert")}
 				data-testid="classification-card-unclassified"
 				class="flex flex-col rounded-xl border border-dashed border-slate-200 bg-slate-50 p-5 shadow-sm transition hover:border-slate-400"
 			>
 				<span class="text-base font-semibold text-slate-500">Nicht klassifiziert</span>
-				<span class="mt-1 font-mono text-xs text-slate-300">unclassified</span>
+				<span class="mt-1 font-mono text-xs text-slate-300">unklassifiziert</span>
 				<span class="mt-3 text-2xl font-bold text-slate-500">{data.unclassifiedCount}</span>
 				<span class="text-xs text-slate-400">Antwort{data.unclassifiedCount === 1 ? "" : "en"}</span>
 			</a>

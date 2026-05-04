@@ -22,7 +22,7 @@ export const test = base.extend<Fixtures>({
 	db: async ({}, use) => {
 		await db
 			.insert(schema.assignments)
-			.values({ id: 1, name: "Standard", isActive: true })
+			.values({ id: 1, name: "Standard", slug: "standard", isActive: true })
 			.onConflictDoNothing();
 		await use(db);
 		await seed.reset(db, schema);

@@ -1,4 +1,3 @@
-import { redirect } from "@sveltejs/kit";
 import { eq } from "drizzle-orm";
 import type { PageServerLoad } from "./$types";
 
@@ -13,9 +12,7 @@ export const load: PageServerLoad = async (event) => {
 		.limit(1);
 	const active = activeRows.at(0);
 
-	if (active) {
-		redirect(302, `/showcase/${active.slug}`);
-	}
-
-	return {};
+	return {
+		showcaseSlug: active?.slug ?? null,
+	};
 };

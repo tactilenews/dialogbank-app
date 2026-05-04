@@ -7,18 +7,18 @@ type ClassificationInsert = typeof schema.classifications.$inferInsert;
 export const classifications: ClassificationInsert[] = [
 	{
 		id: 1,
-		key: "proGelsenkirchen",
-		label: "Pro Gelsenkirchen",
+		key: "gute-sache-ueber-gelsenkirchen",
+		label: "Gute Sache über Gelsenkirchen",
 	},
 	{
 		id: 2,
-		key: "ideaGelsenkirchen",
-		label: "Idea Gelsenkirchen",
+		key: "idee-fuer-gelsenkirchen",
+		label: "Idee für Gelsenkirchen",
 	},
 	{
 		id: 3,
-		key: "conGelsenkirchen",
-		label: "Contra Gelsenkirchen",
+		key: "problem-mit-gelsenkirchen",
+		label: "Problem mit Gelsenkirchen",
 	},
 ];
 

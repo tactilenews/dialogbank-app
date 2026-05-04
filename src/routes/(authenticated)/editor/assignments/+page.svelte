@@ -74,12 +74,20 @@ let { data, form }: { data: PageData; form: ActionData } = $props();
 							{/if}
 						</div>
 					</div>
-					<a
-						href={resolve(`/editor/assignments/${assignment.id}`)}
-						class="ml-4 rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
-					>
-						Bearbeiten
-					</a>
+					<div class="ml-4 flex items-center gap-2">
+						<a
+							href={resolve(`/showcase/${assignment.slug}`)}
+							class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+						>
+							Schaufenster
+						</a>
+						<a
+							href={resolve(`/editor/assignments/${assignment.id}`)}
+							class="rounded border border-gray-300 px-3 py-1.5 text-sm text-gray-700 hover:bg-gray-100"
+						>
+							Bearbeiten
+						</a>
+					</div>
 				</div>
 			{/each}
 		</div>

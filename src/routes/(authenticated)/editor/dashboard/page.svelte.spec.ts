@@ -42,7 +42,7 @@ describe("/editor/dashboard +page.svelte", () => {
 			.element(page.getByTestId("classification-card-unclassified"))
 			.toHaveAttribute(
 				"href",
-				expect.stringContaining("/editor/dashboard/classification/unclassified"),
+				expect.stringContaining("/editor/dashboard/classification/unklassifiziert"),
 			);
 	});
 

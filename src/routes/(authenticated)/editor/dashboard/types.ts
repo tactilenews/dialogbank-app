@@ -12,6 +12,7 @@ export type DashboardClassificationSummary = {
 	id: number;
 	key: string;
 	label: string;
+	emoji: string | null;
 	answerCount: number;
 };
 

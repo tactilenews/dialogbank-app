@@ -57,7 +57,7 @@ test.describe("Editor Dashboard E2E", () => {
 
 		// Click the "Nicht klassifiziert" card to navigate to the detail page
 		await page.getByRole("link", { name: /Nicht klassifiziert/ }).click();
-		await expect(page).toHaveURL(/\/editor\/dashboard\/classification\/unclassified/);
+		await expect(page).toHaveURL(/\/editor\/dashboard\/classification\/unklassifiziert/);
 
 		const movedAnswer = "This answer still needs a classification.";
 		await expect(page.getByText(movedAnswer)).toBeVisible();
@@ -101,7 +101,7 @@ test.describe("Editor Dashboard E2E", () => {
 		await page.getByRole("button", { name: "Trotzdem löschen" }).click();
 		await expect(page.getByText("Klassifizierung gelöscht.")).toBeVisible();
 
-		// Navigate to unclassified page — the answer from "Problem mit Gelsenkirchen" should now be there
+		// Navigate to the unclassified page — the answer from "Problem mit Gelsenkirchen" should now be there
 		await page.getByRole("link", { name: /Nicht klassifiziert/ }).click();
 		await expect(page.getByText("The city center feels neglected.")).toBeVisible();
 	});

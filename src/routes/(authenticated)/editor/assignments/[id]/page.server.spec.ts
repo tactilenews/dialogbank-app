@@ -26,7 +26,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 		]);
 		const [assignment] = await db
 			.insert(schema.assignments)
-			.values({ name: "Test Assignment" })
+			.values({ name: "Test Assignment", slug: "test-assignment" })
 			.returning();
 		const [q] = await db
 			.insert(schema.questions)
@@ -66,7 +66,13 @@ describe("/editor/assignments/[id] +page.server", () => {
 		formData.append("name", "Standard");
 		formData.append("questions", "Was denkst du über Gelsenkirchen?");
 		formData.append("question_classification_ids", "[]");
-		formData.append("question_new_labels", JSON.stringify(["AssignPro", "AssignContra"]));
+		formData.append(
+			"question_new_classifications",
+			JSON.stringify([
+				{ label: "AssignPro", emoji: "💡" },
+				{ label: "AssignContra", emoji: null },
+			]),
+		);
 
 		const event = createRequestEvent({
 			request: new Request("http://localhost/editor/assignments/1", {
@@ -90,6 +96,86 @@ describe("/editor/assignments/[id] +page.server", () => {
 		expect(links).toHaveLength(2);
 	});
 
+	it("save: links duplicate new classifications by normalized key", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		formData.append("questions", "Frage 1");
+		formData.append("questions", "Frage 2");
+		formData.append("question_classification_ids", "[]");
+		formData.append("question_classification_ids", "[]");
+		formData.append(
+			"question_new_classifications",
+			JSON.stringify([{ label: "Assign Pro", emoji: null }]),
+		);
+		formData.append(
+			"question_new_classifications",
+			JSON.stringify([{ label: "assign-pro", emoji: null }]),
+		);
+
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({ success: true, action: "save" });
+
+		const created = await db.query.classifications.findMany({
+			where: (c, { eq }) => eq(c.key, "assign-pro"),
+		});
+		expect(created).toHaveLength(1);
+
+		const links = await db.select().from(schema.questionClassifications);
+		expect(links).toHaveLength(2);
+		expect(new Set(links.map((link) => link.classificationId))).toEqual(new Set([created[0].id]));
+	});
+
+	it("save: does not overwrite existing emoji when upserting a classification without one", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.insert(schema.classifications)
+			.values([{ key: "assign-pro", label: "Assign Pro", emoji: "💡" }]);
+
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		formData.append("questions", "Frage 1");
+		formData.append("question_classification_ids", "[]");
+		formData.append(
+			"question_new_classifications",
+			JSON.stringify([{ label: "Assign Pro", emoji: null }]),
+		);
+
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({ success: true });
+
+		const [updated] = await db.query.classifications.findMany({
+			where: (c, { eq }) => eq(c.key, "assign-pro"),
+		});
+		expect(updated.emoji).toBe("💡");
+	});
+
 	it("save: selects existing classifications and links them to questions", async ({
 		db,
 		expect,
@@ -103,7 +189,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 		formData.append("name", "Standard");
 		formData.append("questions", "Wie läuft es?");
 		formData.append("question_classification_ids", JSON.stringify([CLASSIFICATION_ID_OFFSET + 20]));
-		formData.append("question_new_labels", "[]");
+		formData.append("question_new_classifications", "[]");
 
 		const event = createRequestEvent({
 			request: new Request("http://localhost/editor/assignments/1", {
@@ -142,15 +228,15 @@ describe("/editor/assignments/[id] +page.server", () => {
 		fd1.append("questions", "Frage 2");
 		fd1.append("question_classification_ids", "[]");
 		fd1.append("question_classification_ids", "[]");
-		fd1.append("question_new_labels", "[]");
-		fd1.append("question_new_labels", "[]");
+		fd1.append("question_new_classifications", "[]");
+		fd1.append("question_new_classifications", "[]");
 		await save(fd1);
 
 		const fd2 = new FormData();
 		fd2.append("name", "Standard");
 		fd2.append("questions", "Nur eine Frage");
 		fd2.append("question_classification_ids", "[]");
-		fd2.append("question_new_labels", "[]");
+		fd2.append("question_new_classifications", "[]");
 		await save(fd2);
 
 		const remaining = await db.select().from(schema.questions);

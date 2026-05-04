@@ -13,9 +13,7 @@ test.describe("Showcase E2E", () => {
 
 		await expect(page.getByTestId("stat-guests")).toContainText("1");
 		await expect(page.getByTestId("stat-answers")).toContainText("2");
-		await expect(page.getByTestId("stat-proGelsenkirchen")).toContainText("0");
-		await expect(page.getByTestId("stat-conGelsenkirchen")).toContainText("1");
-		await expect(page.getByTestId("stat-ideaGelsenkirchen")).toContainText("0");
+		await expect(page.getByTestId("stat-problem-mit-gelsenkirchen")).toContainText("1");
 
 		const activeQuote = page.locator('[data-testid="current-quote"]:not([inert])');
 
@@ -30,7 +28,7 @@ test.describe("Showcase E2E", () => {
 			)
 			.toBe(true);
 
-		await expect(page.getByTestId("stat-conGelsenkirchen")).toHaveAttribute(
+		await expect(page.getByTestId("stat-problem-mit-gelsenkirchen")).toHaveAttribute(
 			"data-highlighted",
 			"true",
 		);
