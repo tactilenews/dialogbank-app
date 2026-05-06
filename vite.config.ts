@@ -90,7 +90,6 @@ export default defineConfig({
 							},
 						],
 					},
-					setupFiles: [".storybook/vitest.setup.ts"],
 					exclude: ["**/*.e2e.spec.ts"],
 				},
 			},

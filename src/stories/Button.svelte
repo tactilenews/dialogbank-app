@@ -21,10 +21,10 @@ let style = $derived(backgroundColor ? `background-color: ${backgroundColor}` : 
 </script>
 
 <button
-	type="button"
-	class={['storybook-button', `storybook-button--${size}`, mode].join(' ')}
-	{style}
-	{...props}
+  type="button"
+  class={['storybook-button', `storybook-button--${size}`, mode].join(' ')}
+  {style}
+  {...props}
 >
-	{label}
+  {label}
 </button>

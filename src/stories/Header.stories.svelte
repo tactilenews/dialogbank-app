@@ -14,8 +14,8 @@ const { Story } = defineMeta({
 		layout: "fullscreen",
 	},
 	args: {
-		onSignIn: fn(),
-		onSignOut: fn(),
+		onLogin: fn(),
+		onLogout: fn(),
 		onCreateAccount: fn(),
 	},
 });
