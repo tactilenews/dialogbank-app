@@ -1,20 +1,31 @@
+import { execSync } from "node:child_process";
 import { betterAuth } from "better-auth/minimal";
 import { getAuth } from "$lib/server/auth";
 import { getDb } from "$lib/server/db";
+import { user } from "$lib/server/db/schema";
 
-function getSeedPassword(): string {
-	const password = process.env.SEED_USER_PASSWORD?.trim();
-
-	if (!password) {
-		throw new Error("SEED_USER_PASSWORD must be set before running db:seed.");
-	}
-
-	return password;
+function getUserAccounts(): Array<{ email: string; password: string }> {
+	const output = execSync("infisical secrets --path user-accounts --plain --silent").toString();
+	return output
+		.trim()
+		.split("\n")
+		.filter((line) => line.includes("="))
+		.map((line) => {
+			const eq = line.indexOf("=");
+			return { email: line.slice(0, eq), password: line.slice(eq + 1) };
+		});
 }
 
-const baseAuth = getAuth(getDb(), {
-	ORIGIN: "http://localhost:5173",
-	BETTER_AUTH_SECRET: "development-only-better-auth-secret",
+const db = getDb();
+
+const betterAuthSecret = process.env.BETTER_AUTH_SECRET;
+if (!betterAuthSecret) {
+	throw new Error("BETTER_AUTH_SECRET must be set. Run via: infisical run -- pnpm db:seed");
+}
+
+const baseAuth = getAuth(db, {
+	ORIGIN: process.env.ORIGIN ?? "http://localhost:5173",
+	BETTER_AUTH_SECRET: betterAuthSecret,
 });
 const auth = betterAuth({
 	...baseAuth.options,
@@ -27,10 +38,11 @@ const auth = betterAuth({
 	},
 });
 
-await auth.api.signUpEmail({
-	body: {
-		email: "user@example.org",
-		password: getSeedPassword(),
-		name: "John Doe",
-	},
-});
+const accounts = getUserAccounts();
+
+await db.delete(user);
+for (const { email, password } of accounts) {
+	const name = email.split("@")[0];
+	await auth.api.signUpEmail({ body: { email, password, name } });
+	console.log(`Created user: ${email}`);
+}
