@@ -31,7 +31,7 @@
 		"@biomejs/biome": "^2.4.14",
 		"@chromatic-com/storybook": "^5.2.1",
 		"@electric-sql/pglite": "^0.5.1",
-		"@elevenlabs/elevenlabs-js": "^2.45.0",
+		"@elevenlabs/elevenlabs-js": "^2.52.0",
 		"@neondatabase/serverless": "^1.1.0",
 		"@playwright/test": "^1.60.0",
 		"@sentry/sveltekit": "^10.57.0",
