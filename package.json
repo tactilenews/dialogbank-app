@@ -30,7 +30,7 @@
 		"@better-auth/cli": "~1.4.21",
 		"@biomejs/biome": "^2.4.14",
 		"@chromatic-com/storybook": "^5.2.1",
-		"@electric-sql/pglite": "^0.5.1",
+		"@electric-sql/pglite": "^0.5.2",
 		"@elevenlabs/elevenlabs-js": "^2.52.0",
 		"@neondatabase/serverless": "^1.1.0",
 		"@playwright/test": "^1.60.0",
