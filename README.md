@@ -66,6 +66,12 @@ Infisical is the source of truth for application secrets:
 
 ## Local Development
 
+Node and pnpm versions are pinned in [`mise.toml`](./mise.toml) and managed via [mise](https://mise.jdx.dev). Install mise, then let it install the pinned tool versions:
+
+```sh
+mise install
+```
+
 Install dependencies:
 
 ```sh
