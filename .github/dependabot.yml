@@ -59,6 +59,21 @@ updates:
         patterns:
           - "*"
 
+  # Dependabot only scans .github/workflows for the "/" github-actions entry
+  # above; composite actions need their own directory entry to be picked up.
+  - package-ecosystem: "github-actions"
+    directory: "/.github/actions/setup"
+    schedule:
+      interval: "daily"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "github-actions"
+    groups:
+      actions:
+        patterns:
+          - "*"
+
   - package-ecosystem: "docker-compose"
     directory: "/"
     schedule:
