@@ -21,8 +21,8 @@ importers:
         specifier: ^0.5.6
         version: 0.5.6
       '@elevenlabs/elevenlabs-js':
-        specifier: ^2.52.0
-        version: 2.52.0
+        specifier: ^2.64.0
+        version: 2.64.0
       '@neondatabase/serverless':
         specifier: ^1.1.0
         version: 1.1.0
@@ -564,8 +564,8 @@ packages:
   '@electric-sql/pglite@0.5.6':
     resolution: {integrity: sha512-ipn6AOHouIRwNSVL+0hIRuM3yDwAWgRmvZuj+45sudzKpmdPbG8hQuQDZ4A8l7U8E0l7u6pJ/VtMEW42w+vEKQ==}
 
-  '@elevenlabs/elevenlabs-js@2.52.0':
-    resolution: {integrity: sha512-LAlqLL+WuNMdHZr9noOCgO06MPS53qjwESlxuakusmFPSejiMJ5AiUJvkkhWMIts8Bkzpcmmt2I4FdHwwY12vg==}
+  '@elevenlabs/elevenlabs-js@2.64.0':
+    resolution: {integrity: sha512-g1o6Bs0tsjZYFWSRsG2cND2b4DMhTHvWS+e0SozCtXqUVY+KQa039eas0P7BxLVUN940+IJ+SDY2fJx2pUo39g==}
     engines: {node: '>=18.0.0'}
 
   '@emnapi/core@1.10.0':
@@ -4122,6 +4122,18 @@ packages:
       utf-8-validate:
         optional: true
 
+  ws@8.21.3:
+    resolution: {integrity: sha512-201TZ/kPWxoPr/OKWjquZR1SWKXcvxdH+e1xrx89b3YbmzLMFCLfnaG1HFIgWzJOEWZ7MvpK++odZufgYR50Rw==}
+    engines: {node: '>=10.0.0'}
+    peerDependencies:
+      bufferutil: ^4.0.1
+      utf-8-validate: '>=5.0.2'
+    peerDependenciesMeta:
+      bufferutil:
+        optional: true
+      utf-8-validate:
+        optional: true
+
   wsl-utils@0.1.0:
     resolution: {integrity: sha512-h3Fbisa2nKGPxCpm89Hk33lBLsnaGBvctQopaBSOW/uIs6FTe1ATyAnKFJrzVs9vpGdsTe73WF3V4lIsk4Gacw==}
     engines: {node: '>=18'}
@@ -4726,11 +4738,11 @@ snapshots:
 
   '@electric-sql/pglite@0.5.6': {}
 
-  '@elevenlabs/elevenlabs-js@2.52.0':
+  '@elevenlabs/elevenlabs-js@2.64.0':
     dependencies:
       command-exists: 1.2.9
       node-fetch: 2.7.0
-      ws: 8.21.0
+      ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
       - encoding
@@ -5977,7 +5989,7 @@ snapshots:
       sirv: 3.0.2
       tinyrainbow: 3.1.0
       vitest: 4.1.8(@opentelemetry/api@1.9.1)(@types/node@25.9.3)(@vitest/browser-playwright@4.1.8)(@vitest/coverage-v8@4.1.8)(vite@8.0.16(@types/node@25.9.3)(esbuild@0.27.7)(jiti@2.7.0)(tsx@4.21.0))
-      ws: 8.21.0
+      ws: 8.21.3
     transitivePeerDependencies:
       - bufferutil
       - msw
@@ -7744,6 +7756,8 @@ snapshots:
   wrappy@1.0.2: {}
 
   ws@8.21.0: {}
+
+  ws@8.21.3: {}
 
   wsl-utils@0.1.0:
     dependencies:
