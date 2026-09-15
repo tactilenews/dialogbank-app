@@ -1,8 +1,8 @@
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import type {
 	AgentWorkflowRequestModel,
+	AnalysisProperty,
 	GetAgentResponseModel,
-	LiteralJsonSchemaProperty,
 } from "@elevenlabs/elevenlabs-js/api";
 import { error } from "@sveltejs/kit";
 import { slugify } from "$lib/slugify";
@@ -35,7 +35,7 @@ type AgentWriter = {
 		agentId: string,
 		request: {
 			branchId?: string;
-			platformSettings?: { dataCollection?: Record<string, LiteralJsonSchemaProperty> };
+			platformSettings?: { dataCollection?: Record<string, AnalysisProperty> };
 			workflow?: AgentWorkflowRequestModel;
 		},
 	) => Promise<void>;
@@ -51,7 +51,7 @@ export type ElevenLabsEditorAgent = {
 	id: string;
 	branchId?: string;
 	nodeAdditionalPrompt: string;
-	dataCollection: Record<string, LiteralJsonSchemaProperty>;
+	dataCollection: Record<string, AnalysisProperty>;
 	questions: Question[];
 };
 
@@ -132,7 +132,7 @@ export function buildWorkflowNodeAdditionalPrompt(
 }
 
 function parseClassificationsFromDataCollection(
-	dataCollection: Record<string, LiteralJsonSchemaProperty> | undefined,
+	dataCollection: Record<string, AnalysisProperty> | undefined,
 	index: number,
 ): string[] {
 	const description = dataCollection?.[`${CLASSIFICATION_KEY_PREFIX}${index}`]?.description;
@@ -182,7 +182,7 @@ function mapElevenLabsEditorAgent(
 }
 
 export function parseQuestionsFromDataCollection(
-	dataCollection: Record<string, LiteralJsonSchemaProperty> | undefined,
+	dataCollection: Record<string, AnalysisProperty> | undefined,
 ): string[] {
 	if (!dataCollection) return [];
 
@@ -199,8 +199,8 @@ export function parseQuestionsFromDataCollection(
 
 export function buildQuestionDataCollectionEntries(
 	questions: Question[],
-): Record<string, LiteralJsonSchemaProperty> {
-	const entries: Record<string, LiteralJsonSchemaProperty> = {};
+): Record<string, AnalysisProperty> {
+	const entries: Record<string, AnalysisProperty> = {};
 	for (let i = 0; i < questions.length; i++) {
 		const { text, classifications } = questions[i];
 		entries[`${QUESTION_KEY_PREFIX}${i}`] = {
