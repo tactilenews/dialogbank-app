@@ -1,7 +1,7 @@
 import type {
 	AgentWorkflowResponseModel,
+	AnalysisProperty,
 	GetAgentResponseModel,
-	LiteralJsonSchemaProperty,
 } from "@elevenlabs/elevenlabs-js/api";
 import { describe, expect, it, vi } from "vitest";
 import { slugify } from "$lib/slugify";
@@ -36,6 +36,7 @@ function makeOverrideAgentNode(additionalPrompt: string) {
 		additionalToolIds: [],
 		position: { x: 0, y: 0 },
 		edgeOrder: [],
+		entryBehavior: "auto" as const,
 	};
 }
 
@@ -291,14 +292,14 @@ describe("parseQuestionsFromDataCollection", () => {
 	});
 
 	it("returns an empty array when there are no question_ entries", () => {
-		const dataCollection: Record<string, LiteralJsonSchemaProperty> = {
+		const dataCollection: Record<string, AnalysisProperty> = {
 			first_name: { type: "string", description: "What is the first name?" },
 		};
 		expect(parseQuestionsFromDataCollection(dataCollection)).toEqual([]);
 	});
 
 	it("extracts question text from the description field", () => {
-		const dataCollection: Record<string, LiteralJsonSchemaProperty> = {
+		const dataCollection: Record<string, AnalysisProperty> = {
 			question_0: {
 				type: "string",
 				description: 'Wie hat die Person auf die Frage "Wie alt sind Sie?" geantwortet?',
@@ -316,7 +317,7 @@ describe("parseQuestionsFromDataCollection", () => {
 	});
 
 	it("ignores classification_ and other non-question entries", () => {
-		const dataCollection: Record<string, LiteralJsonSchemaProperty> = {
+		const dataCollection: Record<string, AnalysisProperty> = {
 			question_0: {
 				type: "string",
 				description: 'Wie hat die Person auf die Frage "Wie alt sind Sie?" geantwortet?',
@@ -333,7 +334,7 @@ describe("parseQuestionsFromDataCollection", () => {
 	});
 
 	it("returns questions sorted by key", () => {
-		const dataCollection: Record<string, LiteralJsonSchemaProperty> = {
+		const dataCollection: Record<string, AnalysisProperty> = {
 			question_1: {
 				type: "string",
 				description: 'Wie hat die Person auf die Frage "Zweite Frage?" geantwortet?',
@@ -420,7 +421,7 @@ describe("updateElevenLabsAgentQuestions", () => {
 						request: {
 							branchId?: string;
 							platformSettings?: {
-								dataCollection?: Record<string, LiteralJsonSchemaProperty>;
+								dataCollection?: Record<string, AnalysisProperty>;
 							};
 							workflow?: unknown;
 						},
