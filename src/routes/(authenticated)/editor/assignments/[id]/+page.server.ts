@@ -14,10 +14,13 @@ import {
 	type AgentReaderResponse,
 	createElevenLabsAgentReader,
 	createElevenLabsAgentWriter,
+	type ElevenLabsAgentCatalogEntry,
 	type ElevenLabsEditorAgent,
 	getElevenLabsEditorAgent,
+	listElevenLabsDialogbankAgents,
 	type Question,
-	resolveElevenLabsAgentTarget,
+	resolveElevenLabsAgentTargetForAgentId,
+	resolveElevenLabsDialogbankAgentTag,
 	updateElevenLabsAgentQuestions,
 } from "$lib/server/elevenlabs/agent";
 import { withAuthenticatedActions, withAuthenticatedLoad } from "$lib/server/require-user";
@@ -85,6 +88,11 @@ function parseQuestionItems(formData: FormData): QuestionItem[] {
 			return { text, selectedIds, newClassifications, displayOrder: i };
 		})
 		.filter((q): q is NonNullable<typeof q> => q !== null);
+}
+
+function parseElevenLabsAgentId(formData: FormData): string | null {
+	const agentId = (formData.get("elevenLabsAgentId") as string | null)?.trim();
+	return agentId || null;
 }
 
 type PersistResult = {
@@ -250,16 +258,35 @@ export const load = withAuthenticatedLoad<
 		.from(classifications)
 		.orderBy(classifications.label);
 
+	const agentCatalogTag = resolveElevenLabsDialogbankAgentTag(process.env);
+	let agentCatalog: ElevenLabsAgentCatalogEntry[] = [];
 	let agent: ElevenLabsEditorAgent | null = null;
 	try {
-		const agentTarget = resolveElevenLabsAgentTarget(process.env);
+		agentCatalog = await listElevenLabsDialogbankAgents(process.env);
+	} catch {
+		// non-fatal: show catalog as unavailable
+	}
+
+	try {
+		if (!assignment.elevenLabsAgentId) throw new Error("No assignment agent selected.");
+		const agentTarget = resolveElevenLabsAgentTargetForAgentId(
+			process.env,
+			assignment.elevenLabsAgentId,
+		);
 		const reader = createElevenLabsAgentReader(process.env);
 		agent = await getElevenLabsEditorAgent(agentTarget, reader);
 	} catch {
 		// non-fatal: show agent view as unavailable
 	}
 
-	return { assignment, questions: assignmentQuestions, allClassifications, agent };
+	return {
+		assignment,
+		questions: assignmentQuestions,
+		allClassifications,
+		agentCatalog,
+		agentCatalogTag,
+		agent,
+	};
 });
 
 export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], Actions>({
@@ -274,11 +301,12 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const location = (formData.get("location") as string | null)?.trim() || null;
 		const client = (formData.get("client") as string | null)?.trim() || null;
 		const promptSupplement = (formData.get("promptSupplement") as string | null)?.trim() || null;
+		const elevenLabsAgentId = parseElevenLabsAgentId(formData);
 		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
 
 		await event.locals.db
 			.update(assignments)
-			.set({ name, slug, location, client, promptSupplement })
+			.set({ name, slug, location, client, promptSupplement, elevenLabsAgentId })
 			.where(eq(assignments.id, id));
 
 		const questionItems = parseQuestionItems(formData);
@@ -298,11 +326,13 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const location = (formData.get("location") as string | null)?.trim() || null;
 		const client = (formData.get("client") as string | null)?.trim() || null;
 		const promptSupplement = (formData.get("promptSupplement") as string | null)?.trim() || null;
+		const elevenLabsAgentId = parseElevenLabsAgentId(formData);
+		if (!elevenLabsAgentId) return fail(400, { message: "Agent ist erforderlich." });
 		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
 
 		await event.locals.db
 			.update(assignments)
-			.set({ name, slug, location, client, promptSupplement })
+			.set({ name, slug, location, client, promptSupplement, elevenLabsAgentId })
 			.where(eq(assignments.id, id));
 
 		// Load existing classifications for label lookup
@@ -331,7 +361,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				.filter(Boolean),
 		}));
 
-		const agentTarget = resolveElevenLabsAgentTarget(process.env);
+		const agentTarget = resolveElevenLabsAgentTargetForAgentId(process.env, elevenLabsAgentId);
 		const reader = createElevenLabsAgentReader(process.env);
 		const writer = createElevenLabsAgentWriter(process.env);
 

@@ -1,0 +1,1 @@
+ALTER TABLE "assignments" ADD COLUMN "elevenlabs_agent_id" text;

@@ -96,6 +96,33 @@ describe("/editor/assignments/[id] +page.server", () => {
 		expect(links).toHaveLength(2);
 	});
 
+	it("save: persists the selected ElevenLabs agent", async ({ db, expect, schema }) => {
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		formData.append("elevenLabsAgentId", "agent_dialogbank_123");
+		formData.append("questions", "Was denkst du über Gelsenkirchen?");
+		formData.append("question_classification_ids", "[]");
+		formData.append("question_new_classifications", "[]");
+
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({ success: true, action: "save" });
+
+		const assignment = await db.query.assignments.findFirst({
+			where: (a, { eq }) => eq(a.id, 1),
+		});
+		expect(assignment?.elevenLabsAgentId).toBe("agent_dialogbank_123");
+	});
+
 	it("save: links duplicate new classifications by normalized key", async ({
 		db,
 		expect,
@@ -242,5 +269,29 @@ describe("/editor/assignments/[id] +page.server", () => {
 		const remaining = await db.select().from(schema.questions);
 		expect(remaining).toHaveLength(1);
 		expect(remaining[0].text).toBe("Nur eine Frage");
+	});
+
+	it("activate: requires a selected ElevenLabs agent", async ({ db, expect, schema }) => {
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		formData.append("questions", "Frage 1");
+		formData.append("question_classification_ids", "[]");
+		formData.append("question_new_classifications", "[]");
+
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.activate(event as unknown as Parameters<typeof actions.activate>[0]),
+		).resolves.toMatchObject({
+			status: 400,
+			data: { message: "Agent ist erforderlich." },
+		});
 	});
 });

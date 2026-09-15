@@ -5,6 +5,7 @@ import type {
 	GetAgentResponseModel,
 } from "@elevenlabs/elevenlabs-js/api";
 import { error } from "@sveltejs/kit";
+import { z } from "zod";
 import { slugify } from "$lib/slugify";
 
 const QUESTION_KEY_PREFIX = "question_";
@@ -41,10 +42,22 @@ type AgentWriter = {
 	) => Promise<void>;
 };
 
+export type AgentCatalogReader = {
+	list: (request: { tag: string }) => Promise<ElevenLabsAgentCatalogEntry[]>;
+};
+
 export type ElevenLabsAgentTarget = {
 	agentId: string;
 	branchId?: string;
 	workflowNodeId: string;
+};
+
+export type ElevenLabsAgentCatalogEntry = {
+	id: string;
+	name: string;
+	voiceId: string | null;
+	tags: string[];
+	archived: boolean;
 };
 
 export type ElevenLabsEditorAgent = {
@@ -59,8 +72,29 @@ export type ElevenLabsEnv = {
 	ELEVENLABS_AGENT_ID?: string;
 	ELEVENLABS_AGENT_BRANCH_ID?: string;
 	ELEVENLABS_API_KEY?: string;
+	ELEVENLABS_DIALOGBANK_AGENT_TAG?: string;
 	ELEVENLABS_WORKFLOW_NODE_ID?: string;
 };
+
+const agentListResponseSchema = z.object({
+	agents: z
+		.array(
+			z.object({
+				agent_id: z.string(),
+				name: z.string(),
+				voice_id: z.string().nullable().optional(),
+				tags: z.array(z.string()).nullable().optional(),
+				archived: z.boolean().optional(),
+			}),
+		)
+		.default([]),
+	has_more: z.boolean().optional(),
+	next_cursor: z.string().nullable().optional(),
+});
+
+export function resolveElevenLabsDialogbankAgentTag(environment: ElevenLabsEnv): string {
+	return environment.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
+}
 
 export function resolveElevenLabsAgentTarget(environment: ElevenLabsEnv): ElevenLabsAgentTarget {
 	const agentId = environment.ELEVENLABS_AGENT_ID;
@@ -68,6 +102,13 @@ export function resolveElevenLabsAgentTarget(environment: ElevenLabsEnv): Eleven
 		throw error(500, "ELEVENLABS_AGENT_ID is not configured on the server.");
 	}
 
+	return resolveElevenLabsAgentTargetForAgentId(environment, agentId);
+}
+
+export function resolveElevenLabsAgentTargetForAgentId(
+	environment: ElevenLabsEnv,
+	agentId: string,
+): ElevenLabsAgentTarget {
 	const branchId = environment.ELEVENLABS_AGENT_BRANCH_ID;
 	if (!branchId) {
 		throw error(500, "ELEVENLABS_AGENT_BRANCH_ID is not configured on the server.");
@@ -96,6 +137,50 @@ export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentRe
 	};
 }
 
+export function createElevenLabsAgentCatalogReader(environment: ElevenLabsEnv): AgentCatalogReader {
+	const apiKey = environment.ELEVENLABS_API_KEY;
+	if (!apiKey) {
+		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
+	}
+
+	return {
+		list: async ({ tag }) => {
+			const agents: ElevenLabsAgentCatalogEntry[] = [];
+			let cursor: string | undefined;
+
+			do {
+				const url = new URL("https://api.elevenlabs.io/v1/convai/agents");
+				url.searchParams.append("tags", tag);
+				if (cursor) url.searchParams.set("cursor", cursor);
+
+				const response = await fetch(url, {
+					headers: {
+						"xi-api-key": apiKey,
+					},
+				});
+
+				if (!response.ok) {
+					throw error(response.status, `ElevenLabs agents could not be loaded.`);
+				}
+
+				const page = agentListResponseSchema.parse(await response.json());
+				agents.push(
+					...page.agents.map((agent) => ({
+						id: agent.agent_id,
+						name: agent.name,
+						voiceId: agent.voice_id ?? null,
+						tags: agent.tags ?? [],
+						archived: agent.archived ?? false,
+					})),
+				);
+				cursor = page.has_more ? (page.next_cursor ?? undefined) : undefined;
+			} while (cursor);
+
+			return agents.filter((agent) => !agent.archived);
+		},
+	};
+}
+
 export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWriter {
 	const apiKey = environment.ELEVENLABS_API_KEY;
 	if (!apiKey) {
@@ -111,6 +196,14 @@ export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWr
 			await client.conversationalAi.agents.update(agentId, request);
 		},
 	};
+}
+
+export async function listElevenLabsDialogbankAgents(
+	environment: ElevenLabsEnv,
+	reader = createElevenLabsAgentCatalogReader(environment),
+): Promise<ElevenLabsAgentCatalogEntry[]> {
+	const tag = resolveElevenLabsDialogbankAgentTag(environment);
+	return reader.list({ tag });
 }
 
 export function parseQuestionsFromWorkflowNodePrompt(additionalPrompt: string): string[] {

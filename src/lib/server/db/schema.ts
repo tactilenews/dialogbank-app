@@ -17,6 +17,7 @@ export const assignments = pgTable("assignments", {
 	location: text("location"),
 	client: text("client"),
 	promptSupplement: text("prompt_supplement"),
+	elevenLabsAgentId: text("elevenlabs_agent_id"),
 	isActive: boolean("is_active").notNull().default(false),
 	createdAt: timestamp("created_at").defaultNow().notNull(),
 	updatedAt: timestamp("updated_at")

@@ -16,6 +16,14 @@ let { data, form }: { data: PageData; form: ActionData } = $props();
 
 let nextId = $state(0);
 let submitting = $state(false);
+let selectedAgentIsInCatalog = $derived(
+	data.assignment.elevenLabsAgentId
+		? data.agentCatalog.some(
+				(catalogAgent: (typeof data.agentCatalog)[number]) =>
+					catalogAgent.id === data.assignment.elevenLabsAgentId,
+			)
+		: true,
+);
 
 type NewClassification = { label: string; emoji: string | null };
 
@@ -153,6 +161,38 @@ function makeEnhancer() {
 							value={data.assignment.client ?? ""}
 							class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
 						/>
+					</div>
+					<div class="sm:col-span-2">
+						<label for="elevenLabsAgentId" class="mb-1 block text-sm font-medium text-gray-700">
+							Agent *
+						</label>
+						<select
+							id="elevenLabsAgentId"
+							name="elevenLabsAgentId"
+							required
+							class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
+						>
+							<option value="">Agent auswählen</option>
+							{#if data.assignment.elevenLabsAgentId && !selectedAgentIsInCatalog}
+								<option value={data.assignment.elevenLabsAgentId} selected>
+									{data.assignment.elevenLabsAgentId} (nicht im Katalog)
+								</option>
+							{/if}
+							{#each data.agentCatalog as catalogAgent (catalogAgent.id)}
+								<option
+									value={catalogAgent.id}
+									selected={catalogAgent.id === data.assignment.elevenLabsAgentId}
+								>
+									{catalogAgent.name}
+								</option>
+							{/each}
+						</select>
+						{#if data.agentCatalog.length === 0}
+							<p class="mt-1 text-xs text-gray-500">
+								Keine Dialogbank-Agenten gefunden. Markieren Sie geeignete ElevenLabs-Agenten mit
+								dem Tag {data.agentCatalogTag}.
+							</p>
+						{/if}
 					</div>
 					<div class="sm:col-span-2">
 						<label for="promptSupplement" class="mb-1 block text-sm font-medium text-gray-700">
@@ -360,8 +400,8 @@ function makeEnhancer() {
 			</div>
 		{:else}
 			<p class="text-sm text-gray-400">
-				Agent-Konfiguration konnte nicht geladen werden. Stellen Sie sicher, dass
-				ELEVENLABS_AGENT_ID und ELEVENLABS_API_KEY konfiguriert sind.
+				Agent-Konfiguration konnte nicht geladen werden. Wählen Sie einen Agenten aus und
+				stellen Sie sicher, dass ELEVENLABS_API_KEY konfiguriert ist.
 			</p>
 		{/if}
 	</div>

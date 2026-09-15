@@ -9,12 +9,16 @@ import {
 	type AgentReaderResponse,
 	buildQuestionDataCollectionEntries,
 	buildWorkflowNodeAdditionalPrompt,
+	type ElevenLabsAgentCatalogEntry,
 	type ElevenLabsEnv,
 	getElevenLabsEditorAgent,
+	listElevenLabsDialogbankAgents,
 	parseQuestionsFromDataCollection,
 	parseQuestionsFromWorkflowNodePrompt,
 	type Question,
 	resolveElevenLabsAgentTarget,
+	resolveElevenLabsAgentTargetForAgentId,
+	resolveElevenLabsDialogbankAgentTag,
 	updateElevenLabsAgentQuestions,
 } from "./agent";
 
@@ -131,6 +135,62 @@ describe("resolveElevenLabsAgentTarget", () => {
 		}
 
 		throw new Error("Expected resolveElevenLabsAgentTarget to throw");
+	});
+});
+
+describe("resolveElevenLabsAgentTargetForAgentId", () => {
+	it("uses the provided agent id with the configured branch and workflow node ids", () => {
+		expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{
+					ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_main_123",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
+				"agent_assignment_123",
+			),
+		).toEqual({
+			agentId: "agent_assignment_123",
+			branchId: "agtbrch_main_123",
+			workflowNodeId: WORKFLOW_NODE_ID,
+		});
+	});
+});
+
+describe("resolveElevenLabsDialogbankAgentTag", () => {
+	it("returns the configured Dialogbank agent tag", () => {
+		expect(
+			resolveElevenLabsDialogbankAgentTag({
+				ELEVENLABS_DIALOGBANK_AGENT_TAG: "dialogbank-prod",
+			}),
+		).toBe("dialogbank-prod");
+	});
+
+	it("defaults to dialogbank", () => {
+		expect(resolveElevenLabsDialogbankAgentTag({})).toBe("dialogbank");
+	});
+});
+
+describe("listElevenLabsDialogbankAgents", () => {
+	it("loads agents with the configured catalog tag", async () => {
+		const entries: ElevenLabsAgentCatalogEntry[] = [
+			{
+				id: "agent_dialogbank_123",
+				name: "Dialogbank Agent",
+				voiceId: "voice_123",
+				tags: ["dialogbank-prod"],
+				archived: false,
+			},
+		];
+		const list = vi.fn().mockResolvedValue(entries);
+
+		await expect(
+			listElevenLabsDialogbankAgents(
+				{ ELEVENLABS_DIALOGBANK_AGENT_TAG: "dialogbank-prod" },
+				{ list },
+			),
+		).resolves.toEqual(entries);
+
+		expect(list).toHaveBeenCalledWith({ tag: "dialogbank-prod" });
 	});
 });
 
