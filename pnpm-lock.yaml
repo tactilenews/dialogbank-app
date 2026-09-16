@@ -90,8 +90,8 @@ importers:
         specifier: ^0.3.1
         version: 0.3.1(drizzle-orm@0.45.2(@electric-sql/pglite@0.5.8)(@neondatabase/serverless@1.1.0)(@opentelemetry/api@1.9.1)(@prisma/client@5.22.0(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@6.0.3)))(@types/pg@8.18.0)(better-sqlite3@12.6.2)(kysely@0.28.17)(mysql2@3.15.3)(pg@8.20.0)(postgres@3.4.7)(prisma@7.4.2(@types/react@19.2.14)(better-sqlite3@12.6.2)(magicast@0.5.3)(react-dom@19.2.8(react@19.2.8))(react@19.2.8)(typescript@6.0.3)))
       mdsvex:
-        specifier: ^0.12.7
-        version: 0.12.7(svelte@5.56.3(@typescript-eslint/types@8.58.0))
+        specifier: ^0.12.8
+        version: 0.12.8(svelte@5.56.3(@typescript-eslint/types@8.58.0))
       playwright:
         specifier: ^1.60.0
         version: 1.60.0
@@ -3449,8 +3449,8 @@ packages:
     resolution: {integrity: sha512-hXdUTZYIVOt1Ex//jAQi+wTZZpUpwBj/0QsOzqegb3rGMMeJiSEu5xLHnYfBrRV4RH2+OCSOO95Is/7x1WJ4bw==}
     engines: {node: '>=10'}
 
-  mdsvex@0.12.7:
-    resolution: {integrity: sha512-gx4bReLCUvq+MPErHXYeyX+TEq1hsS2KfiZtEOMNTcbibSouFy8AHc5h04KbGCl+g5tLuo4/lbgRVYRnc7bJZw==}
+  mdsvex@0.12.8:
+    resolution: {integrity: sha512-v2sbRA9QWf0tpYWfREI5Kq7OqqrqoUzfmMKbgdOoWGfPDLc1JYU4EgDDF0N9WFhmjFW5agKrYwo/mDVutBKWKw==}
     peerDependencies:
       svelte: ^3.56.0 || ^4.0.0 || ^5.0.0-next.120
 
@@ -7207,7 +7207,7 @@ snapshots:
     dependencies:
       semver: 7.8.5
 
-  mdsvex@0.12.7(svelte@5.56.3(@typescript-eslint/types@8.58.0)):
+  mdsvex@0.12.8(svelte@5.56.3(@typescript-eslint/types@8.58.0)):
     dependencies:
       '@types/mdast': 4.0.4
       '@types/unist': 2.0.11
