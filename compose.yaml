@@ -3,6 +3,9 @@ services:
     image: neondatabase/neon_local:v1.5
     ports:
       - "5432:5432"
+      # Published on the db container because `web` shares its network
+      # namespace (see web.network_mode) instead of getting its own.
+      - "5173:5173"
     environment:
       NEON_API_KEY: ${NEON_API_KEY}
       NEON_PROJECT_ID: ${NEON_PROJECT_ID}
@@ -17,10 +20,12 @@ services:
   web:
     build:
       context: .
-    ports:
-      - "5173:5173"
+    # src/lib/server/db/index.ts switches to Neon's local-proxy HTTP mode
+    # only when DATABASE_URL contains "localhost". Sharing db's network
+    # namespace keeps that true from inside this container too, instead of
+    # rewriting DATABASE_URL to a hostname the app doesn't recognize.
+    network_mode: "service:db"
     environment:
-      - DB_HOST=db
       - DATABASE_URL
       - BETTER_AUTH_SECRET
       - ORIGIN
