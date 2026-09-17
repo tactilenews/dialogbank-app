@@ -10,4 +10,4 @@ RUN pnpm install --frozen-lockfile
 RUN chmod +x ./docker-entrypoint.sh
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
-CMD ["pnpm", "run", "dev", "--", "--host"]
+CMD ["pnpm", "run", "dev", "--host"]
