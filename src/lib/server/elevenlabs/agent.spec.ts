@@ -82,65 +82,94 @@ describe("slugify", () => {
 });
 
 describe("resolveElevenLabsAgentTarget", () => {
-	it("returns the configured agent, branch, and workflow node ids", () => {
+	it("returns the configured agent, branch, and workflow node ids", async () => {
 		const environment: ElevenLabsEnv = {
 			ELEVENLABS_AGENT_ID: "agent_main_123",
 			ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_main_123",
 			ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 		};
 
-		expect(resolveElevenLabsAgentTarget(environment)).toEqual({
+		await expect(resolveElevenLabsAgentTarget(environment)).resolves.toEqual({
 			agentId: "agent_main_123",
 			branchId: "agtbrch_main_123",
 			workflowNodeId: WORKFLOW_NODE_ID,
 		});
 	});
 
-	it("throws when the branch id is missing", () => {
+	it("resolves the development branch by name outside production", async () => {
 		const environment: ElevenLabsEnv = {
 			ELEVENLABS_AGENT_ID: "agent_main_123",
+			ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+		};
+		const branchReader = {
+			list: vi.fn().mockResolvedValue([
+				{ id: "agtbrch_main_123", name: "main", isArchived: false },
+				{ id: "agtbrch_dev_123", name: "development", isArchived: false },
+			]),
 		};
 
-		try {
-			resolveElevenLabsAgentTarget(environment);
-		} catch (thrown) {
-			expect(thrown).toMatchObject({
-				status: 500,
-				body: {
-					message: "ELEVENLABS_AGENT_BRANCH_ID is not configured on the server.",
-				},
-			});
-			return;
-		}
-
-		throw new Error("Expected resolveElevenLabsAgentTarget to throw");
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(environment, "agent_main_123", branchReader),
+		).resolves.toEqual({
+			agentId: "agent_main_123",
+			branchId: "agtbrch_dev_123",
+			workflowNodeId: WORKFLOW_NODE_ID,
+		});
 	});
 
-	it("throws when the workflow node id is missing", () => {
+	it("resolves the main branch by name in production", async () => {
+		const branchReader = {
+			list: vi.fn().mockResolvedValue([
+				{ id: "agtbrch_main_123", name: "main", isArchived: false },
+				{ id: "agtbrch_dev_123", name: "development", isArchived: false },
+			]),
+		};
+
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{
+					NODE_ENV: "production",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
+				"agent_main_123",
+				branchReader,
+			),
+		).resolves.toMatchObject({ branchId: "agtbrch_main_123" });
+	});
+
+	it("rejects when the expected branch is missing", async () => {
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{ ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID },
+				"agent_main_123",
+				{ list: vi.fn().mockResolvedValue([]) },
+			),
+		).rejects.toMatchObject({
+			status: 500,
+			body: {
+				message: 'ElevenLabs branch "development" was not found for agent agent_main_123.',
+			},
+		});
+	});
+
+	it("rejects when the workflow node id is missing", async () => {
 		const environment: ElevenLabsEnv = {
 			ELEVENLABS_AGENT_ID: "agent_main_123",
 			ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_main_123",
 		};
 
-		try {
-			resolveElevenLabsAgentTarget(environment);
-		} catch (thrown) {
-			expect(thrown).toMatchObject({
-				status: 500,
-				body: {
-					message: "ELEVENLABS_WORKFLOW_NODE_ID is not configured on the server.",
-				},
-			});
-			return;
-		}
-
-		throw new Error("Expected resolveElevenLabsAgentTarget to throw");
+		await expect(resolveElevenLabsAgentTarget(environment)).rejects.toMatchObject({
+			status: 500,
+			body: {
+				message: "ELEVENLABS_WORKFLOW_NODE_ID is not configured on the server.",
+			},
+		});
 	});
 });
 
 describe("resolveElevenLabsAgentTargetForAgentId", () => {
-	it("uses the provided agent id with the configured branch and workflow node ids", () => {
-		expect(
+	it("uses the provided agent id with the explicit branch and workflow node ids", async () => {
+		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
 				{
 					ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_main_123",
@@ -148,7 +177,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 				},
 				"agent_assignment_123",
 			),
-		).toEqual({
+		).resolves.toEqual({
 			agentId: "agent_assignment_123",
 			branchId: "agtbrch_main_123",
 			workflowNodeId: WORKFLOW_NODE_ID,
@@ -573,6 +602,27 @@ describe("updateElevenLabsAgentQuestions", () => {
 				type: "string",
 				description: 'Wie hat die Person auf die Frage "Neue Frage?" geantwortet?',
 			},
+		});
+	});
+
+	it("writes the assignment id as a constant data collection value", async () => {
+		const writer = makeWriter();
+		const existingAgent: AgentReaderResponse = {
+			name: "Test",
+			conversationConfig: {},
+			workflow: makeWorkflow("Stelle der Person nacheinander diese Fragen:\n\n1. Frage?"),
+		};
+
+		await updateElevenLabsAgentQuestions(
+			agentTarget,
+			[makeQuestion("Frage?")],
+			existingAgent,
+			writer,
+			{ assignmentId: 42 },
+		);
+
+		expect(writer.update.mock.calls[0][1].platformSettings?.dataCollection).toMatchObject({
+			assignment_id: { type: "string", constantValue: "42" },
 		});
 	});
 

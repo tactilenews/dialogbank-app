@@ -19,7 +19,13 @@ export const it = baseTest.extend<{ db: typeof db; schema: typeof schema; auth: 
 		await seed.reset(db, schema);
 		await db
 			.insert(schema.assignments)
-			.values({ id: 1, name: "Standard", slug: "standard", isActive: true })
+			.values({
+				id: 1,
+				name: "Standard",
+				slug: "standard",
+				isPublished: true,
+				elevenLabsAgentId: "agent_test",
+			})
 			.onConflictDoNothing();
 		await use(db);
 		await seed.reset(db, schema);

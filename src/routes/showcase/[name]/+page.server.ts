@@ -11,11 +11,12 @@ export const load: PageServerLoad = async (event) => {
 	const slug = event.params.name;
 
 	const [assignment] = await db
-		.select({ id: assignments.id, name: assignments.name })
+		.select({ id: assignments.id, name: assignments.name, isPublished: assignments.isPublished })
 		.from(assignments)
 		.where(eq(assignments.slug, slug))
 		.limit(1);
 	if (!assignment) error(404, "Einsatz nicht gefunden.");
+	if (!assignment.isPublished && !event.locals.user) error(404, "Einsatz nicht gefunden.");
 
 	const [conversationCountRow] = await db
 		.select({ count: sql<number>`count(*)` })

@@ -9,7 +9,7 @@ test.describe("Showcase E2E", () => {
 		await db.insert(schema.classifications).values(classifications);
 		await db.insert(schema.answers).values(answers);
 
-		await page.goto("/showcase", { waitUntil: "networkidle" });
+		await page.goto("/showcase/standard", { waitUntil: "networkidle" });
 
 		await expect(page.getByTestId("stat-guests")).toContainText("1");
 		await expect(page.getByTestId("stat-answers")).toContainText("2");
@@ -39,7 +39,7 @@ test.describe("Showcase E2E", () => {
 		await db.insert(schema.classifications).values(classifications);
 		await db.insert(schema.answers).values(answers);
 
-		await page.goto("/showcase", { waitUntil: "networkidle" });
+		await page.goto("/showcase/standard", { waitUntil: "networkidle" });
 
 		const quoteCard = page.locator('[data-testid="current-quote"]:not([inert])');
 		const initialText = (await quoteCard.textContent())?.trim() ?? "";
@@ -56,7 +56,7 @@ test.describe("Showcase E2E", () => {
 		void db; // trigger database teardown because the following steps write to the database
 
 		// Navigate to an empty showcase page
-		await page.goto("/showcase", { waitUntil: "networkidle" });
+		await page.goto("/showcase/standard", { waitUntil: "networkidle" });
 
 		// Verify baseline: guests stat shows 0
 		await expect(page.getByTestId("stat-guests")).toContainText("0");
@@ -66,10 +66,15 @@ test.describe("Showcase E2E", () => {
 			type: "post_call_transcription",
 			data: {
 				conversation_id: "e2e-conv-auto-refresh",
-				agent_id: "e2e-agent-auto-refresh",
+				agent_id: process.env.ELEVENLABS_AGENT_ID,
 				analysis: {
 					transcript_summary: "Auto-refresh test summary",
 					data_collection_results: {
+						assignment_id: {
+							data_collection_id: "assignment_id",
+							value: "1",
+							rationale: "Configured assignment",
+						},
 						first_name: {
 							data_collection_id: "first_name",
 							value: "Anna",

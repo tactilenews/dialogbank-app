@@ -271,7 +271,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 		expect(remaining[0].text).toBe("Nur eine Frage");
 	});
 
-	it("activate: requires a selected ElevenLabs agent", async ({ db, expect, schema }) => {
+	it("publish: requires a selected ElevenLabs agent", async ({ db, expect, schema }) => {
 		const formData = new FormData();
 		formData.append("name", "Standard");
 		formData.append("questions", "Frage 1");
@@ -288,10 +288,33 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 
 		await expect(
-			actions.activate(event as unknown as Parameters<typeof actions.activate>[0]),
+			actions.publish(event as unknown as Parameters<typeof actions.publish>[0]),
 		).resolves.toMatchObject({
 			status: 400,
 			data: { message: "Agent ist erforderlich." },
 		});
+	});
+
+	it("unpublish: removes the assignment from the public selection", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/unpublish", {
+				method: "POST",
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.unpublish(event as unknown as Parameters<typeof actions.unpublish>[0]),
+		).resolves.toMatchObject({ success: true, action: "unpublish" });
+
+		const assignment = await db.query.assignments.findFirst({
+			where: (row, { eq }) => eq(row.id, 1),
+		});
+		expect(assignment?.isPublished).toBe(false);
 	});
 });

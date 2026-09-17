@@ -59,6 +59,30 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(answers).toHaveLength(0);
 		});
 
+		it("parses a constant assignment id without storing it as an answer", ({ expect }) => {
+			const payload = {
+				...mockPayload,
+				data: {
+					...mockPayload.data,
+					analysis: {
+						...mockPayload.data.analysis,
+						data_collection_results: {
+							assignment_id: {
+								data_collection_id: "assignment_id",
+								value: "42",
+								rationale: "Configured assignment",
+							},
+						},
+					},
+				},
+			};
+
+			const result = parseElevenLabsWebhook(payload);
+
+			expect(result.assignmentId).toBe(42);
+			expect(result.answers).toHaveLength(0);
+		});
+
 		it("parses real sample data (samplePayload1 - empty results)", ({ expect }) => {
 			const data = parseElevenLabsWebhook(samplePayload1);
 
@@ -76,6 +100,7 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(data.conversation.lastName).toBe("Haarmaan");
 			expect(data.conversation.age).toBe(49);
 			expect(data.conversation.publicationAllowed).toBe(true);
+			expect(data.assignmentId).toBe(1);
 
 			const answer1 = data.answers.find((r) => r.dataCollectionId === "answer_1");
 			expect(answer1).toBeDefined();

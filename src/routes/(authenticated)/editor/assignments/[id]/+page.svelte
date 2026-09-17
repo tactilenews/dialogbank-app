@@ -113,9 +113,9 @@ function makeEnhancer() {
 	<div class="mb-6 flex items-center gap-3">
 		<a href={resolve("/editor/assignments")} class="text-sm text-gray-500 hover:text-gray-900">← Einsätze</a>
 		<h1 class="text-3xl font-bold">{data.assignment.name}</h1>
-		{#if data.assignment.isActive}
+		{#if data.assignment.isPublished}
 			<span class="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
-				AKTIV
+				VERÖFFENTLICHT
 			</span>
 		{/if}
 	</div>
@@ -338,7 +338,7 @@ function makeEnhancer() {
 					</button>
 					<button
 						type="submit"
-						formaction="?/activate"
+						formaction="?/publish"
 						class="flex items-center gap-2 rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
 					>
 						{#if submitting}
@@ -347,8 +347,18 @@ function makeEnhancer() {
 								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
 							</svg>
 						{/if}
-						Aktivieren & Agent konfigurieren
+						Veröffentlichen & Agent konfigurieren
 					</button>
+					{#if data.assignment.isPublished}
+						<button
+							type="submit"
+							formaction="?/unpublish"
+							formnovalidate
+							class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+						>
+							Veröffentlichung beenden
+						</button>
+					{/if}
 
 					{#if form?.message}
 						<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">

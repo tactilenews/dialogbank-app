@@ -42,6 +42,10 @@ type AgentWriter = {
 	) => Promise<void>;
 };
 
+export type AgentBranchReader = {
+	list: (agentId: string) => Promise<Array<{ id: string; name: string; isArchived: boolean }>>;
+};
+
 export type AgentCatalogReader = {
 	list: (request: { tag: string }) => Promise<ElevenLabsAgentCatalogEntry[]>;
 };
@@ -74,6 +78,7 @@ export type ElevenLabsEnv = {
 	ELEVENLABS_API_KEY?: string;
 	ELEVENLABS_DIALOGBANK_AGENT_TAG?: string;
 	ELEVENLABS_WORKFLOW_NODE_ID?: string;
+	NODE_ENV?: string;
 };
 
 const agentListResponseSchema = z.object({
@@ -96,7 +101,9 @@ export function resolveElevenLabsDialogbankAgentTag(environment: ElevenLabsEnv):
 	return environment.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
 }
 
-export function resolveElevenLabsAgentTarget(environment: ElevenLabsEnv): ElevenLabsAgentTarget {
+export async function resolveElevenLabsAgentTarget(
+	environment: ElevenLabsEnv,
+): Promise<ElevenLabsAgentTarget> {
 	const agentId = environment.ELEVENLABS_AGENT_ID;
 	if (!agentId) {
 		throw error(500, "ELEVENLABS_AGENT_ID is not configured on the server.");
@@ -105,13 +112,20 @@ export function resolveElevenLabsAgentTarget(environment: ElevenLabsEnv): Eleven
 	return resolveElevenLabsAgentTargetForAgentId(environment, agentId);
 }
 
-export function resolveElevenLabsAgentTargetForAgentId(
+export async function resolveElevenLabsAgentTargetForAgentId(
 	environment: ElevenLabsEnv,
 	agentId: string,
-): ElevenLabsAgentTarget {
-	const branchId = environment.ELEVENLABS_AGENT_BRANCH_ID;
+	branchReader?: AgentBranchReader,
+): Promise<ElevenLabsAgentTarget> {
+	let branchId = environment.ELEVENLABS_AGENT_BRANCH_ID;
 	if (!branchId) {
-		throw error(500, "ELEVENLABS_AGENT_BRANCH_ID is not configured on the server.");
+		const branchName = environment.NODE_ENV === "production" ? "main" : "development";
+		const reader = branchReader ?? createElevenLabsAgentBranchReader(environment);
+		const branches = await reader.list(agentId);
+		branchId = branches.find((branch) => !branch.isArchived && branch.name === branchName)?.id;
+		if (!branchId) {
+			throw error(500, `ElevenLabs branch "${branchName}" was not found for agent ${agentId}.`);
+		}
 	}
 
 	const workflowNodeId = environment.ELEVENLABS_WORKFLOW_NODE_ID;
@@ -120,6 +134,24 @@ export function resolveElevenLabsAgentTargetForAgentId(
 	}
 
 	return { agentId, branchId, workflowNodeId };
+}
+
+export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): AgentBranchReader {
+	const apiKey = environment.ELEVENLABS_API_KEY;
+	if (!apiKey) {
+		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
+	}
+
+	const client = new ElevenLabsClient({ apiKey });
+	return {
+		list: async (agentId) => {
+			const response = await client.conversationalAi.agents.branches.list(agentId, {
+				includeArchived: false,
+				limit: 100,
+			});
+			return response.results;
+		},
+	};
 }
 
 export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentReader {
@@ -317,7 +349,7 @@ export async function updateElevenLabsAgentQuestions(
 	questions: Question[],
 	existingAgent: AgentReaderResponse,
 	writer: AgentWriter,
-	options?: { promptSupplement?: string | null },
+	options?: { promptSupplement?: string | null; assignmentId?: number },
 ): Promise<void> {
 	const existingWorkflow = existingAgent.workflow;
 	const existingNode = existingWorkflow?.nodes[target.workflowNodeId];
@@ -357,6 +389,14 @@ export async function updateElevenLabsAgentQuestions(
 	const newDataCollection = {
 		...baseDataCollection,
 		...buildQuestionDataCollectionEntries(questions),
+		...(options?.assignmentId === undefined
+			? {}
+			: {
+					assignment_id: {
+						type: "string" as const,
+						constantValue: String(options.assignmentId),
+					},
+				}),
 	};
 
 	await writer.update(target.agentId, {

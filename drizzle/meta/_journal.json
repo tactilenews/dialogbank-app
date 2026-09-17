@@ -120,6 +120,13 @@
 			"when": 1789507984881,
 			"tag": "0016_add_assignment_agent",
 			"breakpoints": true
+		},
+		{
+			"idx": 17,
+			"version": "7",
+			"when": 1789637446721,
+			"tag": "0017_publish_assignments",
+			"breakpoints": true
 		}
 	]
 }

@@ -67,6 +67,21 @@ describe("ElevenLabs Storage", () => {
 		);
 	});
 
+	it("keeps attribution when an assignment moves to another agent", async ({ db, expect }) => {
+		const payload = {
+			...samplePayload2,
+			data: {
+				...samplePayload2.data,
+				agent_id: "agent_previous",
+				conversation_id: "conversation_from_previous_agent",
+			},
+		};
+
+		await expect(processElevenLabsPostCall({ db, payload })).resolves.toMatchObject({
+			conversationId: "conversation_from_previous_agent",
+		});
+	});
+
 	it("creates a classification and links it to the answer via classificationId", async ({
 		db,
 		expect,

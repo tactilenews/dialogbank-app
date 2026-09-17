@@ -3,6 +3,17 @@ import { load } from "./[name]/+page.server";
 import { sampleAnswers, sampleClassifications, sampleConversations } from "./page.server.spec/data";
 
 describe("/showcase/[name] +page.server", () => {
+	it("hides unpublished assignments from anonymous visitors", async ({ db, expect, schema }) => {
+		await db.update(schema.assignments).set({ isPublished: false });
+
+		const resultPromise = load({
+			locals: { user: null, db, schema },
+			params: { name: "standard" },
+		} as unknown as Parameters<typeof load>[0]);
+
+		await expect(resultPromise).rejects.toMatchObject({ status: 404 });
+	});
+
 	it("returns counts and published quotes", async ({ db, expect, schema }) => {
 		await expect(
 			db.insert(schema.conversations).values(sampleConversations),
@@ -111,6 +122,7 @@ describe("/showcase/[name] +page.server", () => {
 				id: 2,
 				name: "standard",
 				slug: "standard-2",
+				isPublished: true,
 			}),
 		).resolves.toBeDefined();
 		await expect(

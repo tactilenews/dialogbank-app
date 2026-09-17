@@ -33,6 +33,11 @@ export const elevenLabsWebhookSchema = z.object({
 	data: z.object({
 		conversation_id: z.string(),
 		agent_id: z.string(),
+		conversation_initiation_client_data: z
+			.object({
+				dynamic_variables: z.record(z.string(), z.unknown()).optional(),
+			})
+			.optional(),
 		analysis: z.object({
 			transcript_summary: z.string().optional().nullable(),
 			data_collection_results: z.record(z.string(), elevenLabsDataPointSchema).default({}),
@@ -49,7 +54,8 @@ export type ElevenLabsWebhookPayload = z.infer<typeof elevenLabsWebhookSchema>;
  */
 export function parseElevenLabsWebhook(payload: unknown) {
 	const validated = elevenLabsWebhookSchema.parse(payload);
-	const { conversation_id, agent_id, analysis } = validated.data;
+	const { conversation_id, agent_id, analysis, conversation_initiation_client_data } =
+		validated.data;
 
 	const callSuccessful = analysis.call_successful ?? null;
 	const summary = analysis.transcript_summary ?? null;
@@ -59,6 +65,9 @@ export function parseElevenLabsWebhook(payload: unknown) {
 	let lastName: string | null = null;
 	let age: number | null = null;
 	let publicationAllowed: boolean | null = null;
+	let assignmentId = parseAssignmentId(
+		conversation_initiation_client_data?.dynamic_variables?.assignment_id,
+	);
 
 	const classificationByIndex: Record<number, string> = {};
 	const rawAnswers: {
@@ -82,6 +91,9 @@ export function parseElevenLabsWebhook(payload: unknown) {
 		}
 
 		switch (id) {
+			case "assignment_id":
+				assignmentId ??= parseAssignmentId(val);
+				break;
 			case "first_name":
 				firstName = val as string;
 				break;
@@ -115,6 +127,7 @@ export function parseElevenLabsWebhook(payload: unknown) {
 	});
 
 	return {
+		assignmentId,
 		conversation: {
 			agentId: agent_id,
 			conversationId: conversation_id,
@@ -127,4 +140,10 @@ export function parseElevenLabsWebhook(payload: unknown) {
 		},
 		answers: otherAnswers,
 	};
+}
+
+function parseAssignmentId(value: unknown): number | null {
+	const parsed =
+		typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
+	return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }

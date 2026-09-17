@@ -1,6 +1,6 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error, fail } from "@sveltejs/kit";
-import { asc, eq, sql } from "drizzle-orm";
+import { asc, eq, or, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
@@ -269,7 +269,7 @@ export const load = withAuthenticatedLoad<
 
 	try {
 		if (!assignment.elevenLabsAgentId) throw new Error("No assignment agent selected.");
-		const agentTarget = resolveElevenLabsAgentTargetForAgentId(
+		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
 			process.env,
 			assignment.elevenLabsAgentId,
 		);
@@ -315,7 +315,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		return { success: true, action: "save", message: "Einsatz gespeichert." };
 	},
 
-	activate: async (event) => {
+	publish: async (event) => {
 		const id = parseInt(event.params.id, 10);
 		if (Number.isNaN(id)) throw error(404, "Einsatz nicht gefunden.");
 
@@ -361,7 +361,10 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				.filter(Boolean),
 		}));
 
-		const agentTarget = resolveElevenLabsAgentTargetForAgentId(process.env, elevenLabsAgentId);
+		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
+			process.env,
+			elevenLabsAgentId,
+		);
 		const reader = createElevenLabsAgentReader(process.env);
 		const writer = createElevenLabsAgentWriter(process.env);
 
@@ -381,7 +384,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				elevenLabsQuestions,
 				existingAgent,
 				writer,
-				{ promptSupplement },
+				{ promptSupplement, assignmentId: id },
 			);
 		} catch (e) {
 			if (!(e instanceof ElevenLabsError)) throw e;
@@ -390,12 +393,31 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			});
 		}
 
-		await event.locals.db.update(assignments).set({ isActive: sql`(${assignments.id} = ${id})` });
+		await event.locals.db
+			.update(assignments)
+			.set({ isPublished: sql`(${assignments.id} = ${id})` })
+			.where(or(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, elevenLabsAgentId)));
 
 		return {
 			success: true,
-			action: "activate",
-			message: "Einsatz aktiviert und Agent konfiguriert.",
+			action: "publish",
+			message: "Einsatz veröffentlicht und Agent konfiguriert.",
+		};
+	},
+
+	unpublish: async (event) => {
+		const id = parseInt(event.params.id, 10);
+		if (Number.isNaN(id)) throw error(404, "Einsatz nicht gefunden.");
+
+		await event.locals.db
+			.update(assignments)
+			.set({ isPublished: false })
+			.where(eq(assignments.id, id));
+
+		return {
+			success: true,
+			action: "unpublish",
+			message: "Einsatz nicht mehr veröffentlicht.",
 		};
 	},
 });

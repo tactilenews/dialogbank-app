@@ -10,10 +10,15 @@ test.describe("ElevenLabs Webhook E2E", () => {
 			type: "post_call_transcription",
 			data: {
 				conversation_id: "e2e-conv-fritz",
-				agent_id: "e2e-agent-fritz",
+				agent_id: process.env.ELEVENLABS_AGENT_ID,
 				analysis: {
 					transcript_summary: "Fritz interview summary",
 					data_collection_results: {
+						assignment_id: {
+							data_collection_id: "assignment_id",
+							value: "1",
+							rationale: "Configured assignment",
+						},
 						first_name: {
 							data_collection_id: "first_name",
 							value: "Fritz",
@@ -68,7 +73,7 @@ test.describe("ElevenLabs Webhook E2E", () => {
 			throw new Error("storedConversation is undefined");
 		}
 		expect(storedConversation).toMatchObject({
-			agentId: "e2e-agent-fritz",
+			agentId: process.env.ELEVENLABS_AGENT_ID,
 			conversationId: "e2e-conv-fritz",
 			firstName: "Fritz",
 			lastName: "Haarmaan",
@@ -98,10 +103,15 @@ test.describe("ElevenLabs Webhook E2E", () => {
 			type: "post_call_transcription",
 			data: {
 				conversation_id: "e2e-conv-classification",
-				agent_id: "e2e-agent-classification",
+				agent_id: process.env.ELEVENLABS_AGENT_ID,
 				analysis: {
 					transcript_summary: "Classification test summary",
 					data_collection_results: {
+						assignment_id: {
+							data_collection_id: "assignment_id",
+							value: "1",
+							rationale: "Configured assignment",
+						},
 						question_0: {
 							data_collection_id: "question_0",
 							value: "Ich hätte gerne mehr Grünflächen in der Innenstadt.",

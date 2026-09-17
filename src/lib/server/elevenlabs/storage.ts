@@ -30,24 +30,40 @@ export async function processElevenLabsPostCall({ db, payload }: StorageInput): 
 	const data = parseElevenLabsWebhook(payload);
 	const conversationBase = data.conversation;
 
-	const [active] = await db
-		.select({ id: assignments.id })
-		.from(assignments)
-		.where(eq(assignments.isActive, true))
-		.limit(1);
+	let assignmentId: number | null = null;
+	if (data.assignmentId !== null) {
+		const [assignment] = await db
+			.select({ id: assignments.id })
+			.from(assignments)
+			.where(eq(assignments.id, data.assignmentId))
+			.limit(1);
+		assignmentId = assignment?.id ?? null;
+	} else {
+		const matches = await db
+			.select({ id: assignments.id })
+			.from(assignments)
+			.where(eq(assignments.elevenLabsAgentId, conversationBase.agentId))
+			.limit(2);
+		assignmentId = matches.length === 1 ? matches[0].id : null;
+	}
 
-	if (!active) {
-		Sentry.captureMessage("No active assignment configured; conversation not stored", {
-			level: "error",
-			extra: { conversationId: conversationBase.conversationId },
-		});
+	if (assignmentId === null) {
+		Sentry.captureMessage(
+			"Conversation assignment could not be resolved; conversation not stored",
+			{
+				level: "error",
+				extra: {
+					conversationId: conversationBase.conversationId,
+					agentId: conversationBase.agentId,
+					assignmentId: data.assignmentId,
+				},
+			},
+		);
 		consola.error(
-			`No active assignment configured; conversation ${conversationBase.conversationId} not stored`,
+			`Assignment for conversation ${conversationBase.conversationId} could not be resolved`,
 		);
 		return null;
 	}
-
-	const assignmentId = active.id;
 
 	try {
 		// Use dbAtomic to run both inserts in the best available atomic mode
