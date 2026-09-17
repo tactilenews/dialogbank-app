@@ -78,15 +78,18 @@ Install dependencies:
 pnpm install
 ```
 
-Start the local services:
+Start the database and app:
 
 ```sh
 infisical run --env dev -- docker compose up
 ```
 
-Start the app:
+This starts the local Neon proxy (`db`) and the app (`web`) together. The `web` container waits for `db` to accept connections, applies any pending migrations, then starts the dev server on `http://localhost:5173`.
+
+Alternatively, run the app directly on the host (useful for faster iteration without a rebuild):
 
 ```sh
+infisical run --env dev -- docker compose up db
 infisical run --env dev -- pnpm run dev
 ```
 
@@ -99,9 +102,9 @@ infisical run --env prod -- pnpm run build
 infisical run --env prod -- pnpm run preview
 ```
 
-Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of production. In the normal case, you do not need to run migrations after startup if production is already up to date.
+Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of production, so in the normal case there is nothing new to migrate.
 
-Only run migrations when you have created new local migrations that are not yet reflected in the copied production schema:
+The `web` container applies pending migrations automatically on startup, so this only matters when running the app on the host instead. In that case, run migrations manually whenever you have created new local migrations that are not yet reflected in the copied production schema:
 
 ```sh
 infisical run --env dev -- pnpm run db:migrate
