@@ -34,6 +34,10 @@ services:
       - /app/node_modules
     tty: true
     stdin_open: true
+    # Open Playwright's UI mode instead of running tests immediately. It
+    # serves over HTTP (no port publishing needed thanks to network_mode:
+    # host) — open http://localhost:9323 once the container logs its URL.
+    command: ["./e2e/test-e2e.sh", "--ui", "--ui-host", "0.0.0.0", "--ui-port", "9323"]
     depends_on:
       db_e2e:
         condition: service_healthy

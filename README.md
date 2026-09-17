@@ -130,7 +130,7 @@ Run the full E2E flow, including the dedicated E2E database, interactively in on
 infisical run --env test -- docker compose -f compose.e2e.yaml up
 ```
 
-This starts `db_e2e`, waits for it to accept connections, applies pending migrations, creates an ephemeral ElevenLabs agent branch, and runs Playwright against it. The ElevenLabs branch is deleted again on exit (including Ctrl-C).
+This starts `db_e2e`, waits for it to accept connections, applies pending migrations, creates an ephemeral ElevenLabs agent branch, and opens [Playwright's UI mode](https://playwright.dev/docs/test-ui-mode) instead of running tests immediately — open `http://localhost:9323` to pick and run tests interactively. The ElevenLabs branch is deleted again once the container stops (including Ctrl-C).
 
 Alternatively, run the services and the test runner separately (useful for repeated local runs without rebuilding the container):
 
