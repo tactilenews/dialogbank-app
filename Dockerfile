@@ -7,12 +7,16 @@ WORKDIR /app
 COPY . .
 RUN pnpm install --frozen-lockfile && chmod +x ./docker-entrypoint.sh
 
-# node:*-slim images ship a preexisting non-root "node" user (uid/gid 1000,
-# the common default for a single-user Linux/WSL install). Without this, the
-# process runs as root and writes into the bind-mounted repo (.svelte-kit,
-# etc.) come back root-owned on the host.
-RUN chown -R node:node /app
-USER node
+# Deliberately stays root. This project's dev setup runs on rootless Docker,
+# where container uid 0 is transparently remapped to the real host user (the
+# whole point of rootless Docker), so root-owned writes into the bind mount
+# (.svelte-kit, etc.) already come back owned by the host user correctly. A
+# non-root container user instead maps into an unrelated subordinate uid
+# range with no access to the bind mount at all — confirmed this breaks
+# writes entirely, not just "wrong owner". On classic (rootful) Docker this
+# reasoning flips and root-in-container is a real problem; there's no single
+# Dockerfile setting correct for both, so this repo's dev flow assumes
+# rootless Docker rather than guessing.
 
 ENTRYPOINT ["./docker-entrypoint.sh"]
 CMD ["pnpm", "run", "dev", "--host"]

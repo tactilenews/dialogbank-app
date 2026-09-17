@@ -97,8 +97,9 @@ Local development runs entirely in Docker; there is no host-based alternative, s
 
 ```sh
 docker compose run --rm migrate
-docker compose run --rm -e SEED_USER_PASSWORD='replace-me' web pnpm run db:seed
 ```
+
+`pnpm run db:seed` doesn't work this way yet: `src/scripts/seed.ts` shells out to the `infisical` CLI itself to read account credentials, which isn't installed in the image and wouldn't have an authenticated session there anyway. Seeding the containerized dev database isn't currently supported; see [Database Seeding](#database-seeding) below.
 
 Building and previewing a production bundle still runs on the host against the real database:
 

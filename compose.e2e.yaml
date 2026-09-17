@@ -33,8 +33,6 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    tty: true
-    stdin_open: true
     # Open Playwright's UI mode instead of running tests immediately. Bound
     # to loopback only: with network_mode: host, --ui-host 0.0.0.0 would
     # expose this unauthenticated runner (and the ElevenLabs/DB credentials
