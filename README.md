@@ -34,7 +34,7 @@ The main user-facing areas are:
 This project intentionally uses different database/runtime setups by environment:
 
 - Production: Netlify serverless functions with Neon via `drizzle-orm/neon-http`
-- Development: local Neon proxy/container on port `5432`
+- Development: local Neon proxy container, reachable only from other containers (not published to the host)
 - E2E: separate local Neon proxy/container on port `5433`
 - Vitest integration tests: in-memory PGlite for fast, isolated tests
 
@@ -78,38 +78,35 @@ Install dependencies:
 pnpm install
 ```
 
-Start the database and app:
+Start everything:
 
 ```sh
 infisical run --env dev -- docker compose up
 ```
 
-This starts the local Neon proxy (`db`) and the app (`web`) together. The `web` container waits for `db` to accept connections, applies any pending migrations, then starts the dev server on `http://localhost:5173`.
+This starts three containers:
 
-Alternatively, run the app directly on the host (useful for faster iteration without a rebuild):
+- `db`: the local Neon proxy. Its Postgres port is not published to the host — only other containers can reach it.
+- `web`: waits for `db` to accept connections, applies any pending migrations, then starts the dev server on `http://localhost:5173`.
+- `studio`: waits for `db`, applies any pending migrations, then starts [Drizzle Studio](https://orm.drizzle.team/drizzle-studio/overview) so you can browse the database from your host. Open the URL printed in its logs (`docker compose logs studio`, typically `https://local.drizzle.studio?host=0.0.0.0`) in a browser.
+
+`web` and `studio` fail immediately (exit non-zero) if `DATABASE_URL` is missing or migrations fail, rather than starting in a broken state — check `docker compose logs <service>` if a container isn't coming up.
+
+Local development runs entirely in Docker; there is no host-based alternative, since the database is only reachable from inside the compose network. To run one-off commands against the dev database, use `docker compose exec`:
 
 ```sh
-infisical run --env dev -- docker compose up db
-infisical run --env dev -- pnpm run dev
+docker compose exec web pnpm run db:migrate
+docker compose exec -e SEED_USER_PASSWORD='replace-me' web pnpm run db:seed
 ```
 
-Useful local commands:
+Building and previewing a production bundle still runs on the host against the real database:
 
 ```sh
-infisical run --env dev -- pnpm run db:studio
-infisical run --env dev -- pnpm run db:seed
 infisical run --env prod -- pnpm run build
 infisical run --env prod -- pnpm run preview
 ```
 
-Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of production, so in the normal case there is nothing new to migrate.
-
-The `web` container applies pending migrations automatically on startup, so this only matters when running the app on the host instead. In that case, run migrations manually whenever you have created new local migrations that are not yet reflected in the copied production schema:
-
-```sh
-infisical run --env dev -- pnpm run db:migrate
-infisical run --env test -- pnpm run db:migrate
-```
+Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of production, so in the normal case there is nothing new to migrate — `web`'s and `studio`'s automatic migration step is a no-op then.
 
 ## Testing
 
