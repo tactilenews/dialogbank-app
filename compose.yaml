@@ -1,12 +1,7 @@
 services:
   db:
     image: neondatabase/neon_local:v1.5
-    # No Postgres port published: db is only reachable from other containers.
-    # 5173 and 4983 belong to web/studio, published here because they share
-    # this container's network namespace instead of getting their own.
-    ports:
-      - "5173:5173"
-      - "4983:4983"
+    # No ports published: db is only reachable from other containers.
     environment:
       NEON_API_KEY: ${NEON_API_KEY}
       NEON_PROJECT_ID: ${NEON_PROJECT_ID}
@@ -21,12 +16,10 @@ services:
   web:
     build:
       context: .
-    # src/lib/server/db/index.ts switches to Neon's local-proxy HTTP mode
-    # only when DATABASE_URL contains "localhost". Sharing db's network
-    # namespace keeps that true from inside this container too, instead of
-    # rewriting DATABASE_URL to a hostname the app doesn't recognize.
-    network_mode: "service:db"
+    ports:
+      - "5173:5173"
     environment:
+      - DB_HOST=db
       - DATABASE_URL
       - BETTER_AUTH_SECRET
       - ORIGIN
@@ -45,14 +38,14 @@ services:
   studio:
     build:
       context: .
-    # Same reasoning as web: stay on db's "localhost" so DATABASE_URL never
-    # needs to change between host-oriented secrets and container networking.
-    network_mode: "service:db"
+    ports:
+      - "4983:4983"
     # `pnpm run db:studio` binds drizzle-kit to 127.0.0.1 despite its --help
     # claiming 0.0.0.0 is the default, so it's unreachable through the
     # published port. Call the binary directly and force the bind address.
     command: ["pnpm", "exec", "drizzle-kit", "studio", "--host", "0.0.0.0"]
     environment:
+      - DB_HOST=db
       - DATABASE_URL
     volumes:
       - .:/app
