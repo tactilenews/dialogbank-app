@@ -2,3 +2,7 @@ node_modules
 .svelte-kit
 build
 .git
+.env
+.env.*
+!.env.example
+!.env.test

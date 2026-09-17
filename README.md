@@ -84,19 +84,20 @@ Start everything:
 infisical run --env dev -- docker compose up
 ```
 
-This starts three containers:
+This starts four containers:
 
 - `db`: the local Neon proxy. Its Postgres port is not published to the host — only other containers can reach it.
-- `web`: waits for `db` to accept connections, applies any pending migrations, then starts the dev server on `http://localhost:5173`.
-- `studio`: waits for `db`, applies any pending migrations, then starts [Drizzle Studio](https://orm.drizzle.team/drizzle-studio/overview) so you can browse the database from your host. Open the URL printed in its logs (`docker compose logs studio`, typically `https://local.drizzle.studio?host=0.0.0.0`) in a browser.
+- `migrate`: waits for `db` to accept connections, applies any pending migrations, then exits. `web` and `studio` both wait for this to finish successfully before starting, instead of each applying migrations themselves — that would race two containers against the same pending migration.
+- `web`: the dev server on `http://localhost:5173`.
+- `studio`: [Drizzle Studio](https://orm.drizzle.team/drizzle-studio/overview) so you can browse the database from your host, bound to `127.0.0.1` only (it's an unauthenticated database UI). Open the URL printed in its logs (`docker compose logs studio`, typically `https://local.drizzle.studio?host=0.0.0.0`) in a browser.
 
-`web` and `studio` fail immediately (exit non-zero) if `DATABASE_URL` is missing or migrations fail, rather than starting in a broken state — check `docker compose logs <service>` if a container isn't coming up.
+`migrate` fails immediately (exit non-zero) if `DATABASE_URL` is missing or migrations fail, rather than letting `web`/`studio` start in a broken state — check `docker compose logs <service>` if a container isn't coming up.
 
-Local development runs entirely in Docker; there is no host-based alternative, since the database is only reachable from inside the compose network. To run one-off commands against the dev database, use `docker compose exec`:
+Local development runs entirely in Docker; there is no host-based alternative, since the database is only reachable from inside the compose network. To run one-off commands against the dev database, use `docker compose run --rm` (not `exec` — a running container's already-started process won't see the container-internal database hostname rewrite that happens once at startup):
 
 ```sh
-docker compose exec web pnpm run db:migrate
-docker compose exec -e SEED_USER_PASSWORD='replace-me' web pnpm run db:seed
+docker compose run --rm migrate
+docker compose run --rm -e SEED_USER_PASSWORD='replace-me' web pnpm run db:seed
 ```
 
 Building and previewing a production bundle still runs on the host against the real database:
@@ -106,7 +107,7 @@ infisical run --env prod -- pnpm run build
 infisical run --env prod -- pnpm run preview
 ```
 
-Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of production, so in the normal case there is nothing new to migrate — `web`'s and `studio`'s automatic migration step is a no-op then.
+Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of production, so in the normal case there is nothing new to migrate — `migrate` is then a no-op.
 
 ## Testing
 

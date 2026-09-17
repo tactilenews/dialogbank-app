@@ -5,12 +5,20 @@ set -eu
 # for host-based `pnpm run dev` but not from inside this container, where the
 # database is reachable via the compose service name instead. Set DB_HOST to
 # that service name; leave it unset (e.g. for network_mode: host) to keep
-# DATABASE_URL as-is.
+# DATABASE_URL as-is. Matches the hostname generically (whatever it is, with
+# or without a port) rather than the literal "localhost:" text, so it also
+# covers "127.0.0.1" or a default-port URL.
 if [ -n "${DATABASE_URL:-}" ] && [ -n "${DB_HOST:-}" ]; then
-	DATABASE_URL=$(echo "$DATABASE_URL" | sed "s/@localhost:/@${DB_HOST}:/")
+	DATABASE_URL=$(echo "$DATABASE_URL" | sed -E "s#(@)[^:/]+#\1${DB_HOST}#")
 	export DATABASE_URL
 fi
 
-pnpm run db:migrate
+# Opt-in so multiple services depending on the same database (web, studio)
+# don't race each other running migrations concurrently on startup. Set by
+# the dedicated one-shot `migrate` service, or by services that are the only
+# consumer of their database (e.g. e2e).
+if [ "${RUN_MIGRATIONS:-}" = "true" ]; then
+	pnpm run db:migrate
+fi
 
 exec "$@"
