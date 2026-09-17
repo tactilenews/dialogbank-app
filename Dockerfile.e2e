@@ -1,0 +1,13 @@
+FROM mcr.microsoft.com/playwright:v1.60.0-noble
+
+RUN corepack enable && corepack prepare pnpm@11.22.0 --activate
+
+WORKDIR /app
+
+COPY . .
+RUN pnpm install --frozen-lockfile
+
+RUN chmod +x ./docker-entrypoint.sh ./e2e/test-e2e.sh
+
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["./e2e/test-e2e.sh"]

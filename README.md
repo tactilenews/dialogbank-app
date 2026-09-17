@@ -127,10 +127,18 @@ infisical run --env test -- pnpm run test
 infisical run --env test -- pnpm run test:e2e
 ```
 
-E2E tests also require the dedicated E2E services:
+Run the full E2E flow, including the dedicated E2E database, interactively in one step:
 
 ```sh
-infisical run --env dev -- docker compose -f compose.e2e.yaml up
+infisical run --env test -- docker compose -f compose.e2e.yaml up
+```
+
+This starts `db_e2e`, waits for it to accept connections, applies pending migrations, creates an ephemeral ElevenLabs agent branch, and runs Playwright against it. The ElevenLabs branch is deleted again on exit (including Ctrl-C).
+
+Alternatively, run the services and the test runner separately (useful for repeated local runs without rebuilding the container):
+
+```sh
+infisical run --env dev -- docker compose -f compose.e2e.yaml up db_e2e
 infisical run --env test -- pnpm run test:e2e
 ```
 
