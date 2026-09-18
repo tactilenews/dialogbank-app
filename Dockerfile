@@ -4,6 +4,15 @@ RUN corepack enable && corepack prepare pnpm@11.22.0 --activate
 
 WORKDIR /app
 
+# Keep pnpm's store out of /app: node_modules lives on a separate volume, so
+# pnpm can't hardlink from a store on the image filesystem and otherwise falls
+# back to creating .pnpm-store inside the bind-mounted repo when the
+# entrypoint re-installs at startup. (pnpm 11 reads pnpm_config_*, not the
+# older npm_config_* prefix.) Also never prompt to purge node_modules: there's
+# no TTY, so the prompt would abort the install and kill the container.
+ENV pnpm_config_store_dir=/pnpm-store \
+    pnpm_config_confirm_modules_purge=false
+
 COPY . .
 RUN pnpm install --frozen-lockfile && chmod +x ./docker-entrypoint.sh
 

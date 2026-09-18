@@ -93,6 +93,8 @@ This starts four containers:
 
 `migrate` fails immediately (exit non-zero) if `DATABASE_URL` is missing or migrations fail, rather than letting `web`/`studio` start in a broken state — check `docker compose logs <service>` if a container isn't coming up.
 
+After changing dependencies (`package.json` / `pnpm-lock.yaml`), just rebuild and restart: each container re-syncs `node_modules` at startup, since it lives in a volume that survives image rebuilds. If it ever ends up with stale packages anyway, start fresh with `infisical run --env dev -- docker compose up --build --renew-anon-volumes`.
+
 Local development runs entirely in Docker; there is no host-based alternative, since the database is only reachable from inside the compose network. To run one-off commands against the dev database, use `docker compose run --rm` (not `exec` — a running container's already-started process won't see the container-internal database hostname rewrite that happens once at startup):
 
 ```sh

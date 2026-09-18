@@ -24,6 +24,11 @@ services:
     # of needing db_e2e's internal hostname/port.
     network_mode: host
     environment:
+      # playwright.config.ts reuses any server already on port 4173 unless CI
+      # is set. With network_mode: host that includes a `pnpm run preview`
+      # running on the host, which would silently run the tests against the
+      # wrong app and database instead of the one this container builds.
+      - CI=true
       - RUN_MIGRATIONS=true
       - DATABASE_URL
       - ELEVENLABS_API_KEY

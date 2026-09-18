@@ -13,6 +13,13 @@ if [ -n "${DATABASE_URL:-}" ] && [ -n "${DB_HOST:-}" ]; then
 	export DATABASE_URL
 fi
 
+# node_modules lives in an anonymous volume that Compose keeps across image
+# rebuilds, so after a package.json/lockfile change the rebuilt image's
+# dependencies are hidden behind the stale volume. Re-syncing here is a fast
+# no-op when nothing changed. (Fallback if it ever gets stuck:
+# `docker compose up --build --renew-anon-volumes`.)
+pnpm install --frozen-lockfile
+
 # Opt-in so multiple services depending on the same database (web, studio)
 # don't race each other running migrations concurrently on startup. Set by
 # the dedicated one-shot `migrate` service, or by services that are the only

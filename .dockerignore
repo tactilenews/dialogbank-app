@@ -4,5 +4,3 @@ build
 .git
 .env
 .env.*
-!.env.example
-!.env.test
