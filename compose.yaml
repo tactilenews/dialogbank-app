@@ -1,3 +1,83 @@
-include:
-  - ./compose.dev.yaml
-  - ./compose.e2e.yaml
+services:
+  db:
+    image: neondatabase/neon_local:v1.5
+    # No ports published: db is only reachable from other containers.
+    environment:
+      NEON_API_KEY: ${NEON_API_KEY}
+      NEON_PROJECT_ID: ${NEON_PROJECT_ID}
+      PARENT_BRANCH_ID: ${PARENT_BRANCH_ID}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "5432"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  # One-shot migration runner. web and studio both depend on this completing
+  # successfully instead of each running `db:migrate` themselves, so they
+  # don't race each other applying the same pending migration concurrently.
+  migrate:
+    build:
+      context: .
+    # Its own command already runs the migration; RUN_MIGRATIONS is left
+    # unset here so the entrypoint doesn't also run it via that path.
+    command: ["pnpm", "run", "db:migrate"]
+    environment:
+      - DB_HOST=db
+      - DATABASE_URL
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build:
+      context: .
+    ports:
+      - "5173:5173"
+    environment:
+      - DB_HOST=db
+      - DATABASE_URL
+      - BETTER_AUTH_SECRET
+      - ORIGIN
+      - ELEVENLABS_API_KEY
+      - ELEVENLABS_AGENT_ID
+      - ELEVENLABS_AGENT_BRANCH_ID
+      - ELEVENLABS_WORKFLOW_NODE_ID
+      - ELEVENLABS_WEBHOOK_SECRET
+      - SENTRY_DSN
+      - PUBLIC_SENTRY_DSN
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+
+  studio:
+    build:
+      context: .
+    # Loopback only: this is an unauthenticated database UI. The container
+    # itself still needs to bind 0.0.0.0 (below) for Docker's port-publish
+    # NAT to reach it; only the host-side binding is restricted here.
+    ports:
+      - "127.0.0.1:4983:4983"
+    # `pnpm run db:studio` binds drizzle-kit to 127.0.0.1 despite its --help
+    # claiming 0.0.0.0 is the default, so it's unreachable through the
+    # published port. Call the binary directly and force the bind address.
+    command: ["pnpm", "exec", "drizzle-kit", "studio", "--host", "0.0.0.0"]
+    environment:
+      - DB_HOST=db
+      - DATABASE_URL
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully

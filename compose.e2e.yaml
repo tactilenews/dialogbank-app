@@ -7,3 +7,41 @@ services:
       NEON_API_KEY: ${NEON_API_KEY}
       NEON_PROJECT_ID: ${NEON_PROJECT_ID}
       PARENT_BRANCH_ID: ${PARENT_BRANCH_ID}
+    healthcheck:
+      test: ["CMD", "pg_isready", "-h", "localhost", "-p", "5432"]
+      interval: 2s
+      timeout: 5s
+      retries: 30
+      start_period: 20s
+
+  e2e:
+    build:
+      context: .
+      dockerfile: Dockerfile.e2e
+    # Loopback only: this is an unauthenticated test runner holding the
+    # ElevenLabs/DB credentials. The UI itself still binds 0.0.0.0 (below) for
+    # Docker's port-publish NAT to reach it; only the host side is restricted.
+    ports:
+      - "127.0.0.1:9323:9323"
+    environment:
+      # The tests and the app under test reach the e2e database over the
+      # compose network, not the host-published 5433 that host-based
+      # `pnpm run test:e2e` (and CI) use by default.
+      - E2E_DATABASE_URL=postgres://user:password@db_e2e:5432/neondb
+      # Same for migrations: rewrite the secret's localhost:5433 to db_e2e:5432.
+      - DB_HOST=db_e2e
+      - DB_PORT=5432
+      - RUN_MIGRATIONS=true
+      - DATABASE_URL
+      - ELEVENLABS_API_KEY
+      - ELEVENLABS_AGENT_ID
+      - ELEVENLABS_AGENT_PARENT_BRANCH_ID
+      - ELEVENLABS_WORKFLOW_NODE_ID
+    volumes:
+      - .:/app
+      - /app/node_modules
+    # Open Playwright's UI mode instead of running tests immediately.
+    command: ["./e2e/test-e2e.sh", "--ui", "--ui-host", "0.0.0.0", "--ui-port", "9323"]
+    depends_on:
+      db_e2e:
+        condition: service_healthy

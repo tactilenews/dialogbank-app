@@ -34,7 +34,7 @@ The main user-facing areas are:
 This project intentionally uses different database/runtime setups by environment:
 
 - Production: Netlify serverless functions with Neon via `drizzle-orm/neon-http`
-- Development: local Neon proxy/container on port `5432`
+- Development: local Neon proxy container, reachable only from other containers (not published to the host)
 - E2E: separate local Neon proxy/container on port `5433`
 - Vitest integration tests: in-memory PGlite for fast, isolated tests
 
@@ -78,35 +78,40 @@ Install dependencies:
 pnpm install
 ```
 
-Start the local services:
+Start everything:
 
 ```sh
 infisical run --env dev -- docker compose up
 ```
 
-Start the app:
+This starts four containers:
+
+- `db`: the local Neon proxy. Its Postgres port is not published to the host — only other containers can reach it.
+- `migrate`: waits for `db` to accept connections, applies any pending migrations, then exits. `web` and `studio` both wait for this to finish successfully before starting, instead of each applying migrations themselves — that would race two containers against the same pending migration.
+- `web`: the dev server on `http://localhost:5173`.
+- `studio`: [Drizzle Studio](https://orm.drizzle.team/drizzle-studio/overview) so you can browse the database from your host, bound to `127.0.0.1` only (it's an unauthenticated database UI). Open the URL printed in its logs (`docker compose logs studio`, typically `https://local.drizzle.studio?host=0.0.0.0`) in a browser.
+
+`migrate` fails immediately (exit non-zero) if `DATABASE_URL` is missing or migrations fail, rather than letting `web`/`studio` start in a broken state — check `docker compose logs <service>` if a container isn't coming up.
+
+After changing dependencies (`package.json` / `pnpm-lock.yaml`), just rebuild and restart: each container re-syncs `node_modules` at startup, since it lives in a volume that survives image rebuilds. If it ever ends up with stale packages anyway, start fresh with `infisical run --env dev -- docker compose up --build --renew-anon-volumes`.
+
+Local development runs entirely in Docker; there is no host-based alternative, since the database is only reachable from inside the compose network. To run one-off commands against the dev database, use `docker compose run --rm` (not `exec` — a running container's already-started process won't see the container-internal database hostname rewrite that happens once at startup):
 
 ```sh
-infisical run --env dev -- pnpm run dev
+docker compose run --rm migrate
+docker compose run --rm -e SEED_USER_ACCOUNTS="$(infisical secrets --env dev --path user-accounts -o json)" web pnpm run db:seed
 ```
 
-Useful local commands:
+Seeding needs one extra step because `pnpm run db:seed` needs account credentials that only the host's authenticated `infisical` CLI can read (the container has neither the CLI nor a session). The command above resolves them on the host as JSON and passes that in as a single env var instead — see [Database Seeding](#database-seeding) below.
+
+Building and previewing a production bundle still runs on the host against the real database:
 
 ```sh
-infisical run --env dev -- pnpm run db:studio
-infisical run --env dev -- pnpm run db:seed
 infisical run --env prod -- pnpm run build
 infisical run --env prod -- pnpm run preview
 ```
 
-Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of production. In the normal case, you do not need to run migrations after startup if production is already up to date.
-
-Only run migrations when you have created new local migrations that are not yet reflected in the copied production schema:
-
-```sh
-infisical run --env dev -- pnpm run db:migrate
-infisical run --env test -- pnpm run db:migrate
-```
+Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of production, so in the normal case there is nothing new to migrate — `migrate` is then a no-op.
 
 ## Testing
 
@@ -124,10 +129,20 @@ infisical run --env test -- pnpm run test
 infisical run --env test -- pnpm run test:e2e
 ```
 
-E2E tests also require the dedicated E2E services:
+Run the full E2E flow, including the dedicated E2E database, interactively in one step:
 
 ```sh
-infisical run --env dev -- docker compose -f compose.e2e.yaml up
+infisical run --env test -- docker compose -f compose.e2e.yaml up
+```
+
+This starts `db_e2e`, waits for it to accept connections, applies pending migrations, creates an ephemeral ElevenLabs agent branch, and opens [Playwright's UI mode](https://playwright.dev/docs/test-ui-mode) instead of running tests immediately — open `http://localhost:9323` to pick and run tests interactively. The ElevenLabs branch is deleted again once the container stops (including Ctrl-C).
+
+The `e2e` container reaches the e2e database over the compose network (`db_e2e:5432`, set through `E2E_DATABASE_URL`; the tests default to the host-published `localhost:5433` when it isn't set) and publishes the UI on `127.0.0.1:9323` only, since it is an unauthenticated runner holding the ElevenLabs and database credentials.
+
+Alternatively, run the services and the test runner separately (useful for repeated local runs without rebuilding the container). Both commands use `--env test`, so `db_e2e` is branched from the test Neon project the tests expect, not the dev one:
+
+```sh
+infisical run --env test -- docker compose -f compose.e2e.yaml up db_e2e
 infisical run --env test -- pnpm run test:e2e
 ```
 
@@ -252,13 +267,13 @@ This supports two distinct flows:
 
 ## Database Seeding
 
-The seed script creates a default user with `user@example.org` and requires the password to be provided through `SEED_USER_PASSWORD`.
-
-Example:
+The seed script replaces the `user` table with the accounts stored in Infisical under the `user-accounts` path (one secret per account, `email` as the key and `password` as the value). It needs that list as JSON in `SEED_USER_ACCOUNTS` — resolved from Infisical directly, not through `infisical run`, since it isn't itself a stored secret:
 
 ```sh
-SEED_USER_PASSWORD='replace-me' infisical run --env dev -- pnpm run db:seed
+SEED_USER_ACCOUNTS="$(infisical secrets --env dev --path user-accounts -o json)" infisical run --env dev -- pnpm run db:seed
 ```
+
+To seed the Dockerized dev database instead, see [Local Development](#local-development) above.
 
 ## Project Status
 

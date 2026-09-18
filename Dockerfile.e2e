@@ -1,0 +1,30 @@
+FROM mcr.microsoft.com/playwright:v1.60.0-noble
+
+RUN corepack enable && corepack prepare pnpm@11.22.0 --activate
+
+WORKDIR /app
+
+# Keep pnpm's store out of /app: node_modules lives on a separate volume, so
+# pnpm can't hardlink from a store on the image filesystem and otherwise falls
+# back to creating .pnpm-store inside the bind-mounted repo when the
+# entrypoint re-installs at startup. (pnpm 11 reads pnpm_config_*, not the
+# older npm_config_* prefix.) Also never prompt to purge node_modules: there's
+# no TTY, so the prompt would abort the install and kill the container.
+ENV pnpm_config_store_dir=/pnpm-store \
+    pnpm_config_confirm_modules_purge=false
+
+COPY . .
+RUN pnpm install --frozen-lockfile
+
+RUN chmod +x ./docker-entrypoint.sh ./e2e/test-e2e.sh
+
+# Deliberately stays root — see the comment in Dockerfile. On this project's
+# rootless-Docker dev setup, container uid 0 remaps to the real host user, so
+# root-owned writes into the bind mount (.svelte-kit, build output, the
+# ElevenLabs branch snapshot file) come back correctly host-owned. Switching
+# to a non-root user here (tried both the image's built-in "pwuser" and
+# "ubuntu") instead broke writes into the bind mount entirely, since those
+# uids remap to an unrelated, inaccessible subordinate range.
+
+ENTRYPOINT ["./docker-entrypoint.sh"]
+CMD ["./e2e/test-e2e.sh"]
