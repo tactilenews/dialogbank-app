@@ -1,9 +1,11 @@
 import { defineConfig } from "@playwright/test";
 
 /**
- * Force e2e tests to use the dedicated e2e database on port 5433.
+ * Use the dedicated e2e database (published on the host at port 5433 by
+ * default). Keep in sync with e2e/lib/db.ts, which the tests use directly.
  */
-const E2E_DATABASE_URL = "postgres://user:password@localhost:5433/neondb";
+const E2E_DATABASE_URL =
+	process.env.E2E_DATABASE_URL ?? "postgres://user:password@localhost:5433/neondb";
 const E2E_ORIGIN = "http://localhost:4173";
 const E2E_ELEVENLABS_WEBHOOK_SECRET = "test-elevenlabs-webhook-secret";
 
