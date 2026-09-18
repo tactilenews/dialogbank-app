@@ -97,9 +97,10 @@ Local development runs entirely in Docker; there is no host-based alternative, s
 
 ```sh
 docker compose run --rm migrate
+docker compose run --rm -e SEED_USER_ACCOUNTS="$(infisical secrets --env dev --path user-accounts -o json)" web pnpm run db:seed
 ```
 
-`pnpm run db:seed` doesn't work this way yet: `src/scripts/seed.ts` shells out to the `infisical` CLI itself to read account credentials, which isn't installed in the image and wouldn't have an authenticated session there anyway. Seeding the containerized dev database isn't currently supported; see [Database Seeding](#database-seeding) below.
+Seeding needs one extra step because `pnpm run db:seed` needs account credentials that only the host's authenticated `infisical` CLI can read (the container has neither the CLI nor a session). The command above resolves them on the host as JSON and passes that in as a single env var instead — see [Database Seeding](#database-seeding) below.
 
 Building and previewing a production bundle still runs on the host against the real database:
 
@@ -262,13 +263,13 @@ This supports two distinct flows:
 
 ## Database Seeding
 
-The seed script creates a default user with `user@example.org` and requires the password to be provided through `SEED_USER_PASSWORD`.
-
-Example:
+The seed script replaces the `user` table with the accounts stored in Infisical under the `user-accounts` path (one secret per account, `email` as the key and `password` as the value). It needs that list as JSON in `SEED_USER_ACCOUNTS` — resolved from Infisical directly, not through `infisical run`, since it isn't itself a stored secret:
 
 ```sh
-SEED_USER_PASSWORD='replace-me' infisical run --env dev -- pnpm run db:seed
+SEED_USER_ACCOUNTS="$(infisical secrets --env dev --path user-accounts -o json)" infisical run --env dev -- pnpm run db:seed
 ```
+
+To seed the Dockerized dev database instead, see [Local Development](#local-development) above.
 
 ## Project Status
 

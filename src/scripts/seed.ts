@@ -1,19 +1,23 @@
-import { execSync } from "node:child_process";
 import { betterAuth } from "better-auth/minimal";
 import { getAuth } from "$lib/server/auth";
 import { getDb } from "$lib/server/db";
 import { user } from "$lib/server/db/schema";
 
+type InfisicalSecret = { secretKey: string; secretValue: string };
+
 function getUserAccounts(): Array<{ email: string; password: string }> {
-	const output = execSync("infisical secrets --path user-accounts --plain --silent").toString();
-	return output
-		.trim()
-		.split("\n")
-		.filter((line) => line.includes("="))
-		.map((line) => {
-			const eq = line.indexOf("=");
-			return { email: line.slice(0, eq), password: line.slice(eq + 1) };
-		});
+	const raw = process.env.SEED_USER_ACCOUNTS;
+	if (!raw) {
+		throw new Error(
+			"SEED_USER_ACCOUNTS must be set to the JSON array from " +
+				'`infisical secrets --path user-accounts -o json`. Run via: ' +
+				'SEED_USER_ACCOUNTS="$(infisical secrets --env dev --path user-accounts -o json)" ' +
+				"infisical run --env dev -- pnpm run db:seed",
+		);
+	}
+
+	const secrets = JSON.parse(raw) as InfisicalSecret[];
+	return secrets.map(({ secretKey, secretValue }) => ({ email: secretKey, password: secretValue }));
 }
 
 const db = getDb();
