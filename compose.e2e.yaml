@@ -18,17 +18,19 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.e2e
-    # e2e/lib/db.ts and playwright.config.ts hard-code the e2e database at
-    # localhost:5433, matching host-based `pnpm run test:e2e`. Sharing the
-    # host network keeps that working from inside the container too, instead
-    # of needing db_e2e's internal hostname/port.
-    network_mode: host
+    # Loopback only: this is an unauthenticated test runner holding the
+    # ElevenLabs/DB credentials. The UI itself still binds 0.0.0.0 (below) for
+    # Docker's port-publish NAT to reach it; only the host side is restricted.
+    ports:
+      - "127.0.0.1:9323:9323"
     environment:
-      # playwright.config.ts reuses any server already on port 4173 unless CI
-      # is set. With network_mode: host that includes a `pnpm run preview`
-      # running on the host, which would silently run the tests against the
-      # wrong app and database instead of the one this container builds.
-      - CI=true
+      # The tests and the app under test reach the e2e database over the
+      # compose network, not the host-published 5433 that host-based
+      # `pnpm run test:e2e` (and CI) use by default.
+      - E2E_DATABASE_URL=postgres://user:password@db_e2e:5432/neondb
+      # Same for migrations: rewrite the secret's localhost:5433 to db_e2e:5432.
+      - DB_HOST=db_e2e
+      - DB_PORT=5432
       - RUN_MIGRATIONS=true
       - DATABASE_URL
       - ELEVENLABS_API_KEY
@@ -38,11 +40,8 @@ services:
     volumes:
       - .:/app
       - /app/node_modules
-    # Open Playwright's UI mode instead of running tests immediately. Bound
-    # to loopback only: with network_mode: host, --ui-host 0.0.0.0 would
-    # expose this unauthenticated runner (and the ElevenLabs/DB credentials
-    # it holds) to the whole network, not just this machine.
-    command: ["./e2e/test-e2e.sh", "--ui", "--ui-host", "127.0.0.1", "--ui-port", "9323"]
+    # Open Playwright's UI mode instead of running tests immediately.
+    command: ["./e2e/test-e2e.sh", "--ui", "--ui-host", "0.0.0.0", "--ui-port", "9323"]
     depends_on:
       db_e2e:
         condition: service_healthy

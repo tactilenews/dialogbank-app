@@ -7,9 +7,15 @@ set -eu
 # that service name; leave it unset (e.g. for network_mode: host) to keep
 # DATABASE_URL as-is. Matches the hostname generically (whatever it is, with
 # or without a port) rather than the literal "localhost:" text, so it also
-# covers "127.0.0.1" or a default-port URL.
+# covers "127.0.0.1" or a default-port URL. The port is kept unless DB_PORT is
+# set, for databases that listen on a different port inside the compose
+# network than the one the secret (built for the published host port) says.
 if [ -n "${DATABASE_URL:-}" ] && [ -n "${DB_HOST:-}" ]; then
-	DATABASE_URL=$(echo "$DATABASE_URL" | sed -E "s#(@)[^:/]+#\1${DB_HOST}#")
+	if [ -n "${DB_PORT:-}" ]; then
+		DATABASE_URL=$(echo "$DATABASE_URL" | sed -E "s#(@)[^:/]+(:[0-9]+)?#\1${DB_HOST}:${DB_PORT}#")
+	else
+		DATABASE_URL=$(echo "$DATABASE_URL" | sed -E "s#(@)[^:/]+#\1${DB_HOST}#")
+	fi
 	export DATABASE_URL
 fi
 

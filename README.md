@@ -137,7 +137,7 @@ infisical run --env test -- docker compose -f compose.e2e.yaml up
 
 This starts `db_e2e`, waits for it to accept connections, applies pending migrations, creates an ephemeral ElevenLabs agent branch, and opens [Playwright's UI mode](https://playwright.dev/docs/test-ui-mode) instead of running tests immediately — open `http://localhost:9323` to pick and run tests interactively. The ElevenLabs branch is deleted again once the container stops (including Ctrl-C).
 
-The `e2e` container uses `network_mode: host` because the tests hard-code the database at `localhost:5433`. That only reaches the host's `localhost` on Linux, and on rootless Docker only when the daemon shares the host network namespace (observed working with `rootlesskit --net=slirp4netns --detach-netns`; other rootless network modes weren't tested). If `http://localhost:9323` isn't reachable on your setup, use the split flow below.
+The `e2e` container reaches the e2e database over the compose network (`db_e2e:5432`, set through `E2E_DATABASE_URL`; the tests default to the host-published `localhost:5433` when it isn't set) and publishes the UI on `127.0.0.1:9323` only, since it is an unauthenticated runner holding the ElevenLabs and database credentials.
 
 Alternatively, run the services and the test runner separately (useful for repeated local runs without rebuilding the container). Both commands use `--env test`, so `db_e2e` is branched from the test Neon project the tests expect, not the dev one:
 
