@@ -127,6 +127,13 @@
 			"when": 1789637446721,
 			"tag": "0017_publish_assignments",
 			"breakpoints": true
+		},
+		{
+			"idx": 18,
+			"version": "7",
+			"when": 1789937752018,
+			"tag": "0018_enforce_assignment_agent_ownership",
+			"breakpoints": true
 		}
 	]
 }

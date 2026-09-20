@@ -26,7 +26,6 @@ export const test = base.extend<Fixtures>({
 				id: 1,
 				name: "Standard",
 				slug: "standard",
-				isPublished: true,
 				elevenLabsAgentId: process.env.ELEVENLABS_AGENT_ID,
 			})
 			.onConflictDoNothing();

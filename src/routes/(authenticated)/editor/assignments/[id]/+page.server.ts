@@ -1,6 +1,6 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error, fail } from "@sveltejs/kit";
-import { asc, eq, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
@@ -99,6 +99,37 @@ type PersistResult = {
 	savedRows: { questionId: number; text: string; classificationIds: number[] }[];
 	newClassificationRows: { id: number; key: string; label: string }[];
 };
+
+async function buildElevenLabsQuestions(
+	db: DbClient,
+	questionItems: QuestionItem[],
+): Promise<Question[]> {
+	const existingClassifications = await db
+		.select({ id: classifications.id, label: classifications.label })
+		.from(classifications);
+	const labelsById = new Map(
+		existingClassifications.map((classification) => [classification.id, classification.label]),
+	);
+
+	return questionItems.map((question) => ({
+		text: question.text,
+		classifications: [
+			...question.selectedIds
+				.map((id) => labelsById.get(id))
+				.filter((label): label is string => Boolean(label)),
+			...question.newClassifications.map((classification) => classification.label),
+		].filter((label, index, labels) => labels.indexOf(label) === index),
+	}));
+}
+
+function isUniqueConstraintViolation(cause: unknown): boolean {
+	let current = cause;
+	for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
+		if ("code" in current && current.code === "23505") return true;
+		current = "cause" in current ? current.cause : null;
+	}
+	return false;
+}
 
 async function persistQuestions(
 	db: DbClient,
@@ -263,6 +294,17 @@ export const load = withAuthenticatedLoad<
 	let agent: ElevenLabsEditorAgent | null = null;
 	try {
 		agentCatalog = await listElevenLabsDialogbankAgents(process.env);
+		const ownedAgents = await event.locals.db
+			.select({ assignmentId: assignments.id, agentId: assignments.elevenLabsAgentId })
+			.from(assignments)
+			.where(isNotNull(assignments.elevenLabsAgentId));
+		const unavailableAgentIds = new Set(
+			ownedAgents
+				.filter((ownedAgent) => ownedAgent.assignmentId !== id)
+				.map((ownedAgent) => ownedAgent.agentId)
+				.filter((agentId): agentId is string => agentId !== null),
+		);
+		agentCatalog = agentCatalog.filter((catalogAgent) => !unavailableAgentIds.has(catalogAgent.id));
 	} catch {
 		// non-fatal: show catalog as unavailable
 	}
@@ -302,122 +344,100 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const client = (formData.get("client") as string | null)?.trim() || null;
 		const promptSupplement = (formData.get("promptSupplement") as string | null)?.trim() || null;
 		const elevenLabsAgentId = parseElevenLabsAgentId(formData);
+		const [currentAssignment] = await event.locals.db
+			.select({ elevenLabsAgentId: assignments.elevenLabsAgentId })
+			.from(assignments)
+			.where(eq(assignments.id, id))
+			.limit(1);
+		if (!currentAssignment) throw error(404, "Einsatz nicht gefunden.");
+		if (
+			currentAssignment.elevenLabsAgentId &&
+			currentAssignment.elevenLabsAgentId !== elevenLabsAgentId
+		) {
+			return fail(409, {
+				message: "Der zugewiesene Agent muss zuerst freigegeben werden.",
+			});
+		}
+
 		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
+		const questionItems = parseQuestionItems(formData);
+		const newlyClaimedAgent = Boolean(elevenLabsAgentId && !currentAssignment.elevenLabsAgentId);
+
+		if (newlyClaimedAgent && elevenLabsAgentId) {
+			try {
+				await event.locals.db
+					.update(assignments)
+					.set({ elevenLabsAgentId })
+					.where(eq(assignments.id, id));
+			} catch (cause) {
+				if (!isUniqueConstraintViolation(cause)) throw cause;
+				return fail(409, { message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen." });
+			}
+		}
+
+		if (elevenLabsAgentId) {
+			try {
+				const elevenLabsQuestions = await buildElevenLabsQuestions(event.locals.db, questionItems);
+				const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
+					process.env,
+					elevenLabsAgentId,
+				);
+				const reader = createElevenLabsAgentReader(process.env);
+				const writer = createElevenLabsAgentWriter(process.env);
+				const existingAgent: AgentReaderResponse = await reader.get(agentTarget.agentId, {
+					branchId: agentTarget.branchId,
+				});
+				await updateElevenLabsAgentQuestions(
+					agentTarget,
+					elevenLabsQuestions,
+					existingAgent,
+					writer,
+					{ promptSupplement, assignmentId: id },
+				);
+			} catch (cause) {
+				if (newlyClaimedAgent) {
+					await event.locals.db
+						.update(assignments)
+						.set({ elevenLabsAgentId: null })
+						.where(
+							and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, elevenLabsAgentId)),
+						);
+				}
+				if (!(cause instanceof ElevenLabsError)) throw cause;
+				return fail(cause.statusCode || 500, {
+					message: `Agent konnte nicht konfiguriert werden: ${cause.message || "Unbekannter Fehler"}`,
+				});
+			}
+		}
 
 		await event.locals.db
 			.update(assignments)
 			.set({ name, slug, location, client, promptSupplement, elevenLabsAgentId })
 			.where(eq(assignments.id, id));
-
-		const questionItems = parseQuestionItems(formData);
 		await persistQuestions(event.locals.db, id, questionItems);
-
-		return { success: true, action: "save", message: "Einsatz gespeichert." };
-	},
-
-	publish: async (event) => {
-		const id = parseInt(event.params.id, 10);
-		if (Number.isNaN(id)) throw error(404, "Einsatz nicht gefunden.");
-
-		const formData = await event.request.formData();
-		const name = (formData.get("name") as string | null)?.trim();
-		if (!name) return fail(400, { message: "Name ist erforderlich." });
-
-		const location = (formData.get("location") as string | null)?.trim() || null;
-		const client = (formData.get("client") as string | null)?.trim() || null;
-		const promptSupplement = (formData.get("promptSupplement") as string | null)?.trim() || null;
-		const elevenLabsAgentId = parseElevenLabsAgentId(formData);
-		if (!elevenLabsAgentId) return fail(400, { message: "Agent ist erforderlich." });
-		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
-
-		await event.locals.db
-			.update(assignments)
-			.set({ name, slug, location, client, promptSupplement, elevenLabsAgentId })
-			.where(eq(assignments.id, id));
-
-		// Load existing classifications for label lookup
-		const existingClassifications = await event.locals.db
-			.select({ id: classifications.id, label: classifications.label })
-			.from(classifications);
-		const classificationLabelMap = new Map(existingClassifications.map((c) => [c.id, c.label]));
-
-		const questionItems = parseQuestionItems(formData);
-		const { savedRows, newClassificationRows } = await persistQuestions(
-			event.locals.db,
-			id,
-			questionItems,
-		);
-
-		// Merge new classification labels into the map
-		for (const c of newClassificationRows) {
-			classificationLabelMap.set(c.id, c.label);
-		}
-
-		// Build ElevenLabs questions
-		const elevenLabsQuestions: Question[] = savedRows.map((q) => ({
-			text: q.text,
-			classifications: q.classificationIds
-				.map((cid) => classificationLabelMap.get(cid) ?? "")
-				.filter(Boolean),
-		}));
-
-		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
-			process.env,
-			elevenLabsAgentId,
-		);
-		const reader = createElevenLabsAgentReader(process.env);
-		const writer = createElevenLabsAgentWriter(process.env);
-
-		let existingAgent: AgentReaderResponse;
-		try {
-			existingAgent = await reader.get(agentTarget.agentId, { branchId: agentTarget.branchId });
-		} catch (e) {
-			if (!(e instanceof ElevenLabsError)) throw e;
-			return fail(e.statusCode || 500, {
-				message: `Agent konnte nicht geladen werden: ${e.message || "Unbekannter Fehler"}`,
-			});
-		}
-
-		try {
-			await updateElevenLabsAgentQuestions(
-				agentTarget,
-				elevenLabsQuestions,
-				existingAgent,
-				writer,
-				{ promptSupplement, assignmentId: id },
-			);
-		} catch (e) {
-			if (!(e instanceof ElevenLabsError)) throw e;
-			return fail(e.statusCode || 500, {
-				message: `Agent konnte nicht aktualisiert werden: ${e.message || "Unbekannter Fehler"}`,
-			});
-		}
-
-		await event.locals.db
-			.update(assignments)
-			.set({ isPublished: sql`(${assignments.id} = ${id})` })
-			.where(or(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, elevenLabsAgentId)));
 
 		return {
 			success: true,
-			action: "publish",
-			message: "Einsatz veröffentlicht und Agent konfiguriert.",
+			action: "save",
+			message: elevenLabsAgentId
+				? "Einsatz gespeichert und Agent konfiguriert."
+				: "Entwurf gespeichert.",
 		};
 	},
 
-	unpublish: async (event) => {
+	freeAgent: async (event) => {
 		const id = parseInt(event.params.id, 10);
 		if (Number.isNaN(id)) throw error(404, "Einsatz nicht gefunden.");
 
 		await event.locals.db
 			.update(assignments)
-			.set({ isPublished: false })
+			.set({ elevenLabsAgentId: null })
 			.where(eq(assignments.id, id));
 
 		return {
 			success: true,
-			action: "unpublish",
-			message: "Einsatz nicht mehr veröffentlicht.",
+			action: "freeAgent",
+			message: "Agent freigegeben. Der Einsatz ist jetzt ein Entwurf.",
 		};
 	},
 });

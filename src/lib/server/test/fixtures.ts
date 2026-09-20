@@ -23,8 +23,6 @@ export const it = baseTest.extend<{ db: typeof db; schema: typeof schema; auth: 
 				id: 1,
 				name: "Standard",
 				slug: "standard",
-				isPublished: true,
-				elevenLabsAgentId: "agent_test",
 			})
 			.onConflictDoNothing();
 		await use(db);

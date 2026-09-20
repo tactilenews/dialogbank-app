@@ -10,6 +10,7 @@ import {
 
 describe("ElevenLabs Storage", () => {
 	it("processes payload with no results", async ({ db, expect, schema }) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_test" });
 		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload1 });
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({
@@ -87,6 +88,7 @@ describe("ElevenLabs Storage", () => {
 		expect,
 		schema,
 	}) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_test" });
 		await processElevenLabsPostCall({ db, payload: samplePayload3 });
 
 		const storedClassifications = await db
@@ -107,6 +109,7 @@ describe("ElevenLabs Storage", () => {
 	});
 
 	it("does not store classification_N entries as answer rows", async ({ db, expect, schema }) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_test" });
 		await processElevenLabsPostCall({ db, payload: samplePayload3 });
 
 		const storedAnswers = await db.select().from(schema.answers);
@@ -120,6 +123,7 @@ describe("ElevenLabs Storage", () => {
 		expect,
 		schema,
 	}) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_test" });
 		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload4 });
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({

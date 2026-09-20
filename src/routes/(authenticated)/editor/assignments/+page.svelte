@@ -49,18 +49,18 @@ let { data, form }: { data: PageData; form: ActionData } = $props();
 		<div class="flex flex-col gap-3">
 			{#each data.assignments as assignment (assignment.id)}
 				<div
-					class="flex items-center justify-between rounded-lg border bg-white p-4 shadow-sm {assignment.isPublished
+					class="flex items-center justify-between rounded-lg border bg-white p-4 shadow-sm {assignment.elevenLabsAgentId
 						? 'border-green-300'
 						: ''}"
 				>
 					<div class="min-w-0 flex-1">
 						<div class="flex items-center gap-2">
 							<span class="font-semibold text-gray-900">{assignment.name}</span>
-							{#if assignment.isPublished}
+							{#if assignment.elevenLabsAgentId}
 								<span
 									class="rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700"
 								>
-									VERÖFFENTLICHT
+									AGENT ZUGEWIESEN
 								</span>
 							{/if}
 						</div>

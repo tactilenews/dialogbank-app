@@ -3,9 +3,11 @@ import { load } from "./[name]/+page.server";
 import { sampleAnswers, sampleClassifications, sampleConversations } from "./page.server.spec/data";
 
 describe("/showcase/[name] +page.server", () => {
-	it("hides unpublished assignments from anonymous visitors", async ({ db, expect, schema }) => {
-		await db.update(schema.assignments).set({ isPublished: false });
-
+	it("hides assignments without an agent from anonymous visitors", async ({
+		db,
+		expect,
+		schema,
+	}) => {
 		const resultPromise = load({
 			locals: { user: null, db, schema },
 			params: { name: "standard" },
@@ -15,6 +17,7 @@ describe("/showcase/[name] +page.server", () => {
 	});
 
 	it("returns counts and published quotes", async ({ db, expect, schema }) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_standard" });
 		await expect(
 			db.insert(schema.conversations).values(sampleConversations),
 		).resolves.toBeDefined();
@@ -67,6 +70,7 @@ describe("/showcase/[name] +page.server", () => {
 	});
 
 	it("filters out published answers without visible text", async ({ db, expect, schema }) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_standard" });
 		await expect(
 			db.insert(schema.conversations).values(sampleConversations),
 		).resolves.toBeDefined();
@@ -122,7 +126,7 @@ describe("/showcase/[name] +page.server", () => {
 				id: 2,
 				name: "standard",
 				slug: "standard-2",
-				isPublished: true,
+				elevenLabsAgentId: "agent_standard_2",
 			}),
 		).resolves.toBeDefined();
 		await expect(

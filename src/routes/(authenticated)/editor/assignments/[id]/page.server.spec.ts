@@ -1,3 +1,4 @@
+import { eq } from "drizzle-orm";
 import { createRequestEvent, describe, it } from "$lib/server/test/fixtures";
 import { actions, load } from "./+page.server";
 
@@ -96,7 +97,12 @@ describe("/editor/assignments/[id] +page.server", () => {
 		expect(links).toHaveLength(2);
 	});
 
-	it("save: persists the selected ElevenLabs agent", async ({ db, expect, schema }) => {
+	it("save: rejects an agent owned by another assignment", async ({ db, expect, schema }) => {
+		await db.insert(schema.assignments).values({
+			name: "Another Assignment",
+			slug: "another-assignment",
+			elevenLabsAgentId: "agent_dialogbank_123",
+		});
 		const formData = new FormData();
 		formData.append("name", "Standard");
 		formData.append("elevenLabsAgentId", "agent_dialogbank_123");
@@ -115,12 +121,15 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		await expect(
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
-		).resolves.toMatchObject({ success: true, action: "save" });
+		).resolves.toMatchObject({
+			status: 409,
+			data: { message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen." },
+		});
 
 		const assignment = await db.query.assignments.findFirst({
 			where: (a, { eq }) => eq(a.id, 1),
 		});
-		expect(assignment?.elevenLabsAgentId).toBe("agent_dialogbank_123");
+		expect(assignment?.elevenLabsAgentId).toBeNull();
 	});
 
 	it("save: links duplicate new classifications by normalized key", async ({
@@ -271,9 +280,14 @@ describe("/editor/assignments/[id] +page.server", () => {
 		expect(remaining[0].text).toBe("Nur eine Frage");
 	});
 
-	it("publish: requires a selected ElevenLabs agent", async ({ db, expect, schema }) => {
+	it("save: does not switch an assigned agent", async ({ db, expect, schema }) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_current" })
+			.where(eq(schema.assignments.id, 1));
 		const formData = new FormData();
 		formData.append("name", "Standard");
+		formData.append("elevenLabsAgentId", "agent_replacement");
 		formData.append("questions", "Frage 1");
 		formData.append("question_classification_ids", "[]");
 		formData.append("question_new_classifications", "[]");
@@ -288,20 +302,20 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 
 		await expect(
-			actions.publish(event as unknown as Parameters<typeof actions.publish>[0]),
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
 		).resolves.toMatchObject({
-			status: 400,
-			data: { message: "Agent ist erforderlich." },
+			status: 409,
+			data: { message: "Der zugewiesene Agent muss zuerst freigegeben werden." },
 		});
 	});
 
-	it("unpublish: removes the assignment from the public selection", async ({
-		db,
-		expect,
-		schema,
-	}) => {
+	it("freeAgent: returns the assignment to draft state", async ({ db, expect, schema }) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_current" })
+			.where(eq(schema.assignments.id, 1));
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/assignments/1?/unpublish", {
+			request: new Request("http://localhost/editor/assignments/1?/freeAgent", {
 				method: "POST",
 			}),
 			params: { id: "1" } as never,
@@ -309,12 +323,12 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 
 		await expect(
-			actions.unpublish(event as unknown as Parameters<typeof actions.unpublish>[0]),
-		).resolves.toMatchObject({ success: true, action: "unpublish" });
+			actions.freeAgent(event as unknown as Parameters<typeof actions.freeAgent>[0]),
+		).resolves.toMatchObject({ success: true, action: "freeAgent" });
 
 		const assignment = await db.query.assignments.findFirst({
 			where: (row, { eq }) => eq(row.id, 1),
 		});
-		expect(assignment?.isPublished).toBe(false);
+		expect(assignment?.elevenLabsAgentId).toBeNull();
 	});
 });

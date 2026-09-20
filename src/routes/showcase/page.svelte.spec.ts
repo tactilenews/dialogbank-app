@@ -4,12 +4,12 @@ import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
 
 describe("/showcase +page.svelte", () => {
-	it("lets visitors choose a published assignment", async () => {
+	it("lets visitors choose an available assignment", async () => {
 		render(Page, {
 			props: {
 				data: {
 					user: null,
-					publishedAssignments: [
+					availableAssignments: [
 						{ name: "Gelsenkirchen", slug: "gelsenkirchen", location: "Gelsenkirchen" },
 					],
 				},
@@ -22,9 +22,9 @@ describe("/showcase +page.svelte", () => {
 			.toHaveAttribute("href", "/showcase/gelsenkirchen");
 	});
 
-	it("shows a message when no assignment is published", async () => {
-		render(Page, { props: { data: { user: null, publishedAssignments: [] } } });
+	it("shows a message when no assignment is available", async () => {
+		render(Page, { props: { data: { user: null, availableAssignments: [] } } });
 
-		await expect.element(page.getByText("Derzeit ist kein Einsatz veröffentlicht.")).toBeVisible();
+		await expect.element(page.getByText("Derzeit ist kein Einsatz verfügbar.")).toBeVisible();
 	});
 });
