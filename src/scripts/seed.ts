@@ -1,9 +1,13 @@
 import { betterAuth } from "better-auth/minimal";
+import { z } from "zod";
 import { getAuth } from "$lib/server/auth";
 import { getDb } from "$lib/server/db";
 import { user } from "$lib/server/db/schema";
 
-type InfisicalSecret = { secretKey: string; secretValue: string };
+// Shape of `infisical secrets -o json`: one entry per account, email as the key.
+const seedAccountsSchema = z
+	.array(z.object({ secretKey: z.string().min(1), secretValue: z.string().min(1) }))
+	.min(1);
 
 const SEED_USER_ACCOUNTS_HELP =
 	"Run via: " +
@@ -19,21 +23,28 @@ function getUserAccounts(): Array<{ email: string; password: string }> {
 		);
 	}
 
-	let secrets: InfisicalSecret[];
+	let parsed: unknown;
 	try {
-		secrets = JSON.parse(raw);
+		parsed = JSON.parse(raw);
 	} catch (cause) {
 		throw new Error(`SEED_USER_ACCOUNTS is not valid JSON. ${SEED_USER_ACCOUNTS_HELP}`, { cause });
 	}
 
-	if (!Array.isArray(secrets) || secrets.length === 0) {
+	// Validate every entry up front: the caller deletes all users next, so a
+	// malformed entry must fail here, not halfway through re-creating them.
+	const result = seedAccountsSchema.safeParse(parsed);
+	if (!result.success) {
 		throw new Error(
-			`SEED_USER_ACCOUNTS must be a non-empty array; got ${JSON.stringify(secrets)}. ` +
-				`Check the Infisical path/environment used to build it. ${SEED_USER_ACCOUNTS_HELP}`,
+			"SEED_USER_ACCOUNTS must be a non-empty array of { secretKey, secretValue } strings. " +
+				`Check the Infisical path/environment used to build it.\n${z.prettifyError(result.error)}\n` +
+				SEED_USER_ACCOUNTS_HELP,
 		);
 	}
 
-	return secrets.map(({ secretKey, secretValue }) => ({ email: secretKey, password: secretValue }));
+	return result.data.map(({ secretKey, secretValue }) => ({
+		email: secretKey,
+		password: secretValue,
+	}));
 }
 
 const db = getDb();
