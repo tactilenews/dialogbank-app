@@ -61,11 +61,11 @@ services:
   studio:
     build:
       context: .
-    # Loopback only: this is an unauthenticated database UI. The container
-    # itself still needs to bind 0.0.0.0 (below) for Docker's port-publish
-    # NAT to reach it; only the host-side binding is restricted here.
+    # The host side is loopback-only via the network default below (this is
+    # an unauthenticated database UI). The process itself still needs to bind
+    # 0.0.0.0 (below) for Docker's port publishing to reach it.
     ports:
-      - "127.0.0.1:4983:4983"
+      - "4983:4983"
     # `pnpm run db:studio` binds drizzle-kit to 127.0.0.1 despite its --help
     # claiming 0.0.0.0 is the default, so it's unreachable through the
     # published port. Call the binary directly and force the bind address.
@@ -81,3 +81,14 @@ services:
         condition: service_healthy
       migrate:
         condition: service_completed_successfully
+
+# Published ports bind to loopback instead of Docker's default of every host
+# interface, so nothing here (dev server, Drizzle Studio, the e2e database and
+# Playwright UI) is reachable from the local network: the data behind them is
+# a production-derived copy and Studio/Playwright have no authentication.
+# Opt in temporarily with `BIND_ADDR=0.0.0.0 docker compose up`. A port that
+# names its own host IP keeps it.
+networks:
+  default:
+    driver_opts:
+      com.docker.network.bridge.host_binding_ipv4: "${BIND_ADDR:-127.0.0.1}"

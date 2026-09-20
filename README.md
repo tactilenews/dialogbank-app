@@ -93,6 +93,8 @@ This starts four containers:
 
 `migrate` fails immediately (exit non-zero) if `DATABASE_URL` is missing or migrations fail, rather than letting `web`/`studio` start in a broken state — check `docker compose logs <service>` if a container isn't coming up.
 
+Published ports (`web`, `studio`, and in the e2e stack `db_e2e` and the Playwright UI) bind to `127.0.0.1` only, not Docker's default of every network interface, so none of it is reachable from your local network. The database is an ephemeral copy of production, and Drizzle Studio and Playwright's UI have no authentication. To expose them temporarily (say, to open the app on your phone), set `BIND_ADDR`, e.g. `BIND_ADDR=0.0.0.0 infisical run --env dev -- docker compose up`. The setting belongs to the compose network, so run `docker compose down` first when switching.
+
 After changing dependencies (`package.json` / `pnpm-lock.yaml`), just rebuild and restart: each container re-syncs `node_modules` at startup, since it lives in a volume that survives image rebuilds. If it ever ends up with stale packages anyway, start fresh with `infisical run --env dev -- docker compose up --build --renew-anon-volumes`.
 
 Local development runs entirely in Docker; there is no host-based alternative, since the database is only reachable from inside the compose network. To run one-off commands against the dev database, use `docker compose run --rm`, wrapped in `infisical run` just like `up` (a new shell doesn't inherit the secrets the running containers were started with). Don't use `exec`: a running container's already-started process won't see the container-internal database hostname rewrite that happens once at startup:
@@ -137,7 +139,7 @@ infisical run --env test -- docker compose -f compose.e2e.yaml up
 
 This starts `db_e2e`, waits for it to accept connections, applies pending migrations, creates an ephemeral ElevenLabs agent branch, and opens [Playwright's UI mode](https://playwright.dev/docs/test-ui-mode) instead of running tests immediately — open `http://localhost:9323` to pick and run tests interactively. The ElevenLabs branch is deleted again once the container stops (including Ctrl-C).
 
-The `e2e` container reaches the e2e database over the compose network (`db_e2e:5432`, set through `E2E_DATABASE_URL`; the tests default to the host-published `localhost:5433` when it isn't set) and publishes the UI on `127.0.0.1:9323` only, since it is an unauthenticated runner holding the ElevenLabs and database credentials.
+The `e2e` container reaches the e2e database over the compose network (`db_e2e:5432`, set through `E2E_DATABASE_URL`; the tests default to the host-published `localhost:5433` when it isn't set) and publishes the UI on `127.0.0.1:9323`, like every published port here (see above): it is an unauthenticated runner holding the ElevenLabs and database credentials.
 
 Alternatively, run the services and the test runner separately (useful for repeated local runs without rebuilding the container). Both commands use `--env test`, so `db_e2e` is branched from the test Neon project the tests expect, not the dev one:
 
