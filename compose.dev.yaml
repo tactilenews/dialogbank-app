@@ -1,9 +1,0 @@
-services:
-  db:
-    image: neondatabase/neon_local:v1.5
-    ports:
-      - "5432:5432"
-    environment:
-      NEON_API_KEY: ${NEON_API_KEY}
-      NEON_PROJECT_ID: ${NEON_PROJECT_ID}
-      PARENT_BRANCH_ID: ${PARENT_BRANCH_ID}
