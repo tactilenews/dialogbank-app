@@ -95,11 +95,11 @@ This starts four containers:
 
 After changing dependencies (`package.json` / `pnpm-lock.yaml`), just rebuild and restart: each container re-syncs `node_modules` at startup, since it lives in a volume that survives image rebuilds. If it ever ends up with stale packages anyway, start fresh with `infisical run --env dev -- docker compose up --build --renew-anon-volumes`.
 
-Local development runs entirely in Docker; there is no host-based alternative, since the database is only reachable from inside the compose network. To run one-off commands against the dev database, use `docker compose run --rm` (not `exec` — a running container's already-started process won't see the container-internal database hostname rewrite that happens once at startup):
+Local development runs entirely in Docker; there is no host-based alternative, since the database is only reachable from inside the compose network. To run one-off commands against the dev database, use `docker compose run --rm`, wrapped in `infisical run` just like `up` (a new shell doesn't inherit the secrets the running containers were started with). Don't use `exec`: a running container's already-started process won't see the container-internal database hostname rewrite that happens once at startup:
 
 ```sh
-docker compose run --rm migrate
-docker compose run --rm -e SEED_USER_ACCOUNTS="$(infisical secrets --env dev --path user-accounts -o json)" web pnpm run db:seed
+infisical run --env dev -- docker compose run --rm migrate
+infisical run --env dev -- docker compose run --rm -e SEED_USER_ACCOUNTS="$(infisical secrets --env dev --path user-accounts -o json)" web pnpm run db:seed
 ```
 
 Seeding needs one extra step because `pnpm run db:seed` needs account credentials that only the host's authenticated `infisical` CLI can read (the container has neither the CLI nor a session). The command above resolves them on the host as JSON and passes that in as a single env var instead — see [Database Seeding](#database-seeding) below.
