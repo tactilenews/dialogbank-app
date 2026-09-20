@@ -267,13 +267,15 @@ This supports two distinct flows:
 
 ## Database Seeding
 
-The seed script replaces the `user` table with the accounts stored in Infisical under the `user-accounts` path (one secret per account, `email` as the key and `password` as the value). It needs that list as JSON in `SEED_USER_ACCOUNTS` — resolved from Infisical directly, not through `infisical run`, since it isn't itself a stored secret:
+The seed script replaces the `user` table with the accounts stored in Infisical under the `user-accounts` path (one secret per account, `email` as the key and `password` as the value). It needs that list as JSON in `SEED_USER_ACCOUNTS`, resolved from Infisical directly rather than through `infisical run`, since it isn't itself a stored secret.
+
+Seed the Dockerized dev database with a one-off container (the database isn't reachable from the host, so running `pnpm run db:seed` directly on the host can't connect to it):
 
 ```sh
-SEED_USER_ACCOUNTS="$(infisical secrets --env dev --path user-accounts -o json)" infisical run --env dev -- pnpm run db:seed
+infisical run --env dev -- docker compose run --rm -e SEED_USER_ACCOUNTS="$(infisical secrets --env dev --path user-accounts -o json)" web pnpm run db:seed
 ```
 
-To seed the Dockerized dev database instead, see [Local Development](#local-development) above.
+Running the script on the host only works against a database that is reachable from there, with `SEED_USER_ACCOUNTS` set the same way and `DATABASE_URL` pointing at that database.
 
 ## Project Status
 
