@@ -42,8 +42,20 @@ type AgentWriter = {
 	) => Promise<void>;
 };
 
+export type AgentBranchSummary = { id: string; name: string; isArchived: boolean };
+
+export type AgentBranchVersion = { id: string; seqNoInBranch: number; timeCommittedSecs: number };
+
 export type AgentBranchReader = {
-	list: (agentId: string) => Promise<Array<{ id: string; name: string; isArchived: boolean }>>;
+	list: (agentId: string) => Promise<AgentBranchSummary[]>;
+	get: (
+		agentId: string,
+		branchId: string,
+	) => Promise<{ mostRecentVersions?: AgentBranchVersion[] }>;
+	create: (
+		agentId: string,
+		request: { parentVersionId: string; name: string; description: string },
+	) => Promise<{ createdBranchId: string }>;
 };
 
 export type AgentCatalogReader = {
@@ -124,7 +136,10 @@ export async function resolveElevenLabsAgentTargetForAgentId(
 		const branches = await reader.list(agentId);
 		branchId = branches.find((branch) => !branch.isArchived && branch.name === branchName)?.id;
 		if (!branchId) {
-			throw error(500, `ElevenLabs branch "${branchName}" was not found for agent ${agentId}.`);
+			if (branchName === "main") {
+				throw error(500, `ElevenLabs branch "${branchName}" was not found for agent ${agentId}.`);
+			}
+			branchId = await createElevenLabsDevelopmentBranch(agentId, branchName, branches, reader);
 		}
 	}
 
@@ -151,7 +166,56 @@ export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): A
 			});
 			return response.results;
 		},
+		get: async (agentId, branchId) =>
+			client.conversationalAi.agents.branches.get(agentId, branchId),
+		create: async (agentId, request) =>
+			client.conversationalAi.agents.branches.create(agentId, request),
 	};
+}
+
+function selectLatestCommittedVersionId(
+	branch: { mostRecentVersions?: AgentBranchVersion[] },
+	agentId: string,
+	branchName: string,
+): string {
+	const latestVersion = [...(branch.mostRecentVersions ?? [])].sort((left, right) => {
+		if (left.seqNoInBranch !== right.seqNoInBranch) {
+			return right.seqNoInBranch - left.seqNoInBranch;
+		}
+		return right.timeCommittedSecs - left.timeCommittedSecs;
+	})[0];
+
+	if (!latestVersion) {
+		throw error(
+			500,
+			`ElevenLabs branch "${branchName}" for agent ${agentId} has no committed versions to branch from.`,
+		);
+	}
+
+	return latestVersion.id;
+}
+
+async function createElevenLabsDevelopmentBranch(
+	agentId: string,
+	branchName: string,
+	branches: AgentBranchSummary[],
+	reader: AgentBranchReader,
+): Promise<string> {
+	const mainBranch = branches.find((branch) => !branch.isArchived && branch.name === "main");
+	if (!mainBranch) {
+		throw error(500, `ElevenLabs branch "main" was not found for agent ${agentId}.`);
+	}
+
+	const mainBranchDetails = await reader.get(agentId, mainBranch.id);
+	const parentVersionId = selectLatestCommittedVersionId(mainBranchDetails, agentId, "main");
+
+	const created = await reader.create(agentId, {
+		parentVersionId,
+		name: branchName,
+		description: "Development branch, created automatically by Dialogbank.",
+	});
+
+	return created.createdBranchId;
 }
 
 export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentReader {
