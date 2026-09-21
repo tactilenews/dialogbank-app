@@ -1,6 +1,6 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error, fail } from "@sveltejs/kit";
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
@@ -482,10 +482,17 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const newlyClaimedAgent = !assignment.elevenLabsAgentId;
 		if (newlyClaimedAgent) {
 			try {
-				await event.locals.db
+				const claimedAssignments = await event.locals.db
 					.update(assignments)
 					.set({ elevenLabsAgentId: selectedAgentId })
-					.where(eq(assignments.id, id));
+					.where(and(eq(assignments.id, id), isNull(assignments.elevenLabsAgentId)))
+					.returning();
+				if (claimedAssignments.length === 0) {
+					return fail(409, {
+						action: "connectAgent",
+						message: "Der Einsatz wurde gleichzeitig geändert. Bitte laden Sie die Seite neu.",
+					});
+				}
 			} catch (cause) {
 				if (!isUniqueConstraintViolation(cause)) throw cause;
 				return fail(409, {
