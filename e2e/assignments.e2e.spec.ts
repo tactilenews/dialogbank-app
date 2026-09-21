@@ -58,7 +58,9 @@ test.describe("Assignments E2E", () => {
 		await expect(page.getByText("Problem mit Gelsenkirchen (neu)", { exact: false })).toBeVisible();
 
 		await page.getByRole("button", { name: "Speichern" }).click();
-		await expect(page.getByText("Einsatz gespeichert und Agent konfiguriert.")).toBeVisible();
+		await expect(page.getByText("Einsatz gespeichert.")).toBeVisible();
+		await page.getByRole("button", { name: /konfigurieren$/ }).click();
+		await expect(page.getByText("Agent konfiguriert.")).toBeVisible();
 
 		// Assert DB state: question-classification links created
 		const questionRows = await db.select().from(schema.questions);

@@ -309,13 +309,39 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 	});
 
-	it("freeAgent: returns the assignment to draft state", async ({ db, expect, schema }) => {
+	it("save: returns the assignment to draft state when no agent is selected", async ({
+		db,
+		expect,
+		schema,
+	}) => {
 		await db
 			.update(schema.assignments)
 			.set({ elevenLabsAgentId: "agent_current" })
 			.where(eq(schema.assignments.id, 1));
+		const formData = new FormData();
+		formData.append("name", "Standard");
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/assignments/1?/freeAgent", {
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({ success: true, action: "save", message: "Entwurf gespeichert." });
+
+		const assignment = await db.query.assignments.findFirst({
+			where: (row, { eq }) => eq(row.id, 1),
+		});
+		expect(assignment?.elevenLabsAgentId).toBeNull();
+	});
+
+	it("configureAgent: requires a saved agent assignment", async ({ db, expect, schema }) => {
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/configureAgent", {
 				method: "POST",
 			}),
 			params: { id: "1" } as never,
@@ -323,12 +349,13 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 
 		await expect(
-			actions.freeAgent(event as unknown as Parameters<typeof actions.freeAgent>[0]),
-		).resolves.toMatchObject({ success: true, action: "freeAgent" });
-
-		const assignment = await db.query.assignments.findFirst({
-			where: (row, { eq }) => eq(row.id, 1),
+			actions.configureAgent(event as unknown as Parameters<typeof actions.configureAgent>[0]),
+		).resolves.toMatchObject({
+			status: 400,
+			data: {
+				action: "configureAgent",
+				message: "Dem Einsatz ist kein Agent zugewiesen.",
+			},
 		});
-		expect(assignment?.elevenLabsAgentId).toBeNull();
 	});
 });

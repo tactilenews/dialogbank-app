@@ -16,14 +16,21 @@ let { data, form }: { data: PageData; form: ActionData } = $props();
 
 let nextId = $state(0);
 let submitting = $state(false);
+let selectedAgentId = $state(untrack(() => data.assignment.elevenLabsAgentId ?? ""));
 let selectedAgentIsInCatalog = $derived(
 	data.assignment.elevenLabsAgentId
-		? data.agentCatalog.some(
-				(catalogAgent: (typeof data.agentCatalog)[number]) =>
+		? data.availableAgents.some(
+				(catalogAgent: (typeof data.availableAgents)[number]) =>
 					catalogAgent.id === data.assignment.elevenLabsAgentId,
 			)
 		: true,
 );
+let selectedAgent = $derived(
+	data.availableAgents.find(
+		(catalogAgent: (typeof data.availableAgents)[number]) => catalogAgent.id === selectedAgentId,
+	),
+);
+let agentSelectionIsSaved = $derived(selectedAgentId === (data.assignment.elevenLabsAgentId ?? ""));
 
 type NewClassification = { label: string; emoji: string | null };
 
@@ -166,35 +173,36 @@ function makeEnhancer() {
 						<label for="elevenLabsAgentId" class="mb-1 block text-sm font-medium text-gray-700">
 							Agent
 						</label>
-						{#if data.assignment.elevenLabsAgentId}
-							<input type="hidden" name="elevenLabsAgentId" value={data.assignment.elevenLabsAgentId} />
-							<select
-								id="elevenLabsAgentId"
-								disabled
-								class="w-full rounded border border-gray-300 bg-gray-50 px-3 py-2 text-sm disabled:cursor-not-allowed"
-							>
-								{#if !selectedAgentIsInCatalog}
-									<option>{data.assignment.elevenLabsAgentId} (nicht im Katalog)</option>
-								{/if}
-								{#each data.agentCatalog as catalogAgent (catalogAgent.id)}
-									{#if catalogAgent.id === data.assignment.elevenLabsAgentId}
-										<option>{catalogAgent.name}</option>
-									{/if}
-								{/each}
-							</select>
-						{:else}
-							<select
-								id="elevenLabsAgentId"
-								name="elevenLabsAgentId"
-								class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
-							>
+						<select
+							id="elevenLabsAgentId"
+							name="elevenLabsAgentId"
+							bind:value={selectedAgentId}
+							class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
+						>
+							<optgroup label="Kein Agent">
 								<option value="">Kein Agent (Entwurf)</option>
-								{#each data.agentCatalog as catalogAgent (catalogAgent.id)}
+							</optgroup>
+							{#if data.unavailableAgents.length > 0}
+								<optgroup label="Nicht verfügbare Agenten">
+									{#each data.unavailableAgents as catalogAgent (catalogAgent.id)}
+										<option value={catalogAgent.id} disabled>
+											{catalogAgent.name} — {catalogAgent.assignmentName}
+										</option>
+									{/each}
+								</optgroup>
+							{/if}
+							<optgroup label="Verfügbare Agenten">
+								{#if data.assignment.elevenLabsAgentId && !selectedAgentIsInCatalog}
+									<option value={data.assignment.elevenLabsAgentId}>
+										{data.assignment.elevenLabsAgentId} (nicht im Katalog)
+									</option>
+								{/if}
+								{#each data.availableAgents as catalogAgent (catalogAgent.id)}
 									<option value={catalogAgent.id}>{catalogAgent.name}</option>
 								{/each}
-							</select>
-						{/if}
-						{#if data.agentCatalog.length === 0}
+							</optgroup>
+						</select>
+						{#if data.availableAgents.length === 0 && data.unavailableAgents.length === 0}
 							<p class="mt-1 text-xs text-gray-500">
 								Keine Dialogbank-Agenten gefunden. Markieren Sie geeignete ElevenLabs-Agenten mit
 								dem Tag {data.agentCatalogTag}.
@@ -343,18 +351,7 @@ function makeEnhancer() {
 						{/if}
 						Speichern
 					</button>
-					{#if data.assignment.elevenLabsAgentId}
-						<button
-							type="submit"
-							formaction="?/freeAgent"
-							formnovalidate
-							class="rounded border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
-						>
-							Agent freigeben
-						</button>
-					{/if}
-
-					{#if form?.message}
+					{#if form?.message && form.action !== "configureAgent"}
 						<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">
 							{form.message}
 						</p>
@@ -366,6 +363,27 @@ function makeEnhancer() {
 
 	<div class="mt-6 rounded-lg border bg-white p-6 shadow-md">
 		<h2 class="mb-4 text-lg font-semibold">Aktueller Agent</h2>
+		<form method="POST" use:enhance={makeEnhancer()} class="mb-6 flex flex-wrap items-center gap-3">
+			<button
+				type="submit"
+				formaction="?/configureAgent"
+				disabled={submitting || !selectedAgentId || !agentSelectionIsSaved}
+				class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
+			>
+				{#if !selectedAgentId}
+					Kein Agent ausgewählt
+				{:else if !agentSelectionIsSaved}
+					{data.assignment.elevenLabsAgentId
+						? "Aktuellen Agent zuerst freigeben"
+						: "Zuweisung zuerst speichern"}
+				{:else}
+					{selectedAgent?.name ?? selectedAgentId} konfigurieren
+				{/if}
+			</button>
+			{#if form?.message && form.action === "configureAgent"}
+				<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">{form.message}</p>
+			{/if}
+		</form>
 
 		{#if data.agent}
 			<div>

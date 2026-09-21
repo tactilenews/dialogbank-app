@@ -1,6 +1,6 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error, fail } from "@sveltejs/kit";
-import { and, asc, eq, isNotNull, sql } from "drizzle-orm";
+import { asc, eq, isNotNull, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
@@ -100,28 +100,6 @@ type PersistResult = {
 	newClassificationRows: { id: number; key: string; label: string }[];
 };
 
-async function buildElevenLabsQuestions(
-	db: DbClient,
-	questionItems: QuestionItem[],
-): Promise<Question[]> {
-	const existingClassifications = await db
-		.select({ id: classifications.id, label: classifications.label })
-		.from(classifications);
-	const labelsById = new Map(
-		existingClassifications.map((classification) => [classification.id, classification.label]),
-	);
-
-	return questionItems.map((question) => ({
-		text: question.text,
-		classifications: [
-			...question.selectedIds
-				.map((id) => labelsById.get(id))
-				.filter((label): label is string => Boolean(label)),
-			...question.newClassifications.map((classification) => classification.label),
-		].filter((label, index, labels) => labels.indexOf(label) === index),
-	}));
-}
-
 function isUniqueConstraintViolation(cause: unknown): boolean {
 	let current = cause;
 	for (let depth = 0; depth < 4 && current && typeof current === "object"; depth += 1) {
@@ -129,6 +107,31 @@ function isUniqueConstraintViolation(cause: unknown): boolean {
 		current = "cause" in current ? current.cause : null;
 	}
 	return false;
+}
+
+async function loadElevenLabsQuestions(db: DbClient, assignmentId: number): Promise<Question[]> {
+	const rows = await db
+		.select({
+			questionId: questions.id,
+			text: questions.text,
+			displayOrder: questions.displayOrder,
+			classificationLabel: classifications.label,
+		})
+		.from(questions)
+		.leftJoin(questionClassifications, eq(questionClassifications.questionId, questions.id))
+		.leftJoin(classifications, eq(classifications.id, questionClassifications.classificationId))
+		.where(eq(questions.assignmentId, assignmentId))
+		.orderBy(asc(questions.displayOrder), asc(questions.id));
+
+	const result = new Map<number, Question>();
+	for (const row of rows) {
+		const question = result.get(row.questionId) ?? { text: row.text, classifications: [] };
+		if (row.classificationLabel && !question.classifications.includes(row.classificationLabel)) {
+			question.classifications.push(row.classificationLabel);
+		}
+		result.set(row.questionId, question);
+	}
+	return [...result.values()];
 }
 
 async function persistQuestions(
@@ -290,21 +293,40 @@ export const load = withAuthenticatedLoad<
 		.orderBy(classifications.label);
 
 	const agentCatalogTag = resolveElevenLabsDialogbankAgentTag(process.env);
-	let agentCatalog: ElevenLabsAgentCatalogEntry[] = [];
+	let availableAgents: ElevenLabsAgentCatalogEntry[] = [];
+	let unavailableAgents: (ElevenLabsAgentCatalogEntry & {
+		assignmentId: number;
+		assignmentName: string;
+	})[] = [];
 	let agent: ElevenLabsEditorAgent | null = null;
 	try {
-		agentCatalog = await listElevenLabsDialogbankAgents(process.env);
+		const agentCatalog = await listElevenLabsDialogbankAgents(process.env);
 		const ownedAgents = await event.locals.db
-			.select({ assignmentId: assignments.id, agentId: assignments.elevenLabsAgentId })
+			.select({
+				assignmentId: assignments.id,
+				assignmentName: assignments.name,
+				agentId: assignments.elevenLabsAgentId,
+			})
 			.from(assignments)
 			.where(isNotNull(assignments.elevenLabsAgentId));
-		const unavailableAgentIds = new Set(
+		const ownersByAgentId = new Map(
 			ownedAgents
-				.filter((ownedAgent) => ownedAgent.assignmentId !== id)
-				.map((ownedAgent) => ownedAgent.agentId)
-				.filter((agentId): agentId is string => agentId !== null),
+				.filter((ownedAgent) => ownedAgent.agentId !== null && ownedAgent.assignmentId !== id)
+				.map((ownedAgent) => [ownedAgent.agentId as string, ownedAgent]),
 		);
-		agentCatalog = agentCatalog.filter((catalogAgent) => !unavailableAgentIds.has(catalogAgent.id));
+		availableAgents = agentCatalog.filter((catalogAgent) => !ownersByAgentId.has(catalogAgent.id));
+		unavailableAgents = agentCatalog.flatMap((catalogAgent) => {
+			const owner = ownersByAgentId.get(catalogAgent.id);
+			return owner
+				? [
+						{
+							...catalogAgent,
+							assignmentId: owner.assignmentId,
+							assignmentName: owner.assignmentName,
+						},
+					]
+				: [];
+		});
 	} catch {
 		// non-fatal: show catalog as unavailable
 	}
@@ -325,7 +347,8 @@ export const load = withAuthenticatedLoad<
 		assignment,
 		questions: assignmentQuestions,
 		allClassifications,
-		agentCatalog,
+		availableAgents,
+		unavailableAgents,
 		agentCatalogTag,
 		agent,
 	};
@@ -352,6 +375,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		if (!currentAssignment) throw error(404, "Einsatz nicht gefunden.");
 		if (
 			currentAssignment.elevenLabsAgentId &&
+			elevenLabsAgentId &&
 			currentAssignment.elevenLabsAgentId !== elevenLabsAgentId
 		) {
 			return fail(409, {
@@ -375,41 +399,6 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			}
 		}
 
-		if (elevenLabsAgentId) {
-			try {
-				const elevenLabsQuestions = await buildElevenLabsQuestions(event.locals.db, questionItems);
-				const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
-					process.env,
-					elevenLabsAgentId,
-				);
-				const reader = createElevenLabsAgentReader(process.env);
-				const writer = createElevenLabsAgentWriter(process.env);
-				const existingAgent: AgentReaderResponse = await reader.get(agentTarget.agentId, {
-					branchId: agentTarget.branchId,
-				});
-				await updateElevenLabsAgentQuestions(
-					agentTarget,
-					elevenLabsQuestions,
-					existingAgent,
-					writer,
-					{ promptSupplement, assignmentId: id },
-				);
-			} catch (cause) {
-				if (newlyClaimedAgent) {
-					await event.locals.db
-						.update(assignments)
-						.set({ elevenLabsAgentId: null })
-						.where(
-							and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, elevenLabsAgentId)),
-						);
-				}
-				if (!(cause instanceof ElevenLabsError)) throw cause;
-				return fail(cause.statusCode || 500, {
-					message: `Agent konnte nicht konfiguriert werden: ${cause.message || "Unbekannter Fehler"}`,
-				});
-			}
-		}
-
 		await event.locals.db
 			.update(assignments)
 			.set({ name, slug, location, client, promptSupplement, elevenLabsAgentId })
@@ -419,25 +408,60 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		return {
 			success: true,
 			action: "save",
-			message: elevenLabsAgentId
-				? "Einsatz gespeichert und Agent konfiguriert."
-				: "Entwurf gespeichert.",
+			message: elevenLabsAgentId ? "Einsatz gespeichert." : "Entwurf gespeichert.",
 		};
 	},
 
-	freeAgent: async (event) => {
+	configureAgent: async (event) => {
 		const id = parseInt(event.params.id, 10);
 		if (Number.isNaN(id)) throw error(404, "Einsatz nicht gefunden.");
 
-		await event.locals.db
-			.update(assignments)
-			.set({ elevenLabsAgentId: null })
-			.where(eq(assignments.id, id));
+		const [assignment] = await event.locals.db
+			.select({
+				elevenLabsAgentId: assignments.elevenLabsAgentId,
+				promptSupplement: assignments.promptSupplement,
+			})
+			.from(assignments)
+			.where(eq(assignments.id, id))
+			.limit(1);
+		if (!assignment) throw error(404, "Einsatz nicht gefunden.");
+		if (!assignment.elevenLabsAgentId) {
+			return fail(400, {
+				action: "configureAgent",
+				message: "Dem Einsatz ist kein Agent zugewiesen.",
+			});
+		}
+
+		try {
+			const elevenLabsQuestions = await loadElevenLabsQuestions(event.locals.db, id);
+			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
+				process.env,
+				assignment.elevenLabsAgentId,
+			);
+			const reader = createElevenLabsAgentReader(process.env);
+			const writer = createElevenLabsAgentWriter(process.env);
+			const existingAgent: AgentReaderResponse = await reader.get(agentTarget.agentId, {
+				branchId: agentTarget.branchId,
+			});
+			await updateElevenLabsAgentQuestions(
+				agentTarget,
+				elevenLabsQuestions,
+				existingAgent,
+				writer,
+				{ promptSupplement: assignment.promptSupplement, assignmentId: id },
+			);
+		} catch (cause) {
+			if (!(cause instanceof ElevenLabsError)) throw cause;
+			return fail(cause.statusCode || 500, {
+				action: "configureAgent",
+				message: `Agent konnte nicht konfiguriert werden: ${cause.message || "Unbekannter Fehler"}`,
+			});
+		}
 
 		return {
 			success: true,
-			action: "freeAgent",
-			message: "Agent freigegeben. Der Einsatz ist jetzt ein Entwurf.",
+			action: "configureAgent",
+			message: "Agent konfiguriert.",
 		};
 	},
 });
