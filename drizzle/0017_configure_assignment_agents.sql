@@ -1,0 +1,2 @@
+ALTER TABLE "assignments" ADD COLUMN "elevenlabs_agent_configured" boolean DEFAULT false NOT NULL;--> statement-breakpoint
+ALTER TABLE "assignments" ADD CONSTRAINT "assignments_elevenlabs_agent_id_unique" UNIQUE("elevenlabs_agent_id");

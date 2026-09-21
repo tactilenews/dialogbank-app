@@ -18,7 +18,7 @@ let { data }: { data: PageData } = $props();
 			{#each data.availableAssignments as assignment (assignment.slug)}
 				<a
 					href={resolve(`/showcase/${assignment.slug}`)}
-					class="flex items-center justify-between rounded-lg border border-gray-300 bg-white px-5 py-4 text-left shadow-sm transition hover:bg-gray-100 focus:outline-none"
+					class="flex items-center justify-between rounded-lg border border-gray-300 bg-white px-5 py-4 text-left shadow-sm transition hover:bg-gray-100 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-blue-600"
 				>
 					<span class="font-semibold text-gray-900">{assignment.name}</span>
 					{#if assignment.location}

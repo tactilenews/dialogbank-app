@@ -1,1 +1,0 @@
-ALTER TABLE "assignments" RENAME COLUMN "is_active" TO "is_published";

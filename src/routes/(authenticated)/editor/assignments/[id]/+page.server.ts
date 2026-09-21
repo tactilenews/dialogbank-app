@@ -382,6 +382,11 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			.where(and(eq(assignments.id, id), leaseIsAvailable))
 			.returning();
 		if (savedAssignments.length === 0) {
+			const existingAssignment = await event.locals.db.query.assignments.findFirst({
+				columns: { id: true },
+				where: eq(assignments.id, id),
+			});
+			if (!existingAssignment) throw error(404, "Einsatz nicht gefunden.");
 			return fail(409, {
 				action: "save",
 				message: "Der Agent wird gerade geändert. Bitte versuchen Sie es gleich erneut.",
@@ -412,6 +417,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const [assignment] = await event.locals.db
 			.select({
 				elevenLabsAgentId: assignments.elevenLabsAgentId,
+				elevenLabsAgentConfigured: assignments.elevenLabsAgentConfigured,
 				promptSupplement: assignments.promptSupplement,
 			})
 			.from(assignments)
@@ -428,7 +434,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			}
 			const leasedAssignments = await event.locals.db
 				.update(assignments)
-				.set({ updatedAt: agentOperationLease })
+				.set({ elevenLabsAgentConfigured: false, updatedAt: agentOperationLease })
 				.where(
 					and(
 						eq(assignments.id, id),
@@ -461,7 +467,10 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				} else {
 					await event.locals.db
 						.update(assignments)
-						.set({ updatedAt: new Date() })
+						.set({
+							elevenLabsAgentConfigured: assignment.elevenLabsAgentConfigured,
+							updatedAt: new Date(),
+						})
 						.where(and(eq(assignments.id, id), leaseIsHeld));
 					if (!(cause instanceof ElevenLabsError)) throw cause;
 					return fail(cause.statusCode || 500, {
@@ -473,7 +482,11 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 
 			await event.locals.db
 				.update(assignments)
-				.set({ elevenLabsAgentId: null, updatedAt: new Date() })
+				.set({
+					elevenLabsAgentId: null,
+					elevenLabsAgentConfigured: false,
+					updatedAt: new Date(),
+				})
 				.where(
 					and(
 						eq(assignments.id, id),
@@ -527,7 +540,11 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		try {
 			const leasedAssignments = await event.locals.db
 				.update(assignments)
-				.set({ elevenLabsAgentId: selectedAgentId, updatedAt: agentOperationLease })
+				.set({
+					elevenLabsAgentId: selectedAgentId,
+					elevenLabsAgentConfigured: false,
+					updatedAt: agentOperationLease,
+				})
 				.where(
 					and(
 						eq(assignments.id, id),
@@ -575,6 +592,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				.update(assignments)
 				.set({
 					elevenLabsAgentId: newlyClaimedAgent ? null : selectedAgentId,
+					elevenLabsAgentConfigured: false,
 					updatedAt: new Date(),
 				})
 				.where(and(eq(assignments.id, id), leaseIsHeld));
@@ -586,7 +604,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		}
 		await event.locals.db
 			.update(assignments)
-			.set({ updatedAt: new Date() })
+			.set({ elevenLabsAgentConfigured: true, updatedAt: new Date() })
 			.where(
 				and(
 					eq(assignments.id, id),

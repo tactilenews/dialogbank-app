@@ -1,1 +1,0 @@
-ALTER TABLE "assignments" DROP COLUMN "is_published";

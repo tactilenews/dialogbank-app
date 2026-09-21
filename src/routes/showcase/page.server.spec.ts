@@ -16,8 +16,25 @@ describe("/showcase/[name] +page.server", () => {
 		await expect(resultPromise).rejects.toMatchObject({ status: 404 });
 	});
 
-	it("returns counts and published quotes", async ({ db, expect, schema }) => {
+	it("hides assignments while their agent configuration is pending", async ({
+		db,
+		expect,
+		schema,
+	}) => {
 		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_standard" });
+
+		const resultPromise = load({
+			locals: { user: null, db, schema },
+			params: { name: "standard" },
+		} as unknown as Parameters<typeof load>[0]);
+
+		await expect(resultPromise).rejects.toMatchObject({ status: 404 });
+	});
+
+	it("returns counts and published quotes", async ({ db, expect, schema }) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_standard", elevenLabsAgentConfigured: true });
 		await expect(
 			db.insert(schema.conversations).values(sampleConversations),
 		).resolves.toBeDefined();
@@ -70,7 +87,9 @@ describe("/showcase/[name] +page.server", () => {
 	});
 
 	it("filters out published answers without visible text", async ({ db, expect, schema }) => {
-		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_standard" });
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_standard", elevenLabsAgentConfigured: true });
 		await expect(
 			db.insert(schema.conversations).values(sampleConversations),
 		).resolves.toBeDefined();
@@ -127,6 +146,7 @@ describe("/showcase/[name] +page.server", () => {
 				name: "standard",
 				slug: "standard-2",
 				elevenLabsAgentId: "agent_standard_2",
+				elevenLabsAgentConfigured: true,
 			}),
 		).resolves.toBeDefined();
 		await expect(

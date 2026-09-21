@@ -126,6 +126,24 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 	});
 
+	it("save: returns 404 when the assignment no longer exists", async ({ db, expect, schema }) => {
+		await db.delete(schema.assignments).where(eq(schema.assignments.id, 1));
+		const formData = new FormData();
+		formData.append("name", "Deleted assignment");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).rejects.toMatchObject({ status: 404 });
+	});
+
 	it("connectAgent: rejects an agent owned by another assignment", async ({
 		db,
 		expect,
