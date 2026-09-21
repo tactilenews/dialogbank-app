@@ -137,6 +137,31 @@ describe("resolveElevenLabsAgentTarget", () => {
 		});
 	});
 
+	it("does not apply another agent's explicit CI branch", async () => {
+		const branchReader = {
+			list: vi
+				.fn()
+				.mockResolvedValue([{ id: "agtbrch_other_dev", name: "development", isArchived: false }]),
+			get: vi.fn(),
+			create: vi.fn(),
+		};
+
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{
+					ELEVENLABS_AGENT_ID: "agent_ci_fixture",
+					ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_ci_fixture",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
+				"agent_other",
+				branchReader,
+			),
+		).resolves.toMatchObject({
+			agentId: "agent_other",
+			branchId: "agtbrch_other_dev",
+		});
+	});
+
 	it("resolves the main branch by name in production", async () => {
 		const branchReader = {
 			list: vi.fn().mockResolvedValue([
@@ -266,10 +291,11 @@ describe("resolveElevenLabsAgentTarget", () => {
 });
 
 describe("resolveElevenLabsAgentTargetForAgentId", () => {
-	it("uses the provided agent id with the explicit branch and workflow node ids", async () => {
+	it("uses an explicit branch for its configured agent", async () => {
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
 				{
+					ELEVENLABS_AGENT_ID: "agent_assignment_123",
 					ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_main_123",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},

@@ -136,7 +136,10 @@ export async function resolveElevenLabsAgentTargetForAgentId(
 	agentId: string,
 	branchReader?: AgentBranchReader,
 ): Promise<ElevenLabsAgentTarget> {
-	let branchId = environment.ELEVENLABS_AGENT_BRANCH_ID;
+	let branchId =
+		environment.ELEVENLABS_AGENT_ID === agentId
+			? environment.ELEVENLABS_AGENT_BRANCH_ID
+			: undefined;
 	if (!branchId) {
 		const branchName = environment.NODE_ENV === "production" ? "main" : "development";
 		const reader = branchReader ?? createElevenLabsAgentBranchReader(environment);

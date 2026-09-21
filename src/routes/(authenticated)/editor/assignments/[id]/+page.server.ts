@@ -1,6 +1,6 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error, fail } from "@sveltejs/kit";
-import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
@@ -37,6 +37,10 @@ type QuestionItem = {
 	newClassifications: NewClassification[];
 	displayOrder: number;
 };
+
+const agentOperationLease = sql<Date>`now() + interval '5 minutes'`;
+const leaseIsAvailable = lte(assignments.updatedAt, sql`now()`);
+const leaseIsHeld = gt(assignments.updatedAt, sql`now()`);
 
 function parseQuestionItems(formData: FormData): QuestionItem[] {
 	const rawTexts = formData.getAll("questions");
@@ -372,11 +376,25 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
 		const questionItems = parseQuestionItems(formData);
 
-		await event.locals.db
+		const savedAssignments = await event.locals.db
 			.update(assignments)
-			.set({ name, slug, location, client, promptSupplement })
-			.where(eq(assignments.id, id));
-		await persistQuestions(event.locals.db, id, questionItems);
+			.set({ name, slug, location, client, promptSupplement, updatedAt: agentOperationLease })
+			.where(and(eq(assignments.id, id), leaseIsAvailable))
+			.returning();
+		if (savedAssignments.length === 0) {
+			return fail(409, {
+				action: "save",
+				message: "Der Agent wird gerade geändert. Bitte versuchen Sie es gleich erneut.",
+			});
+		}
+		try {
+			await persistQuestions(event.locals.db, id, questionItems);
+		} finally {
+			await event.locals.db
+				.update(assignments)
+				.set({ updatedAt: new Date() })
+				.where(and(eq(assignments.id, id), leaseIsHeld));
+		}
 
 		return {
 			success: true,
@@ -408,6 +426,23 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 					message: "Dem Einsatz ist kein Agent zugewiesen.",
 				});
 			}
+			const leasedAssignments = await event.locals.db
+				.update(assignments)
+				.set({ updatedAt: agentOperationLease })
+				.where(
+					and(
+						eq(assignments.id, id),
+						eq(assignments.elevenLabsAgentId, assignment.elevenLabsAgentId),
+						leaseIsAvailable,
+					),
+				)
+				.returning();
+			if (leasedAssignments.length === 0) {
+				return fail(409, {
+					action: "connectAgent",
+					message: "Der Agent wird bereits geändert. Bitte versuchen Sie es gleich erneut.",
+				});
+			}
 
 			try {
 				const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
@@ -421,20 +456,29 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				});
 				await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
 			} catch (cause) {
-				if (!(cause instanceof ElevenLabsError)) throw cause;
-				return fail(cause.statusCode || 500, {
-					action: "connectAgent",
-					message: `Agent konnte nicht getrennt werden: ${cause.message || "Unbekannter Fehler"}`,
-				});
+				if (cause instanceof ElevenLabsError && cause.statusCode === 404) {
+					// A deleted remote agent is already detached from the assignment.
+				} else {
+					await event.locals.db
+						.update(assignments)
+						.set({ updatedAt: new Date() })
+						.where(and(eq(assignments.id, id), leaseIsHeld));
+					if (!(cause instanceof ElevenLabsError)) throw cause;
+					return fail(cause.statusCode || 500, {
+						action: "connectAgent",
+						message: `Agent konnte nicht getrennt werden: ${cause.message || "Unbekannter Fehler"}`,
+					});
+				}
 			}
 
 			await event.locals.db
 				.update(assignments)
-				.set({ elevenLabsAgentId: null })
+				.set({ elevenLabsAgentId: null, updatedAt: new Date() })
 				.where(
 					and(
 						eq(assignments.id, id),
 						eq(assignments.elevenLabsAgentId, assignment.elevenLabsAgentId),
+						leaseIsHeld,
 					),
 				);
 
@@ -480,26 +524,32 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		}
 
 		const newlyClaimedAgent = !assignment.elevenLabsAgentId;
-		if (newlyClaimedAgent) {
-			try {
-				const claimedAssignments = await event.locals.db
-					.update(assignments)
-					.set({ elevenLabsAgentId: selectedAgentId })
-					.where(and(eq(assignments.id, id), isNull(assignments.elevenLabsAgentId)))
-					.returning();
-				if (claimedAssignments.length === 0) {
-					return fail(409, {
-						action: "connectAgent",
-						message: "Der Einsatz wurde gleichzeitig geändert. Bitte laden Sie die Seite neu.",
-					});
-				}
-			} catch (cause) {
-				if (!isUniqueConstraintViolation(cause)) throw cause;
+		try {
+			const leasedAssignments = await event.locals.db
+				.update(assignments)
+				.set({ elevenLabsAgentId: selectedAgentId, updatedAt: agentOperationLease })
+				.where(
+					and(
+						eq(assignments.id, id),
+						newlyClaimedAgent
+							? isNull(assignments.elevenLabsAgentId)
+							: eq(assignments.elevenLabsAgentId, selectedAgentId),
+						leaseIsAvailable,
+					),
+				)
+				.returning();
+			if (leasedAssignments.length === 0) {
 				return fail(409, {
 					action: "connectAgent",
-					message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
+					message: "Der Agent wird bereits geändert. Bitte versuchen Sie es gleich erneut.",
 				});
 			}
+		} catch (cause) {
+			if (!isUniqueConstraintViolation(cause)) throw cause;
+			return fail(409, {
+				action: "connectAgent",
+				message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
+			});
 		}
 
 		try {
@@ -521,18 +571,29 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				{ promptSupplement: assignment.promptSupplement, assignmentId: id },
 			);
 		} catch (cause) {
-			if (newlyClaimedAgent) {
-				await event.locals.db
-					.update(assignments)
-					.set({ elevenLabsAgentId: null })
-					.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, selectedAgentId)));
-			}
+			await event.locals.db
+				.update(assignments)
+				.set({
+					elevenLabsAgentId: newlyClaimedAgent ? null : selectedAgentId,
+					updatedAt: new Date(),
+				})
+				.where(and(eq(assignments.id, id), leaseIsHeld));
 			if (!(cause instanceof ElevenLabsError)) throw cause;
 			return fail(cause.statusCode || 500, {
 				action: "connectAgent",
 				message: `Agent konnte nicht verbunden werden: ${cause.message || "Unbekannter Fehler"}`,
 			});
 		}
+		await event.locals.db
+			.update(assignments)
+			.set({ updatedAt: new Date() })
+			.where(
+				and(
+					eq(assignments.id, id),
+					eq(assignments.elevenLabsAgentId, selectedAgentId),
+					leaseIsHeld,
+				),
+			);
 
 		return {
 			success: true,

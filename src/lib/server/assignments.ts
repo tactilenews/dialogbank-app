@@ -1,6 +1,20 @@
+import { and, eq, isNull } from "drizzle-orm";
 import { assignments } from "$lib/server/db/schema";
 import { slugify } from "$lib/slugify";
 import type { DbClient } from "./db";
+
+export async function backfillLegacyAssignmentAgent(
+	db: DbClient,
+	environment: { ELEVENLABS_AGENT_ID?: string },
+): Promise<void> {
+	const legacyAgentId = environment.ELEVENLABS_AGENT_ID?.trim();
+	if (!legacyAgentId) return;
+
+	await db
+		.update(assignments)
+		.set({ elevenLabsAgentId: legacyAgentId, isPublished: false })
+		.where(and(eq(assignments.isPublished, true), isNull(assignments.elevenLabsAgentId)));
+}
 
 export function makeAssignmentSlugBase(name: string): string {
 	return slugify(name) || "einsatz";
