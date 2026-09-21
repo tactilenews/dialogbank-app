@@ -59,8 +59,8 @@ test.describe("Assignments E2E", () => {
 
 		await page.getByRole("button", { name: "Speichern" }).click();
 		await expect(page.getByText("Einsatz gespeichert.")).toBeVisible();
-		await page.getByRole("button", { name: /konfigurieren$/ }).click();
-		await expect(page.getByText("Agent konfiguriert.")).toBeVisible();
+		await page.getByRole("button", { name: /neu konfigurieren$/ }).click();
+		await expect(page.getByText("Agent neu konfiguriert.")).toBeVisible();
 
 		// Assert DB state: question-classification links created
 		const questionRows = await db.select().from(schema.questions);

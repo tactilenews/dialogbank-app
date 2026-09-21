@@ -469,3 +469,20 @@ export async function updateElevenLabsAgentQuestions(
 		platformSettings: { dataCollection: newDataCollection },
 	});
 }
+
+export async function removeElevenLabsAgentAssignment(
+	target: ElevenLabsAgentTarget,
+	existingAgent: AgentReaderResponse,
+	writer: AgentWriter,
+): Promise<void> {
+	const dataCollection = Object.fromEntries(
+		Object.entries(existingAgent.platformSettings?.dataCollection ?? {}).filter(
+			([key]) => key !== "assignment_id",
+		),
+	);
+
+	await writer.update(target.agentId, {
+		branchId: target.branchId,
+		platformSettings: { dataCollection },
+	});
+}

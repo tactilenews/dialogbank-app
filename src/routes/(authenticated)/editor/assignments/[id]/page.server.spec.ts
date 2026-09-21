@@ -97,18 +97,18 @@ describe("/editor/assignments/[id] +page.server", () => {
 		expect(links).toHaveLength(2);
 	});
 
-	it("save: rejects an agent owned by another assignment", async ({ db, expect, schema }) => {
+	it("connectAgent: rejects an agent owned by another assignment", async ({
+		db,
+		expect,
+		schema,
+	}) => {
 		await db.insert(schema.assignments).values({
 			name: "Another Assignment",
 			slug: "another-assignment",
 			elevenLabsAgentId: "agent_dialogbank_123",
 		});
 		const formData = new FormData();
-		formData.append("name", "Standard");
 		formData.append("elevenLabsAgentId", "agent_dialogbank_123");
-		formData.append("questions", "Was denkst du über Gelsenkirchen?");
-		formData.append("question_classification_ids", "[]");
-		formData.append("question_new_classifications", "[]");
 
 		const event = createRequestEvent({
 			request: new Request("http://localhost/editor/assignments/1", {
@@ -120,10 +120,13 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 
 		await expect(
-			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
 		).resolves.toMatchObject({
 			status: 409,
-			data: { message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen." },
+			data: {
+				action: "connectAgent",
+				message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
+			},
 		});
 
 		const assignment = await db.query.assignments.findFirst({
@@ -280,7 +283,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 		expect(remaining[0].text).toBe("Nur eine Frage");
 	});
 
-	it("save: does not switch an assigned agent", async ({ db, expect, schema }) => {
+	it("save: does not change the assigned agent", async ({ db, expect, schema }) => {
 		await db
 			.update(schema.assignments)
 			.set({ elevenLabsAgentId: "agent_current" })
@@ -304,12 +307,16 @@ describe("/editor/assignments/[id] +page.server", () => {
 		await expect(
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
 		).resolves.toMatchObject({
-			status: 409,
-			data: { message: "Der zugewiesene Agent muss zuerst freigegeben werden." },
+			success: true,
+			action: "save",
 		});
+		const assignment = await db.query.assignments.findFirst({
+			where: (row, { eq }) => eq(row.id, 1),
+		});
+		expect(assignment?.elevenLabsAgentId).toBe("agent_current");
 	});
 
-	it("save: returns the assignment to draft state when no agent is selected", async ({
+	it("save: preserves agent ownership when the assignment form has no agent field", async ({
 		db,
 		expect,
 		schema,
@@ -331,29 +338,35 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		await expect(
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
-		).resolves.toMatchObject({ success: true, action: "save", message: "Entwurf gespeichert." });
+		).resolves.toMatchObject({ success: true, action: "save", message: "Einsatz gespeichert." });
 
 		const assignment = await db.query.assignments.findFirst({
 			where: (row, { eq }) => eq(row.id, 1),
 		});
-		expect(assignment?.elevenLabsAgentId).toBeNull();
+		expect(assignment?.elevenLabsAgentId).toBe("agent_current");
 	});
 
-	it("configureAgent: requires a saved agent assignment", async ({ db, expect, schema }) => {
+	it("connectAgent: rejects disconnecting when no agent is connected", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		const formData = new FormData();
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/assignments/1?/configureAgent", {
+			request: new Request("http://localhost/editor/assignments/1?/connectAgent", {
 				method: "POST",
+				body: formData,
 			}),
 			params: { id: "1" } as never,
 			locals: { user: authenticatedUser, db, schema },
 		});
 
 		await expect(
-			actions.configureAgent(event as unknown as Parameters<typeof actions.configureAgent>[0]),
+			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
 		).resolves.toMatchObject({
 			status: 400,
 			data: {
-				action: "configureAgent",
+				action: "connectAgent",
 				message: "Dem Einsatz ist kein Agent zugewiesen.",
 			},
 		});

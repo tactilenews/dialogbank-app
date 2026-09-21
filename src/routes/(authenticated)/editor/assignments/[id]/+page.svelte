@@ -30,7 +30,13 @@ let selectedAgent = $derived(
 		(catalogAgent: (typeof data.availableAgents)[number]) => catalogAgent.id === selectedAgentId,
 	),
 );
-let agentSelectionIsSaved = $derived(selectedAgentId === (data.assignment.elevenLabsAgentId ?? ""));
+let agentSwitchRequiresDisconnect = $derived(
+	Boolean(
+		selectedAgentId &&
+			data.assignment.elevenLabsAgentId &&
+			selectedAgentId !== data.assignment.elevenLabsAgentId,
+	),
+);
 
 type NewClassification = { label: string; emoji: string | null };
 
@@ -168,46 +174,6 @@ function makeEnhancer() {
 							value={data.assignment.client ?? ""}
 							class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
 						/>
-					</div>
-					<div class="sm:col-span-2">
-						<label for="elevenLabsAgentId" class="mb-1 block text-sm font-medium text-gray-700">
-							Agent
-						</label>
-						<select
-							id="elevenLabsAgentId"
-							name="elevenLabsAgentId"
-							bind:value={selectedAgentId}
-							class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
-						>
-							<optgroup label="Kein Agent">
-								<option value="">Kein Agent (Entwurf)</option>
-							</optgroup>
-							{#if data.unavailableAgents.length > 0}
-								<optgroup label="Nicht verfügbare Agenten">
-									{#each data.unavailableAgents as catalogAgent (catalogAgent.id)}
-										<option value={catalogAgent.id} disabled>
-											{catalogAgent.name} — {catalogAgent.assignmentName}
-										</option>
-									{/each}
-								</optgroup>
-							{/if}
-							<optgroup label="Verfügbare Agenten">
-								{#if data.assignment.elevenLabsAgentId && !selectedAgentIsInCatalog}
-									<option value={data.assignment.elevenLabsAgentId}>
-										{data.assignment.elevenLabsAgentId} (nicht im Katalog)
-									</option>
-								{/if}
-								{#each data.availableAgents as catalogAgent (catalogAgent.id)}
-									<option value={catalogAgent.id}>{catalogAgent.name}</option>
-								{/each}
-							</optgroup>
-						</select>
-						{#if data.availableAgents.length === 0 && data.unavailableAgents.length === 0}
-							<p class="mt-1 text-xs text-gray-500">
-								Keine Dialogbank-Agenten gefunden. Markieren Sie geeignete ElevenLabs-Agenten mit
-								dem Tag {data.agentCatalogTag}.
-							</p>
-						{/if}
 					</div>
 					<div class="sm:col-span-2">
 						<label for="promptSupplement" class="mb-1 block text-sm font-medium text-gray-700">
@@ -351,7 +317,7 @@ function makeEnhancer() {
 						{/if}
 						Speichern
 					</button>
-					{#if form?.message && form.action !== "configureAgent"}
+					{#if form?.message && form.action !== "connectAgent"}
 						<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">
 							{form.message}
 						</p>
@@ -363,26 +329,69 @@ function makeEnhancer() {
 
 	<div class="mt-6 rounded-lg border bg-white p-6 shadow-md">
 		<h2 class="mb-4 text-lg font-semibold">Aktueller Agent</h2>
-		<form method="POST" use:enhance={makeEnhancer()} class="mb-6 flex flex-wrap items-center gap-3">
+		<form method="POST" use:enhance={makeEnhancer()} class="mb-6">
+			<label for="elevenLabsAgentId" class="mb-1 block text-sm font-medium text-gray-700">
+				Agent
+			</label>
+			<select
+				id="elevenLabsAgentId"
+				name="elevenLabsAgentId"
+				bind:value={selectedAgentId}
+				class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
+			>
+				<optgroup label="Kein Agent">
+					<option value="">Kein Agent</option>
+				</optgroup>
+				{#if data.unavailableAgents.length > 0}
+					<optgroup label="Nicht verfügbare Agenten">
+						{#each data.unavailableAgents as catalogAgent (catalogAgent.id)}
+							<option value={catalogAgent.id} disabled>
+								{catalogAgent.name} — {catalogAgent.assignmentName}
+							</option>
+						{/each}
+					</optgroup>
+				{/if}
+				<optgroup label="Verfügbare Agenten">
+					{#if data.assignment.elevenLabsAgentId && !selectedAgentIsInCatalog}
+						<option value={data.assignment.elevenLabsAgentId}>
+							{data.assignment.elevenLabsAgentId} (nicht im Katalog)
+						</option>
+					{/if}
+					{#each data.availableAgents as catalogAgent (catalogAgent.id)}
+						<option value={catalogAgent.id}>{catalogAgent.name}</option>
+					{/each}
+				</optgroup>
+			</select>
+			{#if data.availableAgents.length === 0 && data.unavailableAgents.length === 0}
+				<p class="mt-1 text-xs text-gray-500">
+					Keine Dialogbank-Agenten gefunden. Markieren Sie geeignete ElevenLabs-Agenten mit dem
+					Tag {data.agentCatalogTag}.
+				</p>
+			{/if}
+
+			<div class="mt-3 flex flex-wrap items-center gap-3">
 			<button
 				type="submit"
-				formaction="?/configureAgent"
-				disabled={submitting || !selectedAgentId || !agentSelectionIsSaved}
+				formaction="?/connectAgent"
+				disabled={submitting || agentSwitchRequiresDisconnect || (!selectedAgentId && !data.assignment.elevenLabsAgentId)}
 				class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
 			>
-				{#if !selectedAgentId}
+				{#if agentSwitchRequiresDisconnect}
+					Aktuellen Agent zuerst trennen
+				{:else if !selectedAgentId && data.assignment.elevenLabsAgentId}
+					Agent trennen
+				{:else if !selectedAgentId}
 					Kein Agent ausgewählt
-				{:else if !agentSelectionIsSaved}
-					{data.assignment.elevenLabsAgentId
-						? "Aktuellen Agent zuerst freigeben"
-						: "Zuweisung zuerst speichern"}
+				{:else if data.assignment.elevenLabsAgentId === selectedAgentId}
+					{selectedAgent?.name ?? selectedAgentId} neu konfigurieren
 				{:else}
-					{selectedAgent?.name ?? selectedAgentId} konfigurieren
+					{selectedAgent?.name ?? selectedAgentId} verbinden
 				{/if}
 			</button>
-			{#if form?.message && form.action === "configureAgent"}
+			{#if form?.message && form.action === "connectAgent"}
 				<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">{form.message}</p>
 			{/if}
+			</div>
 		</form>
 
 		{#if data.agent}

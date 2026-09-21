@@ -16,6 +16,7 @@ import {
 	parseQuestionsFromDataCollection,
 	parseQuestionsFromWorkflowNodePrompt,
 	type Question,
+	removeElevenLabsAgentAssignment,
 	resolveElevenLabsAgentTarget,
 	resolveElevenLabsAgentTargetForAgentId,
 	resolveElevenLabsDialogbankAgentTag,
@@ -703,6 +704,31 @@ describe("updateElevenLabsAgentQuestions", () => {
 
 		expect(writer.update.mock.calls[0][1].platformSettings?.dataCollection).toMatchObject({
 			assignment_id: { type: "string", constantValue: "42" },
+		});
+	});
+
+	it("removes only the assignment id when disconnecting", async () => {
+		const writer = makeWriter();
+		const existingAgent: AgentReaderResponse = {
+			name: "Test",
+			conversationConfig: {},
+			platformSettings: {
+				dataCollection: {
+					assignment_id: { type: "string", constantValue: "42" },
+					first_name: { type: "string", description: "What is the first name?" },
+				},
+			},
+		};
+
+		await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
+
+		expect(writer.update).toHaveBeenCalledWith(agentTarget.agentId, {
+			branchId: agentTarget.branchId,
+			platformSettings: {
+				dataCollection: {
+					first_name: { type: "string", description: "What is the first name?" },
+				},
+			},
 		});
 	});
 
