@@ -33,6 +33,11 @@ export const samplePayload2: ElevenLabsWebhookPayload = {
 		analysis: {
 			transcript_summary: "The conversation began with the WDR AI agent, Nadia...",
 			data_collection_results: {
+				assignment_id: {
+					data_collection_id: "assignment_id",
+					value: "1",
+					rationale: "Configured assignment",
+				},
 				first_name: {
 					data_collection_id: "first_name",
 					value: "Fritz",

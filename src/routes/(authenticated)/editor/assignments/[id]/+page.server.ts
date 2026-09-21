@@ -17,6 +17,7 @@ import {
 	type ElevenLabsAgentCatalogEntry,
 	type ElevenLabsEditorAgent,
 	getElevenLabsEditorAgent,
+	isSelectableDialogbankAgent,
 	listElevenLabsDialogbankAgents,
 	type Question,
 	removeElevenLabsAgentAssignment,
@@ -444,6 +445,37 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			return fail(409, {
 				action: "connectAgent",
 				message: "Der aktuelle Agent muss zuerst getrennt werden.",
+			});
+		}
+		const [agentOwner] = await event.locals.db
+			.select({ assignmentId: assignments.id })
+			.from(assignments)
+			.where(eq(assignments.elevenLabsAgentId, selectedAgentId))
+			.limit(1);
+		if (agentOwner && agentOwner.assignmentId !== id) {
+			return fail(409, {
+				action: "connectAgent",
+				message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
+			});
+		}
+
+		const requiredTag = resolveElevenLabsDialogbankAgentTag(process.env);
+		let selectedCatalogAgent: ElevenLabsAgentCatalogEntry | undefined;
+		try {
+			const agentCatalog = await listElevenLabsDialogbankAgents(process.env);
+			selectedCatalogAgent = agentCatalog.find(
+				(agent) => agent.id === selectedAgentId && isSelectableDialogbankAgent(agent, requiredTag),
+			);
+		} catch (cause) {
+			return fail(cause instanceof ElevenLabsError ? cause.statusCode || 502 : 502, {
+				action: "connectAgent",
+				message: `Agentenkatalog konnte nicht geprüft werden: ${cause instanceof Error ? cause.message : "Unbekannter Fehler"}`,
+			});
+		}
+		if (!selectedCatalogAgent) {
+			return fail(400, {
+				action: "connectAgent",
+				message: `Der Agent muss aktiv und mit dem Tag ${requiredTag} für die Dialogbank freigegeben sein.`,
 			});
 		}
 

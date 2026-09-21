@@ -54,8 +54,7 @@ export type ElevenLabsWebhookPayload = z.infer<typeof elevenLabsWebhookSchema>;
  */
 export function parseElevenLabsWebhook(payload: unknown) {
 	const validated = elevenLabsWebhookSchema.parse(payload);
-	const { conversation_id, agent_id, analysis, conversation_initiation_client_data } =
-		validated.data;
+	const { conversation_id, agent_id, analysis } = validated.data;
 
 	const callSuccessful = analysis.call_successful ?? null;
 	const summary = analysis.transcript_summary ?? null;
@@ -65,9 +64,7 @@ export function parseElevenLabsWebhook(payload: unknown) {
 	let lastName: string | null = null;
 	let age: number | null = null;
 	let publicationAllowed: boolean | null = null;
-	let assignmentId = parseAssignmentId(
-		conversation_initiation_client_data?.dynamic_variables?.assignment_id,
-	);
+	let assignmentId: number | null = null;
 
 	const classificationByIndex: Record<number, string> = {};
 	const rawAnswers: {

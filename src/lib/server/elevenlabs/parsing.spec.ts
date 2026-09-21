@@ -83,6 +83,44 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(result.answers).toHaveLength(0);
 		});
 
+		it("ignores a conflicting client-supplied assignment id", ({ expect }) => {
+			const payload = {
+				...mockPayload,
+				data: {
+					...mockPayload.data,
+					conversation_initiation_client_data: {
+						dynamic_variables: { assignment_id: "99" },
+					},
+					analysis: {
+						...mockPayload.data.analysis,
+						data_collection_results: {
+							assignment_id: {
+								data_collection_id: "assignment_id",
+								value: "42",
+								rationale: "Configured assignment",
+							},
+						},
+					},
+				},
+			};
+
+			expect(parseElevenLabsWebhook(payload).assignmentId).toBe(42);
+		});
+
+		it("does not use a client-supplied assignment id without a configured result", ({ expect }) => {
+			const payload = {
+				...mockPayload,
+				data: {
+					...mockPayload.data,
+					conversation_initiation_client_data: {
+						dynamic_variables: { assignment_id: "99" },
+					},
+				},
+			};
+
+			expect(parseElevenLabsWebhook(payload).assignmentId).toBeNull();
+		});
+
 		it("parses real sample data (samplePayload1 - empty results)", ({ expect }) => {
 			const data = parseElevenLabsWebhook(samplePayload1);
 

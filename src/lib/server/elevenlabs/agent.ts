@@ -113,6 +113,13 @@ export function resolveElevenLabsDialogbankAgentTag(environment: ElevenLabsEnv):
 	return environment.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
 }
 
+export function isSelectableDialogbankAgent(
+	agent: ElevenLabsAgentCatalogEntry,
+	requiredTag: string,
+): boolean {
+	return !agent.archived && agent.tags.includes(requiredTag);
+}
+
 export async function resolveElevenLabsAgentTarget(
 	environment: ElevenLabsEnv,
 ): Promise<ElevenLabsAgentTarget> {

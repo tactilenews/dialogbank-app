@@ -12,6 +12,7 @@ import {
 	type ElevenLabsAgentCatalogEntry,
 	type ElevenLabsEnv,
 	getElevenLabsEditorAgent,
+	isSelectableDialogbankAgent,
 	listElevenLabsDialogbankAgents,
 	parseQuestionsFromDataCollection,
 	parseQuestionsFromWorkflowNodePrompt,
@@ -30,6 +31,22 @@ const agentTarget = {
 	branchId: "agtbrch_e2e_123",
 	workflowNodeId: WORKFLOW_NODE_ID,
 };
+
+describe("isSelectableDialogbankAgent", () => {
+	it("accepts only active agents carrying the required tag", () => {
+		const agent = {
+			id: "agent_dialogbank",
+			name: "Nadia",
+			voiceId: null,
+			tags: ["dialogbank"],
+			archived: false,
+		};
+
+		expect(isSelectableDialogbankAgent(agent, "dialogbank")).toBe(true);
+		expect(isSelectableDialogbankAgent({ ...agent, tags: ["other"] }, "dialogbank")).toBe(false);
+		expect(isSelectableDialogbankAgent({ ...agent, archived: true }, "dialogbank")).toBe(false);
+	});
+});
 
 function makeOverrideAgentNode(additionalPrompt: string) {
 	return {
