@@ -1,139 +1,146 @@
 {
-	"version": "7",
-	"dialect": "postgresql",
-	"entries": [
-		{
-			"idx": 0,
-			"version": "7",
-			"when": 1772637970540,
-			"tag": "0000_small_hulk",
-			"breakpoints": true
-		},
-		{
-			"idx": 1,
-			"version": "7",
-			"when": 1773051659224,
-			"tag": "0001_confused_dreadnoughts",
-			"breakpoints": true
-		},
-		{
-			"idx": 2,
-			"version": "7",
-			"when": 1773141829459,
-			"tag": "0002_nosy_master_mold",
-			"breakpoints": true
-		},
-		{
-			"idx": 3,
-			"version": "7",
-			"when": 1773148909446,
-			"tag": "0003_vengeful_hairball",
-			"breakpoints": true
-		},
-		{
-			"idx": 4,
-			"version": "7",
-			"when": 1773318601872,
-			"tag": "0004_sour_karen_page",
-			"breakpoints": true
-		},
-		{
-			"idx": 5,
-			"version": "7",
-			"when": 1773413596838,
-			"tag": "0005_stormy_truth",
-			"breakpoints": true
-		},
-		{
-			"idx": 6,
-			"version": "7",
-			"when": 1773499183020,
-			"tag": "0006_loose_tattoo",
-			"breakpoints": true
-		},
-		{
-			"idx": 7,
-			"version": "7",
-			"when": 1773501615861,
-			"tag": "0007_superb_ser_duncan",
-			"breakpoints": true
-		},
-		{
-			"idx": 8,
-			"version": "7",
-			"when": 1773759600000,
-			"tag": "0008_tidy_classifications",
-			"breakpoints": true
-		},
-		{
-			"idx": 9,
-			"version": "7",
-			"when": 1773864900000,
-			"tag": "0009_drop_legacy_answer_classification",
-			"breakpoints": true
-		},
-		{
-			"idx": 10,
-			"version": "7",
-			"when": 1777334400000,
-			"tag": "0010_assignments",
-			"breakpoints": true
-		},
-		{
-			"idx": 11,
-			"version": "7",
-			"when": 1777507200000,
-			"tag": "0011_standard_questions",
-			"breakpoints": true
-		},
-		{
-			"idx": 12,
-			"version": "7",
-			"when": 1777467857441,
-			"tag": "0012_sync_snapshot",
-			"breakpoints": true
-		},
-		{
-			"idx": 13,
-			"version": "7",
-			"when": 1777680000000,
-			"tag": "0013_question_classifications",
-			"breakpoints": true
-		},
-		{
-			"idx": 14,
-			"version": "7",
-			"when": 1777886903346,
-			"tag": "0014_add_emoji_to_classification",
-			"breakpoints": true
-		},
-		{
-			"idx": 15,
-			"version": "7",
-			"when": 1777897605262,
-			"tag": "0015_normal_katie_power",
-			"breakpoints": true
-		},
-		{
-			"idx": 16,
-			"version": "7",
-			"when": 1789507984881,
-			"tag": "0016_add_assignment_agent",
-			"breakpoints": true
-		},
-		{
-			"idx": 17,
-			"version": "7",
-			"when": 1789637446721,
-			"tag": "0017_publish_assignments",
-			"breakpoints": true
-		},
-		{
-			"idx": 18,
-			"version": "7",
-			"when": 1790023405747,
-			"tag": "0018_enforce_assignment_agent_ownership",
-			"breakpoints": true
-		}
-	]
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1772637970540,
+      "tag": "0000_small_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1773051659224,
+      "tag": "0001_confused_dreadnoughts",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773141829459,
+      "tag": "0002_nosy_master_mold",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1773148909446,
+      "tag": "0003_vengeful_hairball",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1773318601872,
+      "tag": "0004_sour_karen_page",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1773413596838,
+      "tag": "0005_stormy_truth",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1773499183020,
+      "tag": "0006_loose_tattoo",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1773501615861,
+      "tag": "0007_superb_ser_duncan",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1773759600000,
+      "tag": "0008_tidy_classifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1773864900000,
+      "tag": "0009_drop_legacy_answer_classification",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1777334400000,
+      "tag": "0010_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1777507200000,
+      "tag": "0011_standard_questions",
+      "breakpoints": true
+    },
+    {
+      "idx": 12,
+      "version": "7",
+      "when": 1777467857441,
+      "tag": "0012_sync_snapshot",
+      "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1777680000000,
+      "tag": "0013_question_classifications",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1777886903346,
+      "tag": "0014_add_emoji_to_classification",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1777897605262,
+      "tag": "0015_normal_katie_power",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1789507984881,
+      "tag": "0016_add_assignment_agent",
+      "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1789637446721,
+      "tag": "0017_publish_assignments",
+      "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1790023405747,
+      "tag": "0018_enforce_assignment_agent_ownership",
+      "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1790024999839,
+      "tag": "0019_enforce_assignment_agent_ownership",
+      "breakpoints": true
+    }
+  ]
 }
