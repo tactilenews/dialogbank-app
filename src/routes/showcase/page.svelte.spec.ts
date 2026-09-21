@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
+import { availableAssignments } from "./page.svelte.spec/data";
 
 describe("/showcase +page.svelte", () => {
 	it("lets visitors choose an available assignment", async () => {
@@ -9,9 +10,7 @@ describe("/showcase +page.svelte", () => {
 			props: {
 				data: {
 					user: null,
-					availableAssignments: [
-						{ name: "Gelsenkirchen", slug: "gelsenkirchen", location: "Gelsenkirchen" },
-					],
+					availableAssignments,
 				},
 			},
 		});

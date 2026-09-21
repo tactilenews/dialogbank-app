@@ -1,0 +1,3 @@
+export const availableAssignments = [
+	{ name: "Gelsenkirchen", slug: "gelsenkirchen", location: "Gelsenkirchen" },
+];

@@ -2,11 +2,7 @@ import { describe, expect, it } from "vitest";
 import { page } from "vitest/browser";
 import { render } from "vitest-browser-svelte";
 import Page from "./+page.svelte";
-
-const availableAssignments = [
-	{ name: "Gelsenkirchen", slug: "gelsenkirchen", location: "Gelsenkirchen" },
-	{ name: "Köln", slug: "koeln", location: null },
-];
+import { availableAssignments } from "./page.svelte.spec/data";
 
 describe("/+page.svelte", () => {
 	it("lets visitors choose an available assignment", async () => {

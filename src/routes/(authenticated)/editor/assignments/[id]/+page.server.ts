@@ -1,6 +1,6 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error, fail } from "@sveltejs/kit";
-import { and, asc, eq, gt, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
@@ -38,9 +38,11 @@ type QuestionItem = {
 	displayOrder: number;
 };
 
-const agentOperationLease = sql<Date>`now() + interval '5 minutes'`;
 const leaseIsAvailable = lte(assignments.updatedAt, sql`now()`);
-const leaseIsHeld = gt(assignments.updatedAt, sql`now()`);
+
+function createAgentOperationLease(): Date {
+	return new Date(Date.now() + 5 * 60 * 1000);
+}
 
 function parseQuestionItems(formData: FormData): QuestionItem[] {
 	const rawTexts = formData.getAll("questions");
@@ -375,10 +377,11 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 
 		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
 		const questionItems = parseQuestionItems(formData);
+		const operationLease = createAgentOperationLease();
 
 		const savedAssignments = await event.locals.db
 			.update(assignments)
-			.set({ name, slug, location, client, promptSupplement, updatedAt: agentOperationLease })
+			.set({ name, slug, location, client, promptSupplement, updatedAt: operationLease })
 			.where(and(eq(assignments.id, id), leaseIsAvailable))
 			.returning();
 		if (savedAssignments.length === 0) {
@@ -398,7 +401,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			await event.locals.db
 				.update(assignments)
 				.set({ updatedAt: new Date() })
-				.where(and(eq(assignments.id, id), leaseIsHeld));
+				.where(and(eq(assignments.id, id), eq(assignments.updatedAt, operationLease)));
 		}
 
 		return {
@@ -418,7 +421,6 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			.select({
 				elevenLabsAgentId: assignments.elevenLabsAgentId,
 				elevenLabsAgentConfigured: assignments.elevenLabsAgentConfigured,
-				promptSupplement: assignments.promptSupplement,
 			})
 			.from(assignments)
 			.where(eq(assignments.id, id))
@@ -432,9 +434,10 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 					message: "Dem Einsatz ist kein Agent zugewiesen.",
 				});
 			}
+			const operationLease = createAgentOperationLease();
 			const leasedAssignments = await event.locals.db
 				.update(assignments)
-				.set({ elevenLabsAgentConfigured: false, updatedAt: agentOperationLease })
+				.set({ elevenLabsAgentConfigured: false, updatedAt: operationLease })
 				.where(
 					and(
 						eq(assignments.id, id),
@@ -471,7 +474,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 							elevenLabsAgentConfigured: assignment.elevenLabsAgentConfigured,
 							updatedAt: new Date(),
 						})
-						.where(and(eq(assignments.id, id), leaseIsHeld));
+						.where(and(eq(assignments.id, id), eq(assignments.updatedAt, operationLease)));
 					if (!(cause instanceof ElevenLabsError)) throw cause;
 					return fail(cause.statusCode || 500, {
 						action: "connectAgent",
@@ -491,7 +494,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 					and(
 						eq(assignments.id, id),
 						eq(assignments.elevenLabsAgentId, assignment.elevenLabsAgentId),
-						leaseIsHeld,
+						eq(assignments.updatedAt, operationLease),
 					),
 				);
 
@@ -537,13 +540,15 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		}
 
 		const newlyClaimedAgent = !assignment.elevenLabsAgentId;
+		const operationLease = createAgentOperationLease();
+		let configuredPromptSupplement: string | null = null;
 		try {
 			const leasedAssignments = await event.locals.db
 				.update(assignments)
 				.set({
 					elevenLabsAgentId: selectedAgentId,
 					elevenLabsAgentConfigured: false,
-					updatedAt: agentOperationLease,
+					updatedAt: operationLease,
 				})
 				.where(
 					and(
@@ -561,6 +566,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 					message: "Der Agent wird bereits geändert. Bitte versuchen Sie es gleich erneut.",
 				});
 			}
+			configuredPromptSupplement = leasedAssignments[0].promptSupplement;
 		} catch (cause) {
 			if (!isUniqueConstraintViolation(cause)) throw cause;
 			return fail(409, {
@@ -585,7 +591,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				elevenLabsQuestions,
 				existingAgent,
 				writer,
-				{ promptSupplement: assignment.promptSupplement, assignmentId: id },
+				{ promptSupplement: configuredPromptSupplement, assignmentId: id },
 			);
 		} catch (cause) {
 			await event.locals.db
@@ -595,7 +601,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 					elevenLabsAgentConfigured: false,
 					updatedAt: new Date(),
 				})
-				.where(and(eq(assignments.id, id), leaseIsHeld));
+				.where(and(eq(assignments.id, id), eq(assignments.updatedAt, operationLease)));
 			if (!(cause instanceof ElevenLabsError)) throw cause;
 			return fail(cause.statusCode || 500, {
 				action: "connectAgent",
@@ -609,7 +615,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				and(
 					eq(assignments.id, id),
 					eq(assignments.elevenLabsAgentId, selectedAgentId),
-					leaseIsHeld,
+					eq(assignments.updatedAt, operationLease),
 				),
 			);
 
