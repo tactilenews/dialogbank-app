@@ -1,6 +1,6 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { error, fail } from "@sveltejs/kit";
-import { and, asc, eq, isNotNull, isNull, lte, sql } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull, isNull, lte, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
@@ -42,6 +42,26 @@ const leaseIsAvailable = lte(assignments.updatedAt, sql`now()`);
 
 function createAgentOperationLease(): Date {
 	return new Date(Date.now() + 5 * 60 * 1000);
+}
+
+async function renewAgentOperationLease(
+	db: DbClient,
+	assignmentId: number,
+	currentLease: Date,
+): Promise<Date | null> {
+	const renewedLease = createAgentOperationLease();
+	const renewedAssignments = await db
+		.update(assignments)
+		.set({ updatedAt: renewedLease })
+		.where(
+			and(
+				eq(assignments.id, assignmentId),
+				eq(assignments.updatedAt, currentLease),
+				gt(assignments.updatedAt, sql`now()`),
+			),
+		)
+		.returning();
+	return renewedAssignments.length > 0 ? renewedLease : null;
 }
 
 function parseQuestionItems(formData: FormData): QuestionItem[] {
@@ -434,7 +454,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 					message: "Dem Einsatz ist kein Agent zugewiesen.",
 				});
 			}
-			const operationLease = createAgentOperationLease();
+			let operationLease = createAgentOperationLease();
 			const leasedAssignments = await event.locals.db
 				.update(assignments)
 				.set({ elevenLabsAgentConfigured: false, updatedAt: operationLease })
@@ -463,6 +483,14 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				const existingAgent = await reader.get(agentTarget.agentId, {
 					branchId: agentTarget.branchId,
 				});
+				const renewedLease = await renewAgentOperationLease(event.locals.db, id, operationLease);
+				if (!renewedLease) {
+					return fail(409, {
+						action: "connectAgent",
+						message: "Der Agent wurde zwischenzeitlich geändert. Bitte laden Sie die Seite neu.",
+					});
+				}
+				operationLease = renewedLease;
 				await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
 			} catch (cause) {
 				if (cause instanceof ElevenLabsError && cause.statusCode === 404) {
@@ -540,7 +568,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		}
 
 		const newlyClaimedAgent = !assignment.elevenLabsAgentId;
-		const operationLease = createAgentOperationLease();
+		let operationLease = createAgentOperationLease();
 		let configuredPromptSupplement: string | null = null;
 		try {
 			const leasedAssignments = await event.locals.db
@@ -586,6 +614,14 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			const existingAgent: AgentReaderResponse = await reader.get(agentTarget.agentId, {
 				branchId: agentTarget.branchId,
 			});
+			const renewedLease = await renewAgentOperationLease(event.locals.db, id, operationLease);
+			if (!renewedLease) {
+				return fail(409, {
+					action: "connectAgent",
+					message: "Der Agent wurde zwischenzeitlich geändert. Bitte laden Sie die Seite neu.",
+				});
+			}
+			operationLease = renewedLease;
 			await updateElevenLabsAgentQuestions(
 				agentTarget,
 				elevenLabsQuestions,

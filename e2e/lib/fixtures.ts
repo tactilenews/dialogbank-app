@@ -27,6 +27,7 @@ export const test = base.extend<Fixtures>({
 				name: "Standard",
 				slug: "standard",
 				elevenLabsAgentId: process.env.ELEVENLABS_AGENT_ID,
+				elevenLabsAgentConfigured: true,
 			})
 			.onConflictDoNothing();
 		await use(db);
