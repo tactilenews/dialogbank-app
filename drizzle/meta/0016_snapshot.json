@@ -1,5 +1,5 @@
 {
-	"id": "3ac5e465-b720-4827-bf48-2277d09e917c",
+	"id": "ed1a4845-2325-4283-9f35-a352e4033fc3",
 	"prevId": "4f92db37-bb0d-41a9-9f6b-1e1faef26432",
 	"version": "7",
 	"dialect": "postgresql",
@@ -126,18 +126,36 @@
 					"primaryKey": false,
 					"notNull": false
 				},
-				"elevenlabs_agent_id": {
-					"name": "elevenlabs_agent_id",
-					"type": "text",
-					"primaryKey": false,
-					"notNull": false
-				},
 				"is_active": {
 					"name": "is_active",
 					"type": "boolean",
 					"primaryKey": false,
 					"notNull": true,
 					"default": false
+				},
+				"elevenlabs_agent_id": {
+					"name": "elevenlabs_agent_id",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"elevenlabs_agent_version_id": {
+					"name": "elevenlabs_agent_version_id",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"agent_configured_at": {
+					"name": "agent_configured_at",
+					"type": "timestamp",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"agent_configuration_error": {
+					"name": "agent_configuration_error",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
 				},
 				"created_at": {
 					"name": "created_at",
@@ -162,6 +180,11 @@
 					"name": "assignments_slug_unique",
 					"nullsNotDistinct": false,
 					"columns": ["slug"]
+				},
+				"assignments_elevenlabs_agent_id_unique": {
+					"name": "assignments_elevenlabs_agent_id_unique",
+					"nullsNotDistinct": false,
+					"columns": ["elevenlabs_agent_id"]
 				}
 			},
 			"policies": {},

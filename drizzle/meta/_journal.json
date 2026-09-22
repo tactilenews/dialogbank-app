@@ -117,15 +117,8 @@
 		{
 			"idx": 16,
 			"version": "7",
-			"when": 1789507984881,
-			"tag": "0016_add_assignment_agent",
-			"breakpoints": true
-		},
-		{
-			"idx": 17,
-			"version": "7",
-			"when": 1790097370106,
-			"tag": "0017_simplify_assignment_agent_configuration",
+			"when": 1790101370060,
+			"tag": "0016_assignment_agents",
 			"breakpoints": true
 		}
 	]
