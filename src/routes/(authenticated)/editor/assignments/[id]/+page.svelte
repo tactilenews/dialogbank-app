@@ -37,15 +37,6 @@ let agentSwitchRequiresDisconnect = $derived(
 			selectedAgentId !== data.assignment.elevenLabsAgentId,
 	),
 );
-let agentConfigurationPending = $derived(
-	Boolean(
-		data.assignment.elevenLabsAgentId &&
-			(data.assignment.appliedAgentConfigurationRevision === 0 ||
-				data.assignment.agentConfigurationRevision !==
-					data.assignment.appliedAgentConfigurationRevision),
-	),
-);
-
 type NewClassification = { label: string; emoji: string | null };
 
 type QuestionItem = {
@@ -135,8 +126,8 @@ function makeEnhancer() {
 		<a href={resolve("/editor/assignments")} class="text-sm text-gray-500 hover:text-gray-900">← Einsätze</a>
 		<h1 class="text-3xl font-bold">{data.assignment.name}</h1>
 		{#if data.assignment.elevenLabsAgentId}
-			<span class="rounded-full px-3 py-1 text-sm font-medium {agentConfigurationPending ? 'bg-amber-100 text-amber-800' : 'bg-green-100 text-green-700'}">
-				{agentConfigurationPending ? "KONFIGURATION AUSSTEHEND" : "AGENT ZUGEWIESEN"}
+			<span class="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
+				AGENT ZUGEWIESEN
 			</span>
 		{/if}
 	</div>
@@ -339,8 +330,21 @@ function makeEnhancer() {
 		<h2 class="mb-4 text-lg font-semibold">Aktueller Agent</h2>
 		{#if data.assignment.agentConfigurationError}
 			<p class="mb-4 text-sm text-red-700">{data.assignment.agentConfigurationError}</p>
-		{:else if agentConfigurationPending}
-			<p class="mb-4 text-sm text-amber-700">Die Agentenkonfiguration wurde noch nicht bestätigt.</p>
+		{/if}
+		<p class="mb-4 text-sm text-amber-700">
+			Konfigurieren Sie denselben Agenten nicht gleichzeitig in mehreren Browserfenstern. Der zuletzt
+			abgeschlossene Vorgang bestimmt die Konfiguration in ElevenLabs.
+		</p>
+		{#if data.assignment.agentConfiguredAt}
+			<p class="mb-4 text-xs text-gray-500">
+				Zuletzt konfiguriert: {new Intl.DateTimeFormat("de-DE", {
+					dateStyle: "medium",
+					timeStyle: "short",
+				}).format(new Date(data.assignment.agentConfiguredAt))}
+				{#if data.assignment.elevenLabsAgentVersionId}
+					· Version {data.assignment.elevenLabsAgentVersionId}
+				{/if}
+			</p>
 		{/if}
 		<form method="POST" use:enhance={makeEnhancer()} class="mb-6">
 			<label for="elevenLabsAgentId" class="mb-1 block text-sm font-medium text-gray-700">

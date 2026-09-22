@@ -750,13 +750,11 @@ describe("updateElevenLabsAgentQuestions", () => {
 			workflow: makeWorkflow("Stelle der Person nacheinander diese Fragen:\n\n1. Frage?"),
 		};
 
-		await updateElevenLabsAgentQuestions(
-			agentTarget,
-			[makeQuestion("Frage?")],
-			existingAgent,
-			writer,
-			{ assignmentId: 42 },
-		);
+		await expect(
+			updateElevenLabsAgentQuestions(agentTarget, [makeQuestion("Frage?")], existingAgent, writer, {
+				assignmentId: 42,
+			}),
+		).resolves.toBe("agtvrsn_test");
 
 		expect(writer.update.mock.calls[0][1].platformSettings?.dataCollection).toMatchObject({
 			assignment_id: { type: "string", constantValue: "42" },
@@ -776,7 +774,9 @@ describe("updateElevenLabsAgentQuestions", () => {
 			},
 		};
 
-		await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
+		await expect(removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer)).resolves.toBe(
+			"agtvrsn_test",
+		);
 
 		expect(writer.update).toHaveBeenCalledWith(agentTarget.agentId, {
 			branchId: agentTarget.branchId,

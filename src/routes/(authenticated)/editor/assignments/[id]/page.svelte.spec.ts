@@ -19,14 +19,13 @@ describe("/editor/assignments/[id] +page.svelte", () => {
 			.toBeEnabled();
 	});
 
-	it("shows when the desired agent configuration has not been applied", async () => {
+	it("shows configuration errors and the concurrency warning", async () => {
 		render(Page, {
 			props: {
 				data: {
 					...assignmentEditorPageData,
 					assignment: {
 						...assignmentEditorPageData.assignment,
-						agentConfigurationRevision: 2,
 						agentConfigurationError: "ElevenLabs unavailable",
 					},
 				},
@@ -34,7 +33,9 @@ describe("/editor/assignments/[id] +page.svelte", () => {
 			},
 		});
 
-		await expect.element(page.getByText("KONFIGURATION AUSSTEHEND")).toBeVisible();
 		await expect.element(page.getByText("ElevenLabs unavailable")).toBeVisible();
+		await expect
+			.element(page.getByText(/nicht gleichzeitig in mehreren Browserfenstern/))
+			.toBeVisible();
 	});
 });

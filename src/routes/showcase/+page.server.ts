@@ -1,4 +1,4 @@
-import { and, asc, eq, gt, isNotNull } from "drizzle-orm";
+import { asc, isNotNull } from "drizzle-orm";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -8,13 +8,7 @@ export const load: PageServerLoad = async (event) => {
 	const availableAssignments = await db
 		.select({ name: assignments.name, slug: assignments.slug, location: assignments.location })
 		.from(assignments)
-		.where(
-			and(
-				isNotNull(assignments.elevenLabsAgentId),
-				gt(assignments.appliedAgentConfigurationRevision, 0),
-				eq(assignments.agentConfigurationRevision, assignments.appliedAgentConfigurationRevision),
-			),
-		)
+		.where(isNotNull(assignments.elevenLabsAgentId))
 		.orderBy(asc(assignments.name));
 
 	return { availableAssignments };

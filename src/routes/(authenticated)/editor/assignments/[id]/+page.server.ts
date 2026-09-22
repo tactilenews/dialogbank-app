@@ -11,7 +11,6 @@ import {
 	questions,
 } from "$lib/server/db/schema";
 import {
-	type AgentReaderResponse,
 	createElevenLabsAgentReader,
 	createElevenLabsAgentWriter,
 	type ElevenLabsAgentCatalogEntry,
@@ -97,9 +96,12 @@ function parseElevenLabsAgentId(formData: FormData): string | null {
 	return agentId || null;
 }
 
-type PersistResult = {
-	savedRows: { questionId: number; text: string; classificationIds: number[] }[];
-	newClassificationRows: { id: number; key: string; label: string }[];
+type AssignmentValues = {
+	name: string;
+	slug: string;
+	location: string | null;
+	client: string | null;
+	promptSupplement: string | null;
 };
 
 function isUniqueConstraintViolation(cause: unknown): boolean {
@@ -136,76 +138,12 @@ async function loadElevenLabsQuestions(db: DbClient, assignmentId: number): Prom
 	return [...result.values()];
 }
 
-async function reconcileAssignmentAgent(
-	db: DbClient,
-	assignmentId: number,
-	agentId: string,
-): Promise<{ versionId: string | null } | null> {
-	for (let attempt = 0; attempt < 3; attempt += 1) {
-		const assignment = await db.query.assignments.findFirst({
-			columns: {
-				elevenLabsAgentId: true,
-				agentConfigurationRevision: true,
-				promptSupplement: true,
-			},
-			where: eq(assignments.id, assignmentId),
-		});
-		if (!assignment || assignment.elevenLabsAgentId !== agentId) return null;
-
-		const revision = assignment.agentConfigurationRevision;
-		try {
-			const elevenLabsQuestions = await loadElevenLabsQuestions(db, assignmentId);
-			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
-			const reader = createElevenLabsAgentReader(process.env);
-			const writer = createElevenLabsAgentWriter(process.env);
-			const existingAgent: AgentReaderResponse = await reader.get(agentTarget.agentId, {
-				branchId: agentTarget.branchId,
-			});
-			const versionId = await updateElevenLabsAgentQuestions(
-				agentTarget,
-				elevenLabsQuestions,
-				existingAgent,
-				writer,
-				{ promptSupplement: assignment.promptSupplement, assignmentId },
-			);
-			const applied = await db
-				.update(assignments)
-				.set({
-					appliedAgentConfigurationRevision: revision,
-					elevenLabsAgentVersionId: versionId,
-					agentConfigurationError: null,
-				})
-				.where(
-					and(
-						eq(assignments.id, assignmentId),
-						eq(assignments.elevenLabsAgentId, agentId),
-						eq(assignments.agentConfigurationRevision, revision),
-					),
-				)
-				.returning();
-			if (applied.length > 0) return { versionId };
-		} catch (cause) {
-			await db
-				.update(assignments)
-				.set({ agentConfigurationError: cause instanceof Error ? cause.message : "Unknown error" })
-				.where(
-					and(
-						eq(assignments.id, assignmentId),
-						eq(assignments.elevenLabsAgentId, agentId),
-						eq(assignments.agentConfigurationRevision, revision),
-					),
-				);
-			throw cause;
-		}
-	}
-	return null;
-}
-
-async function persistQuestions(
+async function persistAssignmentAndQuestions(
 	db: DbClient,
 	assignmentId: number,
 	questionItems: QuestionItem[],
-): Promise<PersistResult> {
+	assignmentValues: AssignmentValues,
+): Promise<boolean> {
 	const seenKeys = new Set<string>();
 	const deduplicatedNew = questionItems
 		.flatMap((q) => q.newClassifications)
@@ -239,8 +177,15 @@ async function persistQuestions(
 	}
 
 	if (questionItems.length === 0) {
-		await db.delete(questions).where(eq(questions.assignmentId, assignmentId));
-		return { savedRows: [], newClassificationRows };
+		const [savedAssignments] = await dbAtomic(db, (client) => [
+			client
+				.update(assignments)
+				.set(assignmentValues)
+				.where(eq(assignments.id, assignmentId))
+				.returning(),
+			client.delete(questions).where(eq(questions.assignmentId, assignmentId)),
+		]);
+		return Array.isArray(savedAssignments) && savedAssignments.length > 0;
 	}
 
 	// Pre-fetch IDs from the sequence so all queries can be pre-built for dbAtomic.
@@ -251,7 +196,6 @@ async function persistQuestions(
 	).rows as { nextval: string }[];
 	const questionIds = seqRows.map((r) => Number(r.nextval));
 
-	const savedRows: { questionId: number; text: string; classificationIds: number[] }[] = [];
 	const qcRows: { questionId: number; classificationId: number }[] = [];
 
 	for (let i = 0; i < questionItems.length; i++) {
@@ -266,12 +210,18 @@ async function persistQuestions(
 		for (const classificationId of uniqueIds) {
 			qcRows.push({ questionId, classificationId });
 		}
-		savedRows.push({ questionId, text: qItem.text, classificationIds: uniqueIds });
 	}
 
-	await dbAtomic(db, (client) => {
+	const [savedAssignments] = await dbAtomic(db, (client) => {
 		const batch: [PromiseLike<unknown>, PromiseLike<unknown>, ...PromiseLike<unknown>[]] = [
+			client
+				.update(assignments)
+				.set(assignmentValues)
+				.where(eq(assignments.id, assignmentId))
+				.returning(),
 			client.delete(questions).where(eq(questions.assignmentId, assignmentId)),
+		];
+		batch.push(
 			client.insert(questions).values(
 				questionItems.map((q, i) => ({
 					id: questionIds[i],
@@ -280,14 +230,14 @@ async function persistQuestions(
 					displayOrder: q.displayOrder,
 				})),
 			),
-		];
+		);
 		if (qcRows.length > 0) {
 			batch.push(client.insert(questionClassifications).values(qcRows));
 		}
 		return batch;
 	});
 
-	return { savedRows, newClassificationRows };
+	return Array.isArray(savedAssignments) && savedAssignments.length > 0;
 }
 
 export const load = withAuthenticatedLoad<
@@ -437,28 +387,16 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
 		const questionItems = parseQuestionItems(formData);
 
-		const savedAssignments = await event.locals.db
-			.update(assignments)
-			.set({
-				name,
-				slug,
-				location,
-				client,
-				promptSupplement,
-			})
-			.where(eq(assignments.id, id))
-			.returning();
-		if (savedAssignments.length === 0) {
+		const saved = await persistAssignmentAndQuestions(event.locals.db, id, questionItems, {
+			name,
+			slug,
+			location,
+			client,
+			promptSupplement,
+		});
+		if (!saved) {
 			throw error(404, "Einsatz nicht gefunden.");
 		}
-		await persistQuestions(event.locals.db, id, questionItems);
-		await event.locals.db
-			.update(assignments)
-			.set({
-				agentConfigurationRevision: sql`${assignments.agentConfigurationRevision} + 1`,
-				agentConfigurationError: null,
-			})
-			.where(and(eq(assignments.id, id), isNotNull(assignments.elevenLabsAgentId)));
 
 		return {
 			success: true,
@@ -476,7 +414,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const [assignment] = await event.locals.db
 			.select({
 				elevenLabsAgentId: assignments.elevenLabsAgentId,
-				agentConfigurationRevision: assignments.agentConfigurationRevision,
+				promptSupplement: assignments.promptSupplement,
 			})
 			.from(assignments)
 			.where(eq(assignments.id, id))
@@ -490,29 +428,6 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 					message: "Dem Einsatz ist kein Agent zugewiesen.",
 				});
 			}
-			const desiredRevision = assignment.agentConfigurationRevision + 1;
-			const pendingAssignments = await event.locals.db
-				.update(assignments)
-				.set({
-					agentConfigurationRevision: desiredRevision,
-					agentConfigurationError: null,
-				})
-				.where(
-					and(
-						eq(assignments.id, id),
-						eq(assignments.elevenLabsAgentId, assignment.elevenLabsAgentId),
-						eq(assignments.agentConfigurationRevision, assignment.agentConfigurationRevision),
-					),
-				)
-				.returning();
-			if (pendingAssignments.length === 0) {
-				return fail(409, {
-					action: "connectAgent",
-					message: "Der Agent wurde zwischenzeitlich geändert. Bitte laden Sie die Seite neu.",
-				});
-			}
-
-			let versionId: string | null = null;
 			try {
 				const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
 					process.env,
@@ -523,7 +438,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				const existingAgent = await reader.get(agentTarget.agentId, {
 					branchId: agentTarget.branchId,
 				});
-				versionId = await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
+				await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
 			} catch (cause) {
 				if (cause instanceof ElevenLabsError && cause.statusCode === 404) {
 					// A deleted remote agent is already detached from the assignment.
@@ -533,12 +448,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 						.set({
 							agentConfigurationError: cause instanceof Error ? cause.message : "Unknown error",
 						})
-						.where(
-							and(
-								eq(assignments.id, id),
-								eq(assignments.agentConfigurationRevision, desiredRevision),
-							),
-						);
+						.where(eq(assignments.id, id));
 					if (!(cause instanceof ElevenLabsError)) throw cause;
 					return fail(cause.statusCode || 500, {
 						action: "connectAgent",
@@ -551,15 +461,14 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				.update(assignments)
 				.set({
 					elevenLabsAgentId: null,
-					appliedAgentConfigurationRevision: desiredRevision,
-					elevenLabsAgentVersionId: versionId,
+					elevenLabsAgentVersionId: null,
+					agentConfiguredAt: null,
 					agentConfigurationError: null,
 				})
 				.where(
 					and(
 						eq(assignments.id, id),
 						eq(assignments.elevenLabsAgentId, assignment.elevenLabsAgentId),
-						eq(assignments.agentConfigurationRevision, desiredRevision),
 					),
 				);
 
@@ -605,47 +514,62 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		}
 
 		const newlyClaimedAgent = !assignment.elevenLabsAgentId;
-		try {
-			const pendingAssignments = await event.locals.db
-				.update(assignments)
-				.set({
-					elevenLabsAgentId: selectedAgentId,
-					agentConfigurationRevision: sql`${assignments.agentConfigurationRevision} + 1`,
-					agentConfigurationError: null,
-				})
-				.where(
-					and(
-						eq(assignments.id, id),
-						newlyClaimedAgent
-							? isNull(assignments.elevenLabsAgentId)
-							: eq(assignments.elevenLabsAgentId, selectedAgentId),
-					),
-				)
-				.returning();
-			if (pendingAssignments.length === 0) {
+		if (newlyClaimedAgent) {
+			try {
+				const claimedAssignments = await event.locals.db
+					.update(assignments)
+					.set({
+						elevenLabsAgentId: selectedAgentId,
+						agentConfigurationError: null,
+					})
+					.where(and(eq(assignments.id, id), isNull(assignments.elevenLabsAgentId)))
+					.returning();
+				if (claimedAssignments.length === 0) {
+					return fail(409, {
+						action: "connectAgent",
+						message: "Der Einsatz wurde zwischenzeitlich geändert. Bitte laden Sie die Seite neu.",
+					});
+				}
+			} catch (cause) {
+				if (!isUniqueConstraintViolation(cause)) throw cause;
 				return fail(409, {
 					action: "connectAgent",
-					message: "Der Einsatz wurde zwischenzeitlich geändert. Bitte laden Sie die Seite neu.",
+					message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
 				});
 			}
-		} catch (cause) {
-			if (!isUniqueConstraintViolation(cause)) throw cause;
-			return fail(409, {
-				action: "connectAgent",
-				message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
-			});
 		}
 
 		try {
-			const reconciled = await reconcileAssignmentAgent(event.locals.db, id, selectedAgentId);
-			if (!reconciled) {
-				return fail(409, {
-					action: "connectAgent",
-					message:
-						"Die Agentenkonfiguration wurde erneut geändert. Bitte versuchen Sie es noch einmal.",
-				});
-			}
+			const elevenLabsQuestions = await loadElevenLabsQuestions(event.locals.db, id);
+			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
+				process.env,
+				selectedAgentId,
+			);
+			const reader = createElevenLabsAgentReader(process.env);
+			const writer = createElevenLabsAgentWriter(process.env);
+			const existingAgent = await reader.get(agentTarget.agentId, {
+				branchId: agentTarget.branchId,
+			});
+			const versionId = await updateElevenLabsAgentQuestions(
+				agentTarget,
+				elevenLabsQuestions,
+				existingAgent,
+				writer,
+				{ promptSupplement: assignment.promptSupplement, assignmentId: id },
+			);
+			await event.locals.db
+				.update(assignments)
+				.set({
+					elevenLabsAgentVersionId: versionId,
+					agentConfiguredAt: new Date(),
+					agentConfigurationError: null,
+				})
+				.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, selectedAgentId)));
 		} catch (cause) {
+			await event.locals.db
+				.update(assignments)
+				.set({ agentConfigurationError: cause instanceof Error ? cause.message : "Unknown error" })
+				.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, selectedAgentId)));
 			if (!(cause instanceof ElevenLabsError)) throw cause;
 			return fail(cause.statusCode || 500, {
 				action: "connectAgent",

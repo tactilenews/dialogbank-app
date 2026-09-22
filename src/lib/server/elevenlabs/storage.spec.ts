@@ -12,8 +12,6 @@ describe("ElevenLabs Storage", () => {
 	it("processes payload with no results", async ({ db, expect, schema }) => {
 		await db.update(schema.assignments).set({
 			elevenLabsAgentId: "agent_test",
-			agentConfigurationRevision: 1,
-			appliedAgentConfigurationRevision: 1,
 		});
 		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload1 });
 		await expect(resultPromise).resolves.toEqual(
@@ -36,18 +34,16 @@ describe("ElevenLabs Storage", () => {
 		await expect(answersPromise).resolves.toHaveLength(0);
 	});
 
-	it("does not use a pending agent mapping for legacy webhook fallback", async ({
-		db,
-		expect,
-		schema,
-	}) => {
+	it("uses the assigned agent for legacy webhook fallback", async ({ db, expect, schema }) => {
 		await db.update(schema.assignments).set({
 			elevenLabsAgentId: "agent_test",
-			agentConfigurationRevision: 2,
-			appliedAgentConfigurationRevision: 1,
 		});
 
-		await expect(processElevenLabsPostCall({ db, payload: samplePayload1 })).resolves.toBeNull();
+		await expect(processElevenLabsPostCall({ db, payload: samplePayload1 })).resolves.toMatchObject(
+			{
+				conversationId: samplePayload1.data.conversation_id,
+			},
+		);
 	});
 
 	it("processes latest payload format (English IDs)", async ({ db, expect, schema }) => {
@@ -108,8 +104,6 @@ describe("ElevenLabs Storage", () => {
 	}) => {
 		await db.update(schema.assignments).set({
 			elevenLabsAgentId: "agent_test",
-			agentConfigurationRevision: 1,
-			appliedAgentConfigurationRevision: 1,
 		});
 		await processElevenLabsPostCall({ db, payload: samplePayload3 });
 
@@ -133,8 +127,6 @@ describe("ElevenLabs Storage", () => {
 	it("does not store classification_N entries as answer rows", async ({ db, expect, schema }) => {
 		await db.update(schema.assignments).set({
 			elevenLabsAgentId: "agent_test",
-			agentConfigurationRevision: 1,
-			appliedAgentConfigurationRevision: 1,
 		});
 		await processElevenLabsPostCall({ db, payload: samplePayload3 });
 
@@ -151,8 +143,6 @@ describe("ElevenLabs Storage", () => {
 	}) => {
 		await db.update(schema.assignments).set({
 			elevenLabsAgentId: "agent_test",
-			agentConfigurationRevision: 1,
-			appliedAgentConfigurationRevision: 1,
 		});
 		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload4 });
 		await expect(resultPromise).resolves.toEqual(

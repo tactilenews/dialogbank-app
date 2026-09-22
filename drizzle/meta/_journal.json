@@ -124,8 +124,8 @@
 		{
 			"idx": 17,
 			"version": "7",
-			"when": 1790092327419,
-			"tag": "0017_reconcile_assignment_agents",
+			"when": 1790097370106,
+			"tag": "0017_simplify_assignment_agent_configuration",
 			"breakpoints": true
 		}
 	]

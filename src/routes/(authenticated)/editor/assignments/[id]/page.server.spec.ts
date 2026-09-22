@@ -115,6 +115,37 @@ describe("/editor/assignments/[id] +page.server", () => {
 		).rejects.toMatchObject({ status: 404 });
 	});
 
+	it("save: rolls back assignment metadata when question persistence fails", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.insert(schema.questions)
+			.values({ assignmentId: 1, text: "Bestehende Frage", displayOrder: 0 });
+		const formData = new FormData();
+		formData.append("name", "Nicht gespeichert");
+		formData.append("questions", "Ungültige Frage");
+		formData.append("question_classification_ids", "[999999]");
+		formData.append("question_new_classifications", "[]");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).rejects.toBeDefined();
+		await expect(db.query.assignments.findFirst()).resolves.toMatchObject({ name: "Standard" });
+		await expect(db.select().from(schema.questions)).resolves.toEqual([
+			expect.objectContaining({ text: "Bestehende Frage" }),
+		]);
+	});
+
 	it("connectAgent: rejects an agent owned by another assignment", async ({
 		db,
 		expect,
@@ -332,8 +363,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 			where: (row, { eq }) => eq(row.id, 1),
 		});
 		expect(assignment?.elevenLabsAgentId).toBe("agent_current");
-		expect(assignment?.agentConfigurationRevision).toBe(1);
-		expect(assignment?.appliedAgentConfigurationRevision).toBe(0);
+		expect(assignment?.elevenLabsAgentVersionId).toBeNull();
 	});
 
 	it("save: preserves agent ownership when the assignment form has no agent field", async ({
