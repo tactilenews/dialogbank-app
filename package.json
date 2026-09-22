@@ -8,6 +8,7 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
+		"preview:resources": "node --experimental-strip-types src/scripts/preview-resources.ts",
 		"prepare": "svelte-kit sync || echo ''",
 		"sync:dependabot-secrets": "node --experimental-strip-types src/scripts/sync-dependabot-secrets.ts",
 		"check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

@@ -1,0 +1,95 @@
+name: Preview
+
+on:
+  pull_request:
+    types:
+      - labeled
+      - unlabeled
+      - reopened
+      - synchronize
+      - closed
+
+permissions:
+  contents: read
+
+concurrency:
+  group: preview-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      github.event.action != 'closed' &&
+      github.event.action != 'unlabeled' &&
+      contains(github.event.pull_request.labels.*.name, 'preview')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      - name: Provision preview resources
+        id: resources
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          ELEVENLABS_AGENT_ID: ${{ secrets.ELEVENLABS_AGENT_ID }}
+          ELEVENLABS_AGENT_PARENT_BRANCH_ID: ${{ secrets.ELEVENLABS_AGENT_PARENT_BRANCH_ID }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          PARENT_BRANCH_ID: ${{ secrets.PARENT_BRANCH_ID }}
+        run: |
+          resources=$(node --experimental-strip-types src/scripts/preview-resources.ts provision "${{ github.event.pull_request.number }}")
+          database_url=$(jq -r '.databaseUrl' <<<"$resources")
+          echo "::add-mask::$database_url"
+          echo "database-url=$database_url" >> "$GITHUB_OUTPUT"
+          echo "elevenlabs-branch-id=$(jq -r '.elevenLabsBranchId' <<<"$resources")" >> "$GITHUB_OUTPUT"
+          echo "resource-name=$(jq -r '.name' <<<"$resources")" >> "$GITHUB_OUTPUT"
+
+      - name: Apply database migrations
+        env:
+          DATABASE_URL: ${{ steps.resources.outputs.database-url }}
+        run: pnpm run db:migrate
+
+      - name: Deploy preview to Netlify
+        id: deploy
+        env:
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+        run: |
+          site_name=$(curl --fail --silent --show-error \
+            --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
+            "https://api.netlify.com/api/v1/sites/$NETLIFY_SITE_ID" | jq -r '.name')
+          preview_origin="https://pr-${{ github.event.pull_request.number }}--${site_name}.netlify.app"
+          deployment=$(pnpm dlx netlify-cli@27.8.0 deploy \
+            --alias "pr-${{ github.event.pull_request.number }}" \
+            --context deploy-preview \
+            --json \
+            --message "PR #${{ github.event.pull_request.number }} at ${{ github.event.pull_request.head.sha }}" \
+            --secret-env "DATABASE_URL=${{ steps.resources.outputs.database-url }}" \
+            --env "ELEVENLABS_AGENT_BRANCH_ID=${{ steps.resources.outputs.elevenlabs-branch-id }}" \
+            --env "ORIGIN=$preview_origin" \
+            --site "$NETLIFY_SITE_ID" \
+            --auth "$NETLIFY_AUTH_TOKEN")
+          echo "url=$(jq -r '.deploy_url' <<<"$deployment")" >> "$GITHUB_OUTPUT"
+          echo "### Preview deployed" >> "$GITHUB_STEP_SUMMARY"
+          echo "- URL: $(jq -r '.deploy_url' <<<"$deployment")" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Resources: ${{ steps.resources.outputs.resource-name }}" >> "$GITHUB_STEP_SUMMARY"
+
+  cleanup:
+    if: >-
+      github.event.pull_request.head.repo.full_name == github.repository &&
+      (github.event.action == 'closed' ||
+       (github.event.action == 'unlabeled' && github.event.label.name == 'preview'))
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+
+      - name: Remove preview resources
+        env:
+          ELEVENLABS_AGENT_ID: ${{ secrets.ELEVENLABS_AGENT_ID }}
+          ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
+          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
+          NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+        run: node --experimental-strip-types src/scripts/preview-resources.ts cleanup "${{ github.event.pull_request.number }}"
