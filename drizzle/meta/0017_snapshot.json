@@ -1,5 +1,5 @@
 {
-	"id": "2cd6bd58-4500-4206-a305-d4e8c6c93cb4",
+	"id": "8c83d801-5b57-47b2-acf3-fbb4232c297c",
 	"prevId": "3ac5e465-b720-4827-bf48-2277d09e917c",
 	"version": "7",
 	"dialect": "postgresql",
@@ -139,12 +139,31 @@
 					"primaryKey": false,
 					"notNull": false
 				},
-				"elevenlabs_agent_configured": {
-					"name": "elevenlabs_agent_configured",
-					"type": "boolean",
+				"agent_configuration_revision": {
+					"name": "agent_configuration_revision",
+					"type": "integer",
 					"primaryKey": false,
 					"notNull": true,
-					"default": false
+					"default": 0
+				},
+				"applied_agent_configuration_revision": {
+					"name": "applied_agent_configuration_revision",
+					"type": "integer",
+					"primaryKey": false,
+					"notNull": true,
+					"default": 0
+				},
+				"elevenlabs_agent_version_id": {
+					"name": "elevenlabs_agent_version_id",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
+				},
+				"agent_configuration_error": {
+					"name": "agent_configuration_error",
+					"type": "text",
+					"primaryKey": false,
+					"notNull": false
 				},
 				"created_at": {
 					"name": "created_at",

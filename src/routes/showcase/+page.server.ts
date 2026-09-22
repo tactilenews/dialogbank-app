@@ -1,4 +1,4 @@
-import { and, asc, eq, isNotNull } from "drizzle-orm";
+import { and, asc, eq, gt, isNotNull } from "drizzle-orm";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -11,7 +11,8 @@ export const load: PageServerLoad = async (event) => {
 		.where(
 			and(
 				isNotNull(assignments.elevenLabsAgentId),
-				eq(assignments.elevenLabsAgentConfigured, true),
+				gt(assignments.appliedAgentConfigurationRevision, 0),
+				eq(assignments.agentConfigurationRevision, assignments.appliedAgentConfigurationRevision),
 			),
 		)
 		.orderBy(asc(assignments.name));

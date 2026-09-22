@@ -39,7 +39,7 @@ type AgentWriter = {
 			platformSettings?: { dataCollection?: Record<string, AnalysisProperty> };
 			workflow?: AgentWorkflowRequestModel;
 		},
-	) => Promise<void>;
+	) => Promise<{ versionId?: string }>;
 };
 
 export type AgentBranchSummary = { id: string; name: string; isArchived: boolean };
@@ -298,9 +298,7 @@ export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWr
 	});
 
 	return {
-		update: async (agentId, request) => {
-			await client.conversationalAi.agents.update(agentId, request);
-		},
+		update: async (agentId, request) => client.conversationalAi.agents.update(agentId, request),
 	};
 }
 
@@ -424,7 +422,7 @@ export async function updateElevenLabsAgentQuestions(
 	existingAgent: AgentReaderResponse,
 	writer: AgentWriter,
 	options?: { promptSupplement?: string | null; assignmentId?: number },
-): Promise<void> {
+): Promise<string | null> {
 	const existingWorkflow = existingAgent.workflow;
 	const existingNode = existingWorkflow?.nodes[target.workflowNodeId];
 
@@ -473,26 +471,28 @@ export async function updateElevenLabsAgentQuestions(
 				}),
 	};
 
-	await writer.update(target.agentId, {
+	const updatedAgent = await writer.update(target.agentId, {
 		branchId: target.branchId,
 		workflow: updatedWorkflow,
 		platformSettings: { dataCollection: newDataCollection },
 	});
+	return updatedAgent.versionId ?? null;
 }
 
 export async function removeElevenLabsAgentAssignment(
 	target: ElevenLabsAgentTarget,
 	existingAgent: AgentReaderResponse,
 	writer: AgentWriter,
-): Promise<void> {
+): Promise<string | null> {
 	const dataCollection = Object.fromEntries(
 		Object.entries(existingAgent.platformSettings?.dataCollection ?? {}).filter(
 			([key]) => key !== "assignment_id",
 		),
 	);
 
-	await writer.update(target.agentId, {
+	const updatedAgent = await writer.update(target.agentId, {
 		branchId: target.branchId,
 		platformSettings: { dataCollection },
 	});
+	return updatedAgent.versionId ?? null;
 }

@@ -1,6 +1,6 @@
 import * as Sentry from "@sentry/sveltekit";
 import { consola } from "consola";
-import { eq } from "drizzle-orm";
+import { and, eq, gt } from "drizzle-orm";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
 import { answers, assignments, classifications, conversations } from "$lib/server/db/schema";
@@ -42,7 +42,13 @@ export async function processElevenLabsPostCall({ db, payload }: StorageInput): 
 		const matches = await db
 			.select({ id: assignments.id })
 			.from(assignments)
-			.where(eq(assignments.elevenLabsAgentId, conversationBase.agentId))
+			.where(
+				and(
+					eq(assignments.elevenLabsAgentId, conversationBase.agentId),
+					gt(assignments.appliedAgentConfigurationRevision, 0),
+					eq(assignments.agentConfigurationRevision, assignments.appliedAgentConfigurationRevision),
+				),
+			)
 			.limit(2);
 		assignmentId = matches.length === 1 ? matches[0].id : null;
 	}

@@ -15,13 +15,19 @@ export const load: PageServerLoad = async (event) => {
 			id: assignments.id,
 			name: assignments.name,
 			agentId: assignments.elevenLabsAgentId,
-			agentConfigured: assignments.elevenLabsAgentConfigured,
+			agentConfigurationRevision: assignments.agentConfigurationRevision,
+			appliedAgentConfigurationRevision: assignments.appliedAgentConfigurationRevision,
 		})
 		.from(assignments)
 		.where(eq(assignments.slug, slug))
 		.limit(1);
 	if (!assignment) error(404, "Einsatz nicht gefunden.");
-	if ((!assignment.agentId || !assignment.agentConfigured) && !event.locals.user) {
+	if (
+		(!assignment.agentId ||
+			assignment.appliedAgentConfigurationRevision === 0 ||
+			assignment.agentConfigurationRevision !== assignment.appliedAgentConfigurationRevision) &&
+		!event.locals.user
+	) {
 		error(404, "Einsatz nicht gefunden.");
 	}
 

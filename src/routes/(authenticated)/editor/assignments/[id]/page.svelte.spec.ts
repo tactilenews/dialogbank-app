@@ -18,4 +18,23 @@ describe("/editor/assignments/[id] +page.svelte", () => {
 			.element(page.getByRole("button", { name: "Nadia neu konfigurieren" }))
 			.toBeEnabled();
 	});
+
+	it("shows when the desired agent configuration has not been applied", async () => {
+		render(Page, {
+			props: {
+				data: {
+					...assignmentEditorPageData,
+					assignment: {
+						...assignmentEditorPageData.assignment,
+						agentConfigurationRevision: 2,
+						agentConfigurationError: "ElevenLabs unavailable",
+					},
+				},
+				form: {},
+			},
+		});
+
+		await expect.element(page.getByText("KONFIGURATION AUSSTEHEND")).toBeVisible();
+		await expect.element(page.getByText("ElevenLabs unavailable")).toBeVisible();
+	});
 });

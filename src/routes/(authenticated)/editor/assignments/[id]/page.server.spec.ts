@@ -1,4 +1,4 @@
-import { eq, sql } from "drizzle-orm";
+import { eq } from "drizzle-orm";
 import { createRequestEvent, describe, it } from "$lib/server/test/fixtures";
 import { actions, load } from "./+page.server";
 
@@ -95,35 +95,6 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		const links = await db.select().from(schema.questionClassifications);
 		expect(links).toHaveLength(2);
-	});
-
-	it("save: rejects changes while an agent operation holds the assignment lease", async ({
-		db,
-		expect,
-		schema,
-	}) => {
-		await db.execute(sql`
-			UPDATE ${schema.assignments}
-			SET updated_at = now() + interval '1 minute'
-			WHERE ${schema.assignments.id} = 1
-		`);
-		const formData = new FormData();
-		formData.append("name", "Changed while locked");
-		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/assignments/1?/save", {
-				method: "POST",
-				body: formData,
-			}),
-			params: { id: "1" } as never,
-			locals: { user: authenticatedUser, db, schema },
-		});
-
-		await expect(
-			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
-		).resolves.toMatchObject({
-			status: 409,
-			data: { message: "Der Agent wird gerade geändert. Bitte versuchen Sie es gleich erneut." },
-		});
 	});
 
 	it("save: returns 404 when the assignment no longer exists", async ({ db, expect, schema }) => {
@@ -361,6 +332,8 @@ describe("/editor/assignments/[id] +page.server", () => {
 			where: (row, { eq }) => eq(row.id, 1),
 		});
 		expect(assignment?.elevenLabsAgentId).toBe("agent_current");
+		expect(assignment?.agentConfigurationRevision).toBe(1);
+		expect(assignment?.appliedAgentConfigurationRevision).toBe(0);
 	});
 
 	it("save: preserves agent ownership when the assignment form has no agent field", async ({

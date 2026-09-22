@@ -638,9 +638,9 @@ describe("updateElevenLabsAgentQuestions", () => {
 							};
 							workflow?: unknown;
 						},
-					) => Promise<void>
+					) => Promise<{ versionId?: string }>
 				>()
-				.mockResolvedValue(undefined),
+				.mockResolvedValue({ versionId: "agtvrsn_test" }),
 		};
 	}
 
@@ -667,6 +667,19 @@ describe("updateElevenLabsAgentQuestions", () => {
 			type: "override_agent",
 			additionalPrompt: "Stelle der Person nacheinander diese Fragen:\n\n1. Neue Frage?",
 		});
+	});
+
+	it("returns the committed agent version", async () => {
+		const writer = makeWriter();
+		const existingAgent: AgentReaderResponse = {
+			name: "Test",
+			conversationConfig: {},
+			workflow: makeWorkflow("Stelle der Person nacheinander diese Fragen:\n\n1. Frage?"),
+		};
+
+		await expect(
+			updateElevenLabsAgentQuestions(agentTarget, [makeQuestion("Frage?")], existingAgent, writer),
+		).resolves.toBe("agtvrsn_test");
 	});
 
 	it("preserves all other workflow nodes unchanged", async () => {
