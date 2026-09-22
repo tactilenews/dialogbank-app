@@ -3,6 +3,7 @@ name: Preview
 on:
   pull_request:
     types:
+      - opened
       - labeled
       - unlabeled
       - reopened
@@ -11,18 +12,22 @@ on:
 
 permissions:
   contents: read
+  actions: write
 
 concurrency:
   group: preview-${{ github.event.pull_request.number }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   deploy:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
-      github.event.action != 'closed' &&
-      github.event.action != 'unlabeled' &&
-      contains(github.event.pull_request.labels.*.name, 'preview')
+      (
+        (github.event.action == 'labeled' && github.event.label.name == 'preview') ||
+        (github.event.action != 'labeled' && github.event.action != 'unlabeled' &&
+         github.event.action != 'closed' &&
+         contains(github.event.pull_request.labels.*.name, 'preview'))
+      )
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -38,6 +43,7 @@ jobs:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
           PARENT_BRANCH_ID: ${{ secrets.PARENT_BRANCH_ID }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           resources=$(node --experimental-strip-types src/scripts/preview-resources.ts provision "${{ github.event.pull_request.number }}")
           database_url=$(jq -r '.databaseUrl' <<<"$resources")
@@ -56,6 +62,8 @@ jobs:
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
+          DATABASE_URL: ${{ steps.resources.outputs.database-url }}
+          ELEVENLABS_AGENT_BRANCH_ID: ${{ steps.resources.outputs.elevenlabs-branch-id }}
         run: |
           site_name=$(curl --fail --silent --show-error \
             --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
@@ -66,8 +74,8 @@ jobs:
             --context deploy-preview \
             --json \
             --message "PR #${{ github.event.pull_request.number }} at ${{ github.event.pull_request.head.sha }}" \
-            --secret-env "DATABASE_URL=${{ steps.resources.outputs.database-url }}" \
-            --env "ELEVENLABS_AGENT_BRANCH_ID=${{ steps.resources.outputs.elevenlabs-branch-id }}" \
+            --secret-env "DATABASE_URL=$DATABASE_URL" \
+            --env "ELEVENLABS_AGENT_BRANCH_ID=$ELEVENLABS_AGENT_BRANCH_ID" \
             --env "ORIGIN=$preview_origin" \
             --site "$NETLIFY_SITE_ID" \
             --auth "$NETLIFY_AUTH_TOKEN")
@@ -92,4 +100,5 @@ jobs:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          GH_TOKEN: ${{ github.token }}
         run: node --experimental-strip-types src/scripts/preview-resources.ts cleanup "${{ github.event.pull_request.number }}"

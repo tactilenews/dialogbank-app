@@ -243,7 +243,10 @@ The workflow uses the deterministic name `preview/pr-<number>` for both the Neon
 the ElevenLabs agent branch, then deploys it at
 `https://pr-<number>--<site-name>.netlify.app`. Further commits redeploy the same resources.
 Removing the label or closing the pull request deletes the Neon branch and archives the
-ElevenLabs branch.
+ElevenLabs branch. Because ElevenLabs' branch list endpoint has no pagination, the workflow
+tracks each PR's ElevenLabs branch ID in a `PREVIEW_PR_<number>_ELEVENLABS_BRANCH_ID`
+GitHub Actions repository variable rather than relying solely on a name search, which is why
+the workflow requests `actions: write` permission.
 
 Infisical remains the source of truth for stable credentials. Sync these values to GitHub
 Actions secrets:

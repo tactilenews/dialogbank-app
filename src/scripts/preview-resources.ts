@@ -1,6 +1,9 @@
+import { spawnSync } from "node:child_process";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { selectLatestCommittedVersionId } from "../lib/server/elevenlabs/branch.ts";
 
 const NEON_API_BASE = "https://console.neon.tech/api/v2";
+const GITHUB_REPOSITORY = "tactilenews/dialogbank-app";
 
 type NeonBranch = {
 	id: string;
@@ -13,7 +16,6 @@ type NeonBranchesResponse = {
 
 type NeonCreateBranchResponse = {
 	branch: NeonBranch;
-	connectionUris?: Array<{ connectionUri: string }>;
 	connection_uris?: Array<{ connection_uri: string }>;
 };
 
@@ -33,6 +35,41 @@ function parsePullRequestNumber(value: string | undefined): number {
 		throw new Error("Expected a positive pull request number");
 	}
 	return pullRequestNumber;
+}
+
+function elevenLabsBranchIdVariableName(pullRequestNumber: number): string {
+	return `PREVIEW_PR_${pullRequestNumber}_ELEVENLABS_BRANCH_ID`;
+}
+
+function readRepoVariable(name: string): string | undefined {
+	const result = spawnSync(
+		"gh",
+		["variable", "get", name, "--repo", GITHUB_REPOSITORY, "--json", "value", "-q", ".value"],
+		{ encoding: "utf8" },
+	);
+	if (result.status !== 0) return undefined;
+	const value = result.stdout.trim();
+	return value.length > 0 ? value : undefined;
+}
+
+function writeRepoVariable(name: string, value: string): void {
+	const result = spawnSync(
+		"gh",
+		["variable", "set", name, "--body", value, "--repo", GITHUB_REPOSITORY],
+		{ encoding: "utf8" },
+	);
+	if (result.status !== 0) {
+		throw new Error(result.stderr.trim() || `Failed to set repo variable ${name}`);
+	}
+}
+
+function deleteRepoVariable(name: string): void {
+	const result = spawnSync("gh", ["variable", "delete", name, "--repo", GITHUB_REPOSITORY], {
+		encoding: "utf8",
+	});
+	if (result.status !== 0 && !/not found/i.test(result.stderr)) {
+		throw new Error(result.stderr.trim() || `Failed to delete repo variable ${name}`);
+	}
 }
 
 async function neonRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -82,8 +119,7 @@ async function provisionNeonBranch(name: string) {
 			},
 		);
 		branch = response.branch;
-		connectionUri =
-			response.connectionUris?.[0]?.connectionUri ?? response.connection_uris?.[0]?.connection_uri;
+		connectionUri = response.connection_uris?.[0]?.connection_uri;
 	}
 
 	if (!connectionUri) {
@@ -102,10 +138,29 @@ async function provisionNeonBranch(name: string) {
 	return { id: branch.id, connectionUri };
 }
 
-async function provisionElevenLabsBranch(name: string): Promise<string> {
+async function provisionElevenLabsBranch(name: string, pullRequestNumber: number): Promise<string> {
 	const agentId = requireEnvironment("ELEVENLABS_AGENT_ID");
 	const parentBranchId = requireEnvironment("ELEVENLABS_AGENT_PARENT_BRANCH_ID");
 	const client = new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_API_KEY") });
+	const variableName = elevenLabsBranchIdVariableName(pullRequestNumber);
+
+	const storedBranchId = readRepoVariable(variableName);
+	if (storedBranchId) {
+		const branch = await client.conversationalAi.agents.branches
+			.get(agentId, storedBranchId)
+			.catch(() => undefined);
+		if (branch) {
+			if (branch.isArchived) {
+				await client.conversationalAi.agents.branches.update(agentId, storedBranchId, {
+					isArchived: false,
+				});
+			}
+			return storedBranchId;
+		}
+	}
+
+	// The branches.list endpoint has no pagination or name filter, so this bounded
+	// search only reliably finds branches created before ID persistence was added.
 	const branches = await client.conversationalAi.agents.branches.list(agentId, {
 		includeArchived: true,
 		limit: 100,
@@ -118,20 +173,19 @@ async function provisionElevenLabsBranch(name: string): Promise<string> {
 				isArchived: false,
 			});
 		}
+		writeRepoVariable(variableName, existing.id);
 		return existing.id;
 	}
 
 	const parentBranch = await client.conversationalAi.agents.branches.get(agentId, parentBranchId);
-	const parentVersion = [...(parentBranch.mostRecentVersions ?? [])].sort(
-		(left, right) => right.seqNoInBranch - left.seqNoInBranch,
-	)[0];
-	if (!parentVersion) throw new Error("The ElevenLabs parent branch has no committed version");
+	const parentVersionId = selectLatestCommittedVersionId(parentBranch);
 
 	const created = await client.conversationalAi.agents.branches.create(agentId, {
-		parentVersionId: parentVersion.id,
+		parentVersionId,
 		name,
 		description: `Preview environment for ${name}`,
 	});
+	writeRepoVariable(variableName, created.createdBranchId);
 	return created.createdBranchId;
 }
 
@@ -142,9 +196,27 @@ async function cleanupNeonBranch(name: string): Promise<void> {
 	await neonRequest(`/projects/${projectId}/branches/${branch.id}`, { method: "DELETE" });
 }
 
-async function cleanupElevenLabsBranch(name: string): Promise<void> {
+async function cleanupElevenLabsBranch(name: string, pullRequestNumber: number): Promise<void> {
 	const agentId = requireEnvironment("ELEVENLABS_AGENT_ID");
 	const client = new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_API_KEY") });
+	const variableName = elevenLabsBranchIdVariableName(pullRequestNumber);
+
+	const storedBranchId = readRepoVariable(variableName);
+	if (storedBranchId) {
+		const branch = await client.conversationalAi.agents.branches
+			.get(agentId, storedBranchId)
+			.catch(() => undefined);
+		if (branch && !branch.isArchived) {
+			await client.conversationalAi.agents.branches.update(agentId, storedBranchId, {
+				isArchived: true,
+			});
+		}
+		deleteRepoVariable(variableName);
+		return;
+	}
+
+	// The branches.list endpoint has no pagination or name filter, so this bounded
+	// search only reliably finds branches created before ID persistence was added.
 	const branches = await client.conversationalAi.agents.branches.list(agentId, {
 		includeArchived: true,
 		limit: 100,
@@ -164,7 +236,7 @@ async function main() {
 	if (action === "provision") {
 		const [neon, elevenLabsBranchId] = await Promise.all([
 			provisionNeonBranch(name),
-			provisionElevenLabsBranch(name),
+			provisionElevenLabsBranch(name, pullRequestNumber),
 		]);
 		process.stdout.write(
 			JSON.stringify({
@@ -178,7 +250,7 @@ async function main() {
 	}
 
 	if (action === "cleanup") {
-		await Promise.all([cleanupNeonBranch(name), cleanupElevenLabsBranch(name)]);
+		await Promise.all([cleanupNeonBranch(name), cleanupElevenLabsBranch(name, pullRequestNumber)]);
 		process.stdout.write(JSON.stringify({ name }));
 		return;
 	}
@@ -186,4 +258,10 @@ async function main() {
 	throw new Error('Expected action "provision" or "cleanup"');
 }
 
-await main();
+try {
+	await main();
+} catch (error) {
+	const message = error instanceof Error ? error.message : "Unknown error";
+	console.error(message);
+	process.exitCode = 1;
+}
