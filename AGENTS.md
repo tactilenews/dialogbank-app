@@ -119,7 +119,7 @@ For database operations, always use the appropriate environment:
 infisical run --env dev -- pnpm run db:migrate
 
 # Testing (the local e2e database from compose.e2e.yaml, not a secret)
-DATABASE_URL=postgres://user:password@localhost:5433/neondb pnpm run db:migrate
+DATABASE_URL=postgres://neon:npg@localhost:5433/neondb pnpm run db:migrate
 ```
 
 ## Documentation

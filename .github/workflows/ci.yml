@@ -48,8 +48,9 @@ jobs:
       - name: Run Database Migrations
         run: pnpm run db:migrate
         env:
-          # The neon_local proxy started above; same URL as playwright.config.ts.
-          DATABASE_URL: postgres://user:password@localhost:5433/neondb
+          # The neon_local proxy started above. Its Postgres (TCP) endpoint only
+          # accepts the fixed neon:npg credentials, unlike the HTTP one the tests use.
+          DATABASE_URL: postgres://neon:npg@localhost:5433/neondb
       - name: E2E Tests
         run: pnpm test:e2e
         env:

@@ -29,8 +29,9 @@ services:
       # compose network, not the host-published 5433 that host-based
       # `pnpm run test:e2e` (and CI) use by default.
       - E2E_DATABASE_URL=postgres://user:password@db_e2e:5432/neondb
-      # Same for migrations.
-      - DATABASE_URL=postgres://user:password@db_e2e:5432/neondb
+      # Migrations connect over Postgres (TCP), where neon_local only accepts
+      # its fixed neon:npg credentials.
+      - DATABASE_URL=postgres://neon:npg@db_e2e:5432/neondb
       - RUN_MIGRATIONS=true
       - ELEVENLABS_API_KEY
       - ELEVENLABS_AGENT_ID
