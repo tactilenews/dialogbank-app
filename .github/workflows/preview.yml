@@ -34,6 +34,7 @@ jobs:
       queue: max
     permissions:
       contents: read
+      deployments: write
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
@@ -160,6 +161,52 @@ jobs:
               })
             }
 
+      # Makes GitHub show the preview in the PR's merge box and timeline. All PRs
+      # share the `preview` environment, so GitHub's auto_inactive would retire
+      # other PRs' previews; only this PR's older deployments are retired instead.
+      - name: Record GitHub deployment
+        if: steps.state.outputs.active == 'true'
+        uses: actions/github-script@v9
+        env:
+          DEPLOY_URL: ${{ steps.deploy.outputs.url }}
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request.number
+            const previous = await github.paginate(github.rest.repos.listDeployments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment: 'preview',
+            })
+            const { data: deployment } = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.payload.pull_request.head.sha,
+              environment: 'preview',
+              description: `Preview for PR #${pullRequest}`,
+              payload: { pull_request: pullRequest },
+              auto_merge: false,
+              required_contexts: [],
+              transient_environment: true,
+              production_environment: false,
+            })
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: deployment.id,
+              state: 'success',
+              environment_url: process.env.DEPLOY_URL,
+              auto_inactive: false,
+            })
+            for (const older of previous) {
+              if (older.payload?.pull_request !== pullRequest) continue
+              await github.rest.repos.createDeploymentStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: older.id,
+                state: 'inactive',
+              })
+            }
+
   cleanup:
     if: >-
       github.event.pull_request.head.repo.full_name == github.repository &&
@@ -170,6 +217,7 @@ jobs:
       queue: max
     permissions:
       contents: read
+      deployments: write
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
@@ -205,3 +253,24 @@ jobs:
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
           GH_TOKEN: ${{ github.token }}
         run: node --experimental-strip-types src/scripts/preview-resources.ts cleanup "${{ github.event.pull_request.number }}"
+
+      - name: Retire GitHub deployments
+        if: steps.state.outputs.active == 'true'
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const pullRequest = context.payload.pull_request.number
+            const deployments = await github.paginate(github.rest.repos.listDeployments, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              environment: 'preview',
+            })
+            for (const deployment of deployments) {
+              if (deployment.payload?.pull_request !== pullRequest) continue
+              await github.rest.repos.createDeploymentStatus({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                deployment_id: deployment.id,
+                state: 'inactive',
+              })
+            }
