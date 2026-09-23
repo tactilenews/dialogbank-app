@@ -38,7 +38,7 @@ jobs:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - name: Start services
-        run: docker compose -f compose.e2e.yaml up -d db_e2e
+        run: docker compose -f compose.e2e.yaml up -d --wait db_e2e
         env:
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}

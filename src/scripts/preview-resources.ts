@@ -23,6 +23,10 @@ type NeonCreateBranchResponse = {
 	branch: NeonBranch;
 };
 
+type NeonDatabasesResponse = {
+	databases: { name: string; owner_name: string }[];
+};
+
 type NeonConnectionUriResponse = {
 	uri: string;
 };
@@ -187,12 +191,16 @@ async function findNeonBranch(projectId: string, name: string): Promise<NeonBran
 async function provisionNeonBranch(name: string) {
 	const projectId = requireEnvironment("NEON_PROJECT_ID");
 	const parentId = requireEnvironment("PARENT_BRANCH_ID");
-	const parentDatabaseUrl = new URL(requireEnvironment("DATABASE_URL"));
-	const databaseName = decodeURIComponent(parentDatabaseUrl.pathname.replace(/^\//, ""));
-	const roleName = decodeURIComponent(parentDatabaseUrl.username);
-	if (!databaseName || !roleName) {
-		throw new Error("DATABASE_URL must contain a database name and role");
+	// Connect previews as the owner of the parent branch's only database, which
+	// every child branch inherits.
+	const { databases } = await neonRequest<NeonDatabasesResponse>(
+		`/projects/${projectId}/branches/${parentId}/databases`,
+	);
+	const [database] = databases;
+	if (!database || databases.length > 1) {
+		throw new Error(`Expected exactly one database on branch ${parentId}`);
 	}
+	const { name: databaseName, owner_name: roleName } = database;
 	let branch = await findNeonBranch(projectId, name);
 
 	if (!branch) {
@@ -210,7 +218,7 @@ async function provisionNeonBranch(name: string) {
 	}
 
 	// Always resolve the URI explicitly: the creation response's connection_uris
-	// are not guaranteed to match DATABASE_URL's database and role.
+	// are not guaranteed to use that database and role.
 	const query = new URLSearchParams({
 		branch_id: branch.id,
 		database_name: databaseName,

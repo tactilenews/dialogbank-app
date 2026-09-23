@@ -65,7 +65,6 @@ jobs:
         if: steps.state.outputs.active == 'true'
         id: resources
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
           ELEVENLABS_AGENT_ID: ${{ secrets.ELEVENLABS_AGENT_ID }}
           ELEVENLABS_AGENT_PARENT_BRANCH_ID: ${{ secrets.ELEVENLABS_AGENT_PARENT_BRANCH_ID }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
