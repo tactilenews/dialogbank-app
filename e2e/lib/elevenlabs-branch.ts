@@ -1,6 +1,6 @@
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import type { GetAgentResponseModel } from "@elevenlabs/elevenlabs-js/api";
-import { selectLatestCommittedVersionId } from "$lib/server/elevenlabs/branch";
+import { selectLatestCommittedVersionId } from "../../src/lib/server/elevenlabs/branch.ts";
 
 export { selectLatestCommittedVersionId };
 
