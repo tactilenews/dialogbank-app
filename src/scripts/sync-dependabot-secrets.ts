@@ -3,7 +3,6 @@ import { spawnSync } from "node:child_process";
 const GITHUB_REPOSITORY = "tactilenews/dialogbank-app";
 
 const DEFAULT_SECRET_NAMES = [
-	"DATABASE_URL",
 	"ELEVENLABS_AGENT_ID",
 	"ELEVENLABS_AGENT_PARENT_BRANCH_ID",
 	"ELEVENLABS_API_KEY",

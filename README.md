@@ -251,7 +251,7 @@ extra token scopes beyond `pull-requests: write` and disappears with the pull re
 Infisical remains the source of truth for stable credentials. Sync these values to GitHub
 Actions secrets:
 
-- `DATABASE_URL`, `NEON_API_KEY`, `NEON_PROJECT_ID`, and `PARENT_BRANCH_ID`
+- `NEON_API_KEY`, `NEON_PROJECT_ID`, and `PARENT_BRANCH_ID`
 - `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, and `ELEVENLABS_AGENT_PARENT_BRANCH_ID`
 - `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`
 
@@ -279,7 +279,6 @@ infisical run --env test -- pnpm run sync:dependabot-secrets
 
 By default, the script syncs test-related values such as:
 
-- `DATABASE_URL`
 - `ELEVENLABS_AGENT_ID`
 - `ELEVENLABS_API_KEY`
 - `NEON_API_KEY`
