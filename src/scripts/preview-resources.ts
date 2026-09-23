@@ -23,6 +23,10 @@ type NeonCreateBranchResponse = {
 	branch: NeonBranch;
 };
 
+type NeonDatabasesResponse = {
+	databases: { name: string; owner_name: string }[];
+};
+
 type NeonConnectionUriResponse = {
 	uri: string;
 };
@@ -187,12 +191,16 @@ async function findNeonBranch(projectId: string, name: string): Promise<NeonBran
 async function provisionNeonBranch(name: string) {
 	const projectId = requireEnvironment("NEON_PROJECT_ID");
 	const parentId = requireEnvironment("PARENT_BRANCH_ID");
-	const parentDatabaseUrl = new URL(requireEnvironment("DATABASE_URL"));
-	const databaseName = decodeURIComponent(parentDatabaseUrl.pathname.replace(/^\//, ""));
-	const roleName = decodeURIComponent(parentDatabaseUrl.username);
-	if (!databaseName || !roleName) {
-		throw new Error("DATABASE_URL must contain a database name and role");
+	// DATABASE_URL points at neon_local in CI, so its database and role do not
+	// exist on the Neon project. Read them from the parent branch instead.
+	const { databases } = await neonRequest<NeonDatabasesResponse>(
+		`/projects/${projectId}/branches/${parentId}/databases`,
+	);
+	const [database] = databases;
+	if (!database || databases.length > 1) {
+		throw new Error(`Expected exactly one database on branch ${parentId}`);
 	}
+	const { name: databaseName, owner_name: roleName } = database;
 	let branch = await findNeonBranch(projectId, name);
 
 	if (!branch) {
