@@ -2,6 +2,13 @@ import { ElevenLabsClient, ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { selectLatestCommittedVersionId } from "../lib/server/elevenlabs/branch.ts";
 
 const NEON_API_BASE = "https://console.neon.tech/api/v2";
+const NETLIFY_API_BASE = "https://api.netlify.com/api/v1";
+
+type NetlifyDeploy = {
+	id: string;
+	branch: string | null;
+};
+
 type NeonBranch = {
 	id: string;
 	name: string;
@@ -9,6 +16,7 @@ type NeonBranch = {
 
 type NeonBranchesResponse = {
 	branches: NeonBranch[];
+	pagination?: { next?: string };
 };
 
 type NeonCreateBranchResponse = {
@@ -105,30 +113,41 @@ async function readStoredElevenLabsBranchId(
 	return comment?.body?.match(ELEVENLABS_BRANCH_ID_PATTERN)?.[1];
 }
 
-async function storeElevenLabsBranchId(pullRequestNumber: number, branchId: string): Promise<void> {
+async function upsertPreviewComment(
+	pullRequestNumber: number,
+	update: { branchId?: string; status?: string; onlyIfExists?: boolean },
+): Promise<void> {
 	const repository = requireEnvironment("GITHUB_REPOSITORY");
 	const comment = await findPreviewComment(pullRequestNumber);
-	const idLine = elevenLabsBranchIdLine(branchId);
+	if (!comment && update.onlyIfExists) return;
+	const previousBody = comment?.body ?? "";
+	const branchId = update.branchId ?? previousBody.match(ELEVENLABS_BRANCH_ID_PATTERN)?.[1];
+	const previousStatus = previousBody
+		.split("\n")
+		.filter((line) => line !== PREVIEW_COMMENT_MARKER && !ELEVENLABS_BRANCH_ID_PATTERN.test(line))
+		.join("\n");
+	const body = [
+		PREVIEW_COMMENT_MARKER,
+		...(branchId ? [elevenLabsBranchIdLine(branchId)] : []),
+		update.status ?? (previousStatus || "Preview deployment in progress."),
+	].join("\n");
 
 	if (comment) {
-		const body = comment.body ?? PREVIEW_COMMENT_MARKER;
 		await githubRequest(`/repos/${repository}/issues/comments/${comment.id}`, {
 			method: "PATCH",
-			body: JSON.stringify({
-				body: ELEVENLABS_BRANCH_ID_PATTERN.test(body)
-					? body.replace(ELEVENLABS_BRANCH_ID_PATTERN, idLine)
-					: `${body}\n${idLine}`,
-			}),
+			body: JSON.stringify({ body }),
 		});
 		return;
 	}
 
 	await githubRequest(`/repos/${repository}/issues/${pullRequestNumber}/comments`, {
 		method: "POST",
-		body: JSON.stringify({
-			body: [PREVIEW_COMMENT_MARKER, idLine, "Preview deployment in progress."].join("\n"),
-		}),
+		body: JSON.stringify({ body }),
 	});
+}
+
+async function storeElevenLabsBranchId(pullRequestNumber: number, branchId: string): Promise<void> {
+	await upsertPreviewComment(pullRequestNumber, { branchId });
 }
 
 async function neonRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -150,8 +169,19 @@ async function neonRequest<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 async function findNeonBranch(projectId: string, name: string): Promise<NeonBranch | undefined> {
-	const response = await neonRequest<NeonBranchesResponse>(`/projects/${projectId}/branches`);
-	return response.branches.find((branch) => branch.name === name);
+	let cursor: string | undefined;
+	do {
+		const query = new URLSearchParams({ search: name, limit: "100" });
+		if (cursor) query.set("cursor", cursor);
+		const response = await neonRequest<NeonBranchesResponse>(
+			`/projects/${projectId}/branches?${query}`,
+		);
+		const branch = response.branches.find((candidate) => candidate.name === name);
+		if (branch) return branch;
+		const next = response.pagination?.next;
+		cursor = response.branches.length > 0 && next !== cursor ? next : undefined;
+	} while (cursor);
+	return undefined;
 }
 
 async function provisionNeonBranch(name: string) {
@@ -243,8 +273,59 @@ async function provisionElevenLabsBranch(name: string, pullRequestNumber: number
 		name,
 		description: `Preview environment for ${name}`,
 	});
-	await storeElevenLabsBranchId(pullRequestNumber, created.createdBranchId);
+	try {
+		await storeElevenLabsBranchId(pullRequestNumber, created.createdBranchId);
+	} catch (error) {
+		// Without a persisted ID the branch is only discoverable through the bounded
+		// name search, so archive it rather than leave an untracked active branch.
+		await client.conversationalAi.agents.branches
+			.update(agentId, created.createdBranchId, { isArchived: true })
+			.catch((archiveError: unknown) => {
+				console.error(
+					`Failed to archive untracked ElevenLabs branch ${created.createdBranchId}:`,
+					archiveError,
+				);
+			});
+		throw error;
+	}
 	return created.createdBranchId;
+}
+
+async function netlifyRequest<T>(path: string, init?: RequestInit): Promise<T | undefined> {
+	const response = await fetch(`${NETLIFY_API_BASE}${path}`, {
+		...init,
+		headers: {
+			Accept: "application/json",
+			Authorization: `Bearer ${requireEnvironment("NETLIFY_AUTH_TOKEN")}`,
+			...init?.headers,
+		},
+	});
+
+	if (!response.ok) {
+		throw new Error(`Netlify API ${response.status}: ${await response.text()}`);
+	}
+
+	if (response.status === 204) return undefined;
+	return (await response.json()) as T;
+}
+
+// `netlify deploy --alias` records the alias as the deploy's branch. Every
+// deploy for the alias must go, otherwise the alias URL falls back to an older
+// one that still points at the deleted database.
+async function cleanupNetlifyDeploys(alias: string): Promise<void> {
+	const siteId = requireEnvironment("NETLIFY_SITE_ID");
+	const deployIds: string[] = [];
+	for (let page = 1; ; page++) {
+		const query = new URLSearchParams({ branch: alias, per_page: "100", page: String(page) });
+		const deploys =
+			(await netlifyRequest<NetlifyDeploy[]>(`/sites/${siteId}/deploys?${query}`)) ?? [];
+		deployIds.push(...deploys.filter((deploy) => deploy.branch === alias).map(({ id }) => id));
+		if (deploys.length < 100) break;
+	}
+
+	for (const deployId of deployIds) {
+		await netlifyRequest(`/sites/${siteId}/deploys/${deployId}`, { method: "DELETE" });
+	}
 }
 
 async function cleanupNeonBranch(name: string): Promise<void> {
@@ -306,7 +387,15 @@ async function main() {
 	}
 
 	if (action === "cleanup") {
-		await Promise.all([cleanupNeonBranch(name), cleanupElevenLabsBranch(name, pullRequestNumber)]);
+		await Promise.all([
+			cleanupNetlifyDeploys(`pr-${pullRequestNumber}`),
+			cleanupNeonBranch(name),
+			cleanupElevenLabsBranch(name, pullRequestNumber),
+		]);
+		await upsertPreviewComment(pullRequestNumber, {
+			status: "Preview removed.",
+			onlyIfExists: true,
+		});
 		process.stdout.write(JSON.stringify({ name }));
 		return;
 	}

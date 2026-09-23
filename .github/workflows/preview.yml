@@ -81,7 +81,7 @@ jobs:
             --header "Authorization: Bearer $NETLIFY_AUTH_TOKEN" \
             "https://api.netlify.com/api/v1/sites/$NETLIFY_SITE_ID" | jq -r '.name')
           preview_origin="https://pr-${{ github.event.pull_request.number }}--${site_name}.netlify.app"
-          deployment=$(pnpm dlx netlify-cli@27.8.0 deploy \
+          deployment=$(pnpm --package=netlify-cli@27.8.0 dlx netlify deploy \
             --alias "pr-${{ github.event.pull_request.number }}" \
             --context deploy-preview \
             --json \
@@ -147,7 +147,7 @@ jobs:
       cancel-in-progress: false
     permissions:
       contents: read
-      pull-requests: read
+      pull-requests: write
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -162,5 +162,7 @@ jobs:
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
           NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
           NEON_PROJECT_ID: ${{ secrets.NEON_PROJECT_ID }}
+          NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
+          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
           GH_TOKEN: ${{ github.token }}
         run: node --experimental-strip-types src/scripts/preview-resources.ts cleanup "${{ github.event.pull_request.number }}"
