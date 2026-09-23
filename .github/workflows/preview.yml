@@ -58,7 +58,6 @@ jobs:
         if: steps.state.outputs.active == 'true'
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: ./.github/actions/setup
         if: steps.state.outputs.active == 'true'
 
@@ -193,7 +192,6 @@ jobs:
         if: steps.state.outputs.active == 'true'
         with:
           persist-credentials: false
-          ref: ${{ github.event.pull_request.head.sha }}
       - uses: ./.github/actions/setup
         if: steps.state.outputs.active == 'true'
 
