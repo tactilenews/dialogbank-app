@@ -3,6 +3,8 @@ import { selectLatestCommittedVersionId } from "../lib/server/elevenlabs/branch.
 
 const NEON_API_BASE = "https://console.neon.tech/api/v2";
 const NETLIFY_API_BASE = "https://api.netlify.com/api/v1";
+const PREVIEW_BRANCH_PREFIX = "preview/pr-";
+const DEFAULT_PREVIEW_LIMIT = 3;
 
 type NetlifyDeploy = {
 	id: string;
@@ -171,21 +173,42 @@ async function neonRequest<T>(path: string, init?: RequestInit): Promise<T> {
 	return (await response.json()) as T;
 }
 
-async function findNeonBranch(projectId: string, name: string): Promise<NeonBranch | undefined> {
+async function searchNeonBranches(projectId: string, search: string): Promise<NeonBranch[]> {
+	const branches: NeonBranch[] = [];
 	let cursor: string | undefined;
 	do {
-		const query = new URLSearchParams({ search: name, limit: "100" });
+		const query = new URLSearchParams({ search, limit: "100" });
 		if (cursor) query.set("cursor", cursor);
 		const response = await neonRequest<NeonBranchesResponse>(
 			`/projects/${projectId}/branches?${query}`,
 		);
-		const branch = response.branches.find((candidate) => candidate.name === name);
-		if (branch) return branch;
+		branches.push(...response.branches);
 		// List endpoints use `next`; Neon's older pagination schema uses `cursor`.
 		const next = response.pagination?.next ?? response.pagination?.cursor;
 		cursor = response.branches.length > 0 && next !== cursor ? next : undefined;
 	} while (cursor);
-	return undefined;
+	return branches;
+}
+
+async function findNeonBranch(projectId: string, name: string): Promise<NeonBranch | undefined> {
+	const branches = await searchNeonBranches(projectId, name);
+	return branches.find((candidate) => candidate.name === name);
+}
+
+// Each preview holds a Neon branch, an ElevenLabs branch and a Netlify alias
+// until its PR closes, so cap how many can exist at once. Checked before any
+// resource is created so a rejected PR leaves nothing behind.
+async function assertPreviewCapacity(name: string): Promise<void> {
+	const projectId = requireEnvironment("NEON_PROJECT_ID");
+	const limit = Number(process.env.PREVIEW_LIMIT ?? DEFAULT_PREVIEW_LIMIT);
+	const previews = (await searchNeonBranches(projectId, PREVIEW_BRANCH_PREFIX)).filter((branch) =>
+		branch.name.startsWith(PREVIEW_BRANCH_PREFIX),
+	);
+	if (previews.some((branch) => branch.name === name) || previews.length < limit) return;
+	throw new Error(
+		`Preview limit of ${limit} reached (${previews.map((branch) => branch.name).join(", ")}). ` +
+			"Remove the preview label from another pull request, then re-add it here.",
+	);
 }
 
 async function provisionNeonBranch(name: string) {
@@ -373,9 +396,10 @@ async function cleanupElevenLabsBranch(name: string, pullRequestNumber: number):
 async function main() {
 	const action = process.argv[2];
 	const pullRequestNumber = parsePullRequestNumber(process.argv[3]);
-	const name = `preview/pr-${pullRequestNumber}`;
+	const name = `${PREVIEW_BRANCH_PREFIX}${pullRequestNumber}`;
 
 	if (action === "provision") {
+		await assertPreviewCapacity(name);
 		const [neon, elevenLabsBranchId] = await Promise.all([
 			provisionNeonBranch(name),
 			provisionElevenLabsBranch(name, pullRequestNumber),
