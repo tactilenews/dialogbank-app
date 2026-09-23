@@ -214,8 +214,8 @@ async function assertPreviewCapacity(name: string): Promise<void> {
 async function provisionNeonBranch(name: string) {
 	const projectId = requireEnvironment("NEON_PROJECT_ID");
 	const parentId = requireEnvironment("PARENT_BRANCH_ID");
-	// DATABASE_URL points at neon_local in CI, so its database and role do not
-	// exist on the Neon project. Read them from the parent branch instead.
+	// Connect previews as the owner of the parent branch's only database, which
+	// every child branch inherits.
 	const { databases } = await neonRequest<NeonDatabasesResponse>(
 		`/projects/${projectId}/branches/${parentId}/databases`,
 	);
@@ -241,7 +241,7 @@ async function provisionNeonBranch(name: string) {
 	}
 
 	// Always resolve the URI explicitly: the creation response's connection_uris
-	// are not guaranteed to match DATABASE_URL's database and role.
+	// are not guaranteed to use that database and role.
 	const query = new URLSearchParams({
 		branch_id: branch.id,
 		database_name: databaseName,
