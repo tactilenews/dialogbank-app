@@ -25,23 +25,45 @@ jobs:
       )
     # Job-level concurrency: only jobs that pass their `if` join the group, so
     # skipped jobs from unrelated events (e.g. `synchronize` without the label)
-    # cannot replace a pending cleanup. Deploy and cleanup share the group so
-    # they never race on the same Neon/ElevenLabs branches.
+    # never enter it. Deploy and cleanup share the group so they never race on
+    # the same Neon/ElevenLabs branches, and `queue: max` keeps a pending
+    # cleanup from being replaced by a later deploy. Ordering within the queue
+    # is not guaranteed, so each job re-checks the PR's current state first.
     concurrency:
       group: preview-${{ github.event.pull_request.number }}
-      cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
+      - name: Check preview is still wanted
+        id: state
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            })
+            const active =
+              pr.state === 'open' &&
+              pr.labels.some((label) => label.name === 'preview') &&
+              pr.head.sha === context.payload.pull_request.head.sha
+            core.setOutput('active', String(active))
+            if (!active) core.notice('Skipping deploy: the PR is closed, unlabeled, or has a newer head commit.')
+
       - uses: actions/checkout@v7
+        if: steps.state.outputs.active == 'true'
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: ./.github/actions/setup
+        if: steps.state.outputs.active == 'true'
 
       - name: Provision preview resources
+        if: steps.state.outputs.active == 'true'
         id: resources
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
@@ -63,11 +85,13 @@ jobs:
           echo "resource-name=$(jq -r '.name' <<<"$resources")" >> "$GITHUB_OUTPUT"
 
       - name: Apply database migrations
+        if: steps.state.outputs.active == 'true'
         env:
           DATABASE_URL: ${{ steps.resources.outputs.database-url }}
         run: pnpm run db:migrate
 
       - name: Deploy preview to Netlify
+        if: steps.state.outputs.active == 'true'
         id: deploy
         env:
           NETLIFY_AUTH_TOKEN: ${{ secrets.NETLIFY_AUTH_TOKEN }}
@@ -97,6 +121,7 @@ jobs:
           echo "- Resources: ${{ steps.resources.outputs.resource-name }}" >> "$GITHUB_STEP_SUMMARY"
 
       - name: Comment deployment URL
+        if: steps.state.outputs.active == 'true'
         uses: actions/github-script@v9
         env:
           DEPLOY_URL: ${{ steps.deploy.outputs.url }}
@@ -144,19 +169,36 @@ jobs:
        (github.event.action == 'unlabeled' && github.event.label.name == 'preview'))
     concurrency:
       group: preview-${{ github.event.pull_request.number }}
-      cancel-in-progress: false
+      queue: max
     permissions:
       contents: read
       pull-requests: write
     runs-on: ubuntu-latest
     steps:
+      - name: Check preview is still unwanted
+        id: state
+        uses: actions/github-script@v9
+        with:
+          script: |
+            const { data: pr } = await github.rest.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.payload.pull_request.number,
+            })
+            const wanted = pr.state === 'open' && pr.labels.some((label) => label.name === 'preview')
+            core.setOutput('active', String(!wanted))
+            if (wanted) core.notice('Skipping cleanup: the PR has been reopened or relabeled since.')
+
       - uses: actions/checkout@v7
+        if: steps.state.outputs.active == 'true'
         with:
           persist-credentials: false
           ref: ${{ github.event.pull_request.head.sha }}
       - uses: ./.github/actions/setup
+        if: steps.state.outputs.active == 'true'
 
       - name: Remove preview resources
+        if: steps.state.outputs.active == 'true'
         env:
           ELEVENLABS_AGENT_ID: ${{ secrets.ELEVENLABS_AGENT_ID }}
           ELEVENLABS_API_KEY: ${{ secrets.ELEVENLABS_API_KEY }}
