@@ -242,8 +242,8 @@ Add the `preview` label to an internal pull request to provision and deploy an i
 The workflow uses the deterministic name `preview/pr-<number>` for both the Neon branch and
 the ElevenLabs agent branch, then deploys it at
 `https://pr-<number>--<site-name>.netlify.app`. Further commits redeploy the same resources.
-Removing the label or closing the pull request deletes the Neon branch and archives the
-ElevenLabs branch. Because ElevenLabs' branch list endpoint has no pagination, the workflow
+Removing the label or closing the pull request deletes the alias's Netlify deploys, then
+deletes the Neon branch and archives the ElevenLabs branch. Because ElevenLabs' branch list endpoint has no pagination, the workflow
 stores each PR's ElevenLabs branch ID in a hidden marker inside the bot's preview-deployment
 comment on the pull request rather than relying solely on a name search. This state needs no
 extra token scopes beyond `pull-requests: write` and disappears with the pull request.
