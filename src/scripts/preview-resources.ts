@@ -1,5 +1,4 @@
-import { spawnSync } from "node:child_process";
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { ElevenLabsClient, ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import { selectLatestCommittedVersionId } from "../lib/server/elevenlabs/branch.ts";
 
 const NEON_API_BASE = "https://console.neon.tech/api/v2";
@@ -21,6 +20,18 @@ type NeonConnectionUriResponse = {
 	uri: string;
 };
 
+// Only a confirmed 404 counts as "missing"; any other failure must abort the run
+// so provisioning never forks a duplicate branch and cleanup never reports a
+// false success.
+async function getElevenLabsBranchIfExists<T>(request: Promise<T>): Promise<T | undefined> {
+	try {
+		return await request;
+	} catch (error) {
+		if (error instanceof ElevenLabsError && error.statusCode === 404) return undefined;
+		throw error;
+	}
+}
+
 function requireEnvironment(name: string): string {
 	const value = process.env[name];
 	if (!value) throw new Error(`${name} is not set`);
@@ -35,34 +46,89 @@ function parsePullRequestNumber(value: string | undefined): number {
 	return pullRequestNumber;
 }
 
-function elevenLabsBranchIdVariableName(pullRequestNumber: number): string {
-	return `PREVIEW_PR_${pullRequestNumber}_ELEVENLABS_BRANCH_ID`;
+// The deploy job's PR comment doubles as durable state for the ElevenLabs
+// branch ID, so storage lives and dies with the pull request.
+const PREVIEW_COMMENT_MARKER = "<!-- dialogbank-preview-deployment -->";
+const PREVIEW_COMMENT_AUTHOR = "github-actions[bot]";
+const ELEVENLABS_BRANCH_ID_PATTERN = /<!-- dialogbank-preview-elevenlabs-branch-id: (\S+) -->/;
+
+type GitHubComment = {
+	id: number;
+	body?: string;
+	user: { login: string } | null;
+};
+
+function elevenLabsBranchIdLine(branchId: string): string {
+	return `<!-- dialogbank-preview-elevenlabs-branch-id: ${branchId} -->`;
 }
 
-function githubRepository(): string {
-	return requireEnvironment("GITHUB_REPOSITORY");
-}
+async function githubRequest<T>(path: string, init?: RequestInit): Promise<T> {
+	const apiUrl = process.env.GITHUB_API_URL ?? "https://api.github.com";
+	const response = await fetch(`${apiUrl}${path}`, {
+		...init,
+		headers: {
+			Accept: "application/vnd.github+json",
+			Authorization: `Bearer ${requireEnvironment("GH_TOKEN")}`,
+			"X-GitHub-Api-Version": "2022-11-28",
+			...(init?.body ? { "Content-Type": "application/json" } : {}),
+			...init?.headers,
+		},
+	});
 
-function readRepoVariable(name: string): string | undefined {
-	const result = spawnSync(
-		"gh",
-		["variable", "get", name, "--repo", githubRepository(), "--json", "value", "-q", ".value"],
-		{ encoding: "utf8" },
-	);
-	if (result.status !== 0) return undefined;
-	const value = result.stdout.trim();
-	return value.length > 0 ? value : undefined;
-}
-
-function writeRepoVariable(name: string, value: string): void {
-	const result = spawnSync(
-		"gh",
-		["variable", "set", name, "--body", value, "--repo", githubRepository()],
-		{ encoding: "utf8" },
-	);
-	if (result.status !== 0) {
-		throw new Error(result.stderr.trim() || `Failed to set repo variable ${name}`);
+	if (!response.ok) {
+		throw new Error(`GitHub API ${response.status}: ${await response.text()}`);
 	}
+
+	return (await response.json()) as T;
+}
+
+async function findPreviewComment(pullRequestNumber: number): Promise<GitHubComment | undefined> {
+	const repository = requireEnvironment("GITHUB_REPOSITORY");
+	for (let page = 1; ; page++) {
+		const comments = await githubRequest<GitHubComment[]>(
+			`/repos/${repository}/issues/${pullRequestNumber}/comments?per_page=100&page=${page}`,
+		);
+		const comment = comments.find(
+			(candidate) =>
+				candidate.user?.login === PREVIEW_COMMENT_AUTHOR &&
+				candidate.body?.includes(PREVIEW_COMMENT_MARKER),
+		);
+		if (comment) return comment;
+		if (comments.length < 100) return undefined;
+	}
+}
+
+async function readStoredElevenLabsBranchId(
+	pullRequestNumber: number,
+): Promise<string | undefined> {
+	const comment = await findPreviewComment(pullRequestNumber);
+	return comment?.body?.match(ELEVENLABS_BRANCH_ID_PATTERN)?.[1];
+}
+
+async function storeElevenLabsBranchId(pullRequestNumber: number, branchId: string): Promise<void> {
+	const repository = requireEnvironment("GITHUB_REPOSITORY");
+	const comment = await findPreviewComment(pullRequestNumber);
+	const idLine = elevenLabsBranchIdLine(branchId);
+
+	if (comment) {
+		const body = comment.body ?? PREVIEW_COMMENT_MARKER;
+		await githubRequest(`/repos/${repository}/issues/comments/${comment.id}`, {
+			method: "PATCH",
+			body: JSON.stringify({
+				body: ELEVENLABS_BRANCH_ID_PATTERN.test(body)
+					? body.replace(ELEVENLABS_BRANCH_ID_PATTERN, idLine)
+					: `${body}\n${idLine}`,
+			}),
+		});
+		return;
+	}
+
+	await githubRequest(`/repos/${repository}/issues/${pullRequestNumber}/comments`, {
+		method: "POST",
+		body: JSON.stringify({
+			body: [PREVIEW_COMMENT_MARKER, idLine, "Preview deployment in progress."].join("\n"),
+		}),
+	});
 }
 
 async function neonRequest<T>(path: string, init?: RequestInit): Promise<T> {
@@ -135,13 +201,12 @@ async function provisionElevenLabsBranch(name: string, pullRequestNumber: number
 	const agentId = requireEnvironment("ELEVENLABS_AGENT_ID");
 	const parentBranchId = requireEnvironment("ELEVENLABS_AGENT_PARENT_BRANCH_ID");
 	const client = new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_API_KEY") });
-	const variableName = elevenLabsBranchIdVariableName(pullRequestNumber);
 
-	const storedBranchId = readRepoVariable(variableName);
+	const storedBranchId = await readStoredElevenLabsBranchId(pullRequestNumber);
 	if (storedBranchId) {
-		const branch = await client.conversationalAi.agents.branches
-			.get(agentId, storedBranchId)
-			.catch(() => undefined);
+		const branch = await getElevenLabsBranchIfExists(
+			client.conversationalAi.agents.branches.get(agentId, storedBranchId),
+		);
 		if (branch) {
 			if (branch.isArchived) {
 				await client.conversationalAi.agents.branches.update(agentId, storedBranchId, {
@@ -166,7 +231,7 @@ async function provisionElevenLabsBranch(name: string, pullRequestNumber: number
 				isArchived: false,
 			});
 		}
-		writeRepoVariable(variableName, existing.id);
+		await storeElevenLabsBranchId(pullRequestNumber, existing.id);
 		return existing.id;
 	}
 
@@ -178,7 +243,7 @@ async function provisionElevenLabsBranch(name: string, pullRequestNumber: number
 		name,
 		description: `Preview environment for ${name}`,
 	});
-	writeRepoVariable(variableName, created.createdBranchId);
+	await storeElevenLabsBranchId(pullRequestNumber, created.createdBranchId);
 	return created.createdBranchId;
 }
 
@@ -192,13 +257,12 @@ async function cleanupNeonBranch(name: string): Promise<void> {
 async function cleanupElevenLabsBranch(name: string, pullRequestNumber: number): Promise<void> {
 	const agentId = requireEnvironment("ELEVENLABS_AGENT_ID");
 	const client = new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_API_KEY") });
-	const variableName = elevenLabsBranchIdVariableName(pullRequestNumber);
 
-	const storedBranchId = readRepoVariable(variableName);
+	const storedBranchId = await readStoredElevenLabsBranchId(pullRequestNumber);
 	if (storedBranchId) {
-		const branch = await client.conversationalAi.agents.branches
-			.get(agentId, storedBranchId)
-			.catch(() => undefined);
+		const branch = await getElevenLabsBranchIfExists(
+			client.conversationalAi.agents.branches.get(agentId, storedBranchId),
+		);
 		if (branch && !branch.isArchived) {
 			await client.conversationalAi.agents.branches.update(agentId, storedBranchId, {
 				isArchived: true,
