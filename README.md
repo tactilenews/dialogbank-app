@@ -236,6 +236,30 @@ In practice, Netlify receives the production runtime variables from Infisical sy
 - `SENTRY_DSN`
 - `PUBLIC_SENTRY_DSN` if browser-side Sentry reporting is desired
 
+### Opt-in pull request previews
+
+Add the `preview` label to an internal pull request to provision and deploy an isolated preview.
+The workflow uses the deterministic name `preview/pr-<number>` for both the Neon branch and
+the ElevenLabs agent branch, then deploys it at
+`https://pr-<number>--<site-name>.netlify.app`. Further commits redeploy the same resources.
+Removing the label or closing the pull request deletes the alias's Netlify deploys, then
+deletes the Neon branch and archives the ElevenLabs branch. Because ElevenLabs' branch list endpoint has no pagination, the workflow
+stores each PR's ElevenLabs branch ID in a hidden marker inside the bot's preview-deployment
+comment on the pull request rather than relying solely on a name search. This state needs no
+extra token scopes beyond `pull-requests: write` and disappears with the pull request.
+
+Infisical remains the source of truth for stable credentials. Sync these values to GitHub
+Actions secrets:
+
+- `DATABASE_URL`, `NEON_API_KEY`, `NEON_PROJECT_ID`, and `PARENT_BRANCH_ID`
+- `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, and `ELEVENLABS_AGENT_PARENT_BRANCH_ID`
+- `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`
+
+The generated database URL and ElevenLabs branch ID are passed directly to the individual
+Netlify deploy, so they do not require an Infisical environment or folder per pull request.
+Preview provisioning is disabled for pull requests from forks because those builds cannot be
+trusted with provider credentials.
+
 To upload sourcemaps from Netlify builds, the deployment environment also needs:
 
 - `SENTRY_AUTH_TOKEN`

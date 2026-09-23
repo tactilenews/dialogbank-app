@@ -63,6 +63,7 @@ dialogbank-app/
   - **Testing**: All test-related scripts (e.g., `test`, `test:e2e`, `vitest`) **must** be run with `--env test`.
   - Example: `infisical run --env dev -- pnpm dev`
   - Example: `infisical run --env test -- pnpm test:e2e`
+  - **CI exception**: GitHub Actions workflows do not use the Infisical CLI. Infisical syncs stable credentials to GitHub Actions secrets, and workflows read them from there. Values generated at runtime (e.g. a preview's `DATABASE_URL`) are passed as step environment variables.
 
 ## Running Tests
 

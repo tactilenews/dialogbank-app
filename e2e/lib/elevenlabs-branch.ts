@@ -1,5 +1,8 @@
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import type { GetAgentResponseModel } from "@elevenlabs/elevenlabs-js/api";
+import { selectLatestCommittedVersionId } from "../../src/lib/server/elevenlabs/branch.ts";
+
+export { selectLatestCommittedVersionId };
 
 export const ELEVENLABS_SNAPSHOT_PATH = "e2e/.elevenlabs-snapshot.json";
 
@@ -112,28 +115,6 @@ export function createEphemeralBranchName(now: Date) {
 	const timestamp = now.toISOString().replace(/[:.]/g, "-");
 	const randomSuffix = Math.random().toString(36).slice(2, 8);
 	return `dialogbank-e2e-${timestamp}-${randomSuffix}`;
-}
-
-export function selectLatestCommittedVersionId(branch: {
-	mostRecentVersions?: Array<{
-		id: string;
-		seqNoInBranch: number;
-		timeCommittedSecs: number;
-	}>;
-}) {
-	const latestVersion = [...(branch.mostRecentVersions ?? [])].sort((left, right) => {
-		if (left.seqNoInBranch !== right.seqNoInBranch) {
-			return right.seqNoInBranch - left.seqNoInBranch;
-		}
-
-		return right.timeCommittedSecs - left.timeCommittedSecs;
-	})[0];
-
-	if (!latestVersion) {
-		throw new Error("The configured ElevenLabs branch has no committed versions to branch from");
-	}
-
-	return latestVersion.id;
 }
 
 export async function createEphemeralElevenLabsBranch(
