@@ -65,15 +65,6 @@ function writeRepoVariable(name: string, value: string): void {
 	}
 }
 
-function deleteRepoVariable(name: string): void {
-	const result = spawnSync("gh", ["variable", "delete", name, "--repo", githubRepository()], {
-		encoding: "utf8",
-	});
-	if (result.status !== 0 && !/not found/i.test(result.stderr)) {
-		throw new Error(result.stderr.trim() || `Failed to delete repo variable ${name}`);
-	}
-}
-
 async function neonRequest<T>(path: string, init?: RequestInit): Promise<T> {
 	const response = await fetch(`${NEON_API_BASE}${path}`, {
 		...init,
@@ -213,7 +204,6 @@ async function cleanupElevenLabsBranch(name: string, pullRequestNumber: number):
 				isArchived: true,
 			});
 		}
-		deleteRepoVariable(variableName);
 		return;
 	}
 
