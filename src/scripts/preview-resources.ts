@@ -16,12 +16,11 @@ type NeonBranch = {
 
 type NeonBranchesResponse = {
 	branches: NeonBranch[];
-	pagination?: { next?: string };
+	pagination?: { next?: string; cursor?: string };
 };
 
 type NeonCreateBranchResponse = {
 	branch: NeonBranch;
-	connection_uris?: Array<{ connection_uri: string }>;
 };
 
 type NeonConnectionUriResponse = {
@@ -178,7 +177,8 @@ async function findNeonBranch(projectId: string, name: string): Promise<NeonBran
 		);
 		const branch = response.branches.find((candidate) => candidate.name === name);
 		if (branch) return branch;
-		const next = response.pagination?.next;
+		// List endpoints use `next`; Neon's older pagination schema uses `cursor`.
+		const next = response.pagination?.next ?? response.pagination?.cursor;
 		cursor = response.branches.length > 0 && next !== cursor ? next : undefined;
 	} while (cursor);
 	return undefined;
@@ -194,7 +194,6 @@ async function provisionNeonBranch(name: string) {
 		throw new Error("DATABASE_URL must contain a database name and role");
 	}
 	let branch = await findNeonBranch(projectId, name);
-	let connectionUri: string | undefined;
 
 	if (!branch) {
 		const response = await neonRequest<NeonCreateBranchResponse>(
@@ -208,23 +207,21 @@ async function provisionNeonBranch(name: string) {
 			},
 		);
 		branch = response.branch;
-		connectionUri = response.connection_uris?.[0]?.connection_uri;
 	}
 
-	if (!connectionUri) {
-		const query = new URLSearchParams({
-			branch_id: branch.id,
-			database_name: databaseName,
-			role_name: roleName,
-			pooled: "true",
-		});
-		const response = await neonRequest<NeonConnectionUriResponse>(
-			`/projects/${projectId}/connection_uri?${query}`,
-		);
-		connectionUri = response.uri;
-	}
+	// Always resolve the URI explicitly: the creation response's connection_uris
+	// are not guaranteed to match DATABASE_URL's database and role.
+	const query = new URLSearchParams({
+		branch_id: branch.id,
+		database_name: databaseName,
+		role_name: roleName,
+		pooled: "true",
+	});
+	const { uri } = await neonRequest<NeonConnectionUriResponse>(
+		`/projects/${projectId}/connection_uri?${query}`,
+	);
 
-	return { id: branch.id, connectionUri };
+	return { id: branch.id, connectionUri: uri };
 }
 
 async function provisionElevenLabsBranch(name: string, pullRequestNumber: number): Promise<string> {
@@ -387,11 +384,10 @@ async function main() {
 	}
 
 	if (action === "cleanup") {
-		await Promise.all([
-			cleanupNetlifyDeploys(`pr-${pullRequestNumber}`),
-			cleanupNeonBranch(name),
-			cleanupElevenLabsBranch(name, pullRequestNumber),
-		]);
+		// Retire the Netlify deploys first: if that fails, the database and agent
+		// branch stay intact rather than being served by a stale alias.
+		await cleanupNetlifyDeploys(`pr-${pullRequestNumber}`);
+		await Promise.all([cleanupNeonBranch(name), cleanupElevenLabsBranch(name, pullRequestNumber)]);
 		await upsertPreviewComment(pullRequestNumber, {
 			status: "Preview removed.",
 			onlyIfExists: true,
