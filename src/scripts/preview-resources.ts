@@ -3,8 +3,6 @@ import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { selectLatestCommittedVersionId } from "../lib/server/elevenlabs/branch.ts";
 
 const NEON_API_BASE = "https://console.neon.tech/api/v2";
-const GITHUB_REPOSITORY = "tactilenews/dialogbank-app";
-
 type NeonBranch = {
 	id: string;
 	name: string;
@@ -41,10 +39,14 @@ function elevenLabsBranchIdVariableName(pullRequestNumber: number): string {
 	return `PREVIEW_PR_${pullRequestNumber}_ELEVENLABS_BRANCH_ID`;
 }
 
+function githubRepository(): string {
+	return requireEnvironment("GITHUB_REPOSITORY");
+}
+
 function readRepoVariable(name: string): string | undefined {
 	const result = spawnSync(
 		"gh",
-		["variable", "get", name, "--repo", GITHUB_REPOSITORY, "--json", "value", "-q", ".value"],
+		["variable", "get", name, "--repo", githubRepository(), "--json", "value", "-q", ".value"],
 		{ encoding: "utf8" },
 	);
 	if (result.status !== 0) return undefined;
@@ -55,7 +57,7 @@ function readRepoVariable(name: string): string | undefined {
 function writeRepoVariable(name: string, value: string): void {
 	const result = spawnSync(
 		"gh",
-		["variable", "set", name, "--body", value, "--repo", GITHUB_REPOSITORY],
+		["variable", "set", name, "--body", value, "--repo", githubRepository()],
 		{ encoding: "utf8" },
 	);
 	if (result.status !== 0) {
@@ -64,7 +66,7 @@ function writeRepoVariable(name: string, value: string): void {
 }
 
 function deleteRepoVariable(name: string): void {
-	const result = spawnSync("gh", ["variable", "delete", name, "--repo", GITHUB_REPOSITORY], {
+	const result = spawnSync("gh", ["variable", "delete", name, "--repo", githubRepository()], {
 		encoding: "utf8",
 	});
 	if (result.status !== 0 && !/not found/i.test(result.stderr)) {
