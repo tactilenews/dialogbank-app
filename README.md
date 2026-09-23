@@ -283,6 +283,7 @@ By default, the script syncs test-related values such as:
 - `ELEVENLABS_API_KEY`
 - `NEON_API_KEY`
 - `NEON_PROJECT_ID`
+- `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`, so the `preview` label also works on Dependabot pull requests
 - `PARENT_BRANCH_ID`
 
 This supports two distinct flows:
