@@ -7,9 +7,12 @@ publish = "build"
 command = "pnpm run db:migrate && pnpm run build"
 
 # Branch deploys receive the values that `pnpm preview:up` last wrote to
-# Infisical `prod` `/preview`, which belong to exactly one branch. Any other
-# branch would build against that branch's database, so it is skipped, and the
-# build command fails as a backstop in case the skip does not apply.
+# Infisical `prod` `/preview`, which belong to exactly one branch. Netlify is set
+# to build no branches on push, so only the build hook that `preview:up` calls
+# starts branch deploys. As a second line of defense, any branch other than
+# PREVIEW_BRANCH is skipped, and the build command fails if the skip does not
+# apply. Branches cut before this file existed lack both checks, which is why
+# the Netlify setting matters.
 [context.branch-deploy]
 ignore = 'test "$PREVIEW_BRANCH" != "$BRANCH"'
 command = '''

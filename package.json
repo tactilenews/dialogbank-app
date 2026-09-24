@@ -8,6 +8,7 @@
 		"dev": "vite dev",
 		"build": "vite build",
 		"preview": "vite preview",
+		"preview:init": "node --experimental-strip-types src/scripts/preview.ts init",
 		"preview:up": "node --experimental-strip-types src/scripts/preview.ts up",
 		"preview:down": "node --experimental-strip-types src/scripts/preview.ts down",
 		"prepare": "svelte-kit sync || echo ''",
