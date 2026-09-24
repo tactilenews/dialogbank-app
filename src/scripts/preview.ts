@@ -93,7 +93,7 @@ function validateBranchName(branch: string): void {
 // The build hook builds whatever the remote branch points to, so a local commit
 // that was never pushed would silently not be part of the preview.
 function requirePushedBranch(branch: string): void {
-	const remote = git("ls-remote", "--heads", "origin", branch).split(/\s+/)[0];
+	const remote = git("ls-remote", "origin", `refs/heads/${branch}`).split(/\s+/)[0];
 	if (!remote) throw new Error(`Branch "${branch}" does not exist on origin; push it first`);
 	if (remote !== git("rev-parse", "HEAD")) {
 		throw new Error(`origin/${branch} is not at your local HEAD; push or pull first`);
@@ -299,23 +299,20 @@ async function syncPreviewSecrets(): Promise<void> {
 }
 
 function readPreviewBranch(): string | undefined {
-	let value: string;
-	try {
-		value = infisical(
-			"secrets",
-			"get",
-			"PREVIEW_BRANCH",
-			"--env",
-			INFISICAL_ENVIRONMENT,
-			"--path",
-			INFISICAL_PREVIEW_PATH,
-			"--plain",
-		);
-	} catch {
-		return undefined;
-	}
-	// The CLI prints a placeholder instead of failing when the secret is missing.
-	return /^[a-z0-9-]+$/.test(value) ? value : undefined;
+	// With --plain the CLI prints nothing for a missing secret. Any other failure,
+	// such as an expired session, must abort: `down` would otherwise delete the
+	// database while `/preview` still points at it.
+	const value = infisical(
+		"secrets",
+		"get",
+		"PREVIEW_BRANCH",
+		"--env",
+		INFISICAL_ENVIRONMENT,
+		"--path",
+		INFISICAL_PREVIEW_PATH,
+		"--plain",
+	);
+	return value || undefined;
 }
 
 // Secrets go through a private temporary file instead of command-line arguments,
