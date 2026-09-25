@@ -1,3 +1,4 @@
+import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import type {
 	AgentWorkflowResponseModel,
 	AnalysisProperty,
@@ -253,6 +254,51 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			name: "preview/feature",
 			description: 'Branch "preview/feature", created automatically by Dialogbank.',
 		});
+	});
+
+	it("uses the branch a concurrent request created when the name is taken", async () => {
+		const branchReader = createBranchReader();
+		branchReader.list
+			.mockResolvedValueOnce([{ id: "agtbrch_main_123", name: "Main", isArchived: false }])
+			.mockResolvedValueOnce([
+				{ id: "agtbrch_main_123", name: "Main", isArchived: false },
+				{ id: "agtbrch_concurrent", name: "preview/feature", isArchived: false },
+			]);
+		branchReader.create.mockRejectedValue(
+			new ElevenLabsError({
+				statusCode: 400,
+				body: { detail: { type: "conflict", code: "conflict", message: "already exists" } },
+			}),
+		);
+
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{
+					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
+				"agent_main_123",
+				branchReader,
+			),
+		).resolves.toMatchObject({ branchId: "agtbrch_concurrent" });
+	});
+
+	it("rethrows other errors from creating a branch", async () => {
+		const branchReader = createBranchReader();
+		const failure = new ElevenLabsError({ statusCode: 400, body: { detail: "invalid" } });
+		branchReader.create.mockRejectedValue(failure);
+
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{
+					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
+				"agent_main_123",
+				branchReader,
+			),
+		).rejects.toBe(failure);
+		expect(branchReader.list).toHaveBeenCalledTimes(1);
 	});
 
 	it("rejects when there is no main branch to create a missing branch from", async () => {

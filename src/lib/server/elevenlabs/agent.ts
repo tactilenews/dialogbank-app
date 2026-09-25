@@ -1,4 +1,4 @@
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { ElevenLabsClient, ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import type {
 	AgentWorkflowRequestModel,
 	AnalysisProperty,
@@ -225,13 +225,33 @@ async function findOrCreateElevenLabsBranch(
 		MAIN_BRANCH_NAME,
 	);
 
-	const created = await reader.create(agentId, {
-		parentVersionId,
-		name: branchName,
-		description: `Branch "${branchName}", created automatically by Dialogbank.`,
-	});
+	try {
+		const created = await reader.create(agentId, {
+			parentVersionId,
+			name: branchName,
+			description: `Branch "${branchName}", created automatically by Dialogbank.`,
+		});
+		return created.createdBranchId;
+	} catch (cause) {
+		if (!isBranchNameConflict(cause)) throw cause;
+		// ElevenLabs keeps active branch names unique, so a concurrent request
+		// created the branch in the meantime.
+		const concurrent = (await reader.list(agentId)).find(
+			(branch) => !branch.isArchived && branch.name === branchName,
+		);
+		if (!concurrent) throw cause;
+		return concurrent.id;
+	}
+}
 
-	return created.createdBranchId;
+const branchNameConflictSchema = z.object({ detail: z.object({ code: z.literal("conflict") }) });
+
+function isBranchNameConflict(cause: unknown): boolean {
+	return (
+		cause instanceof ElevenLabsError &&
+		cause.statusCode === 400 &&
+		branchNameConflictSchema.safeParse(cause.body).success
+	);
 }
 
 export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentReader {
