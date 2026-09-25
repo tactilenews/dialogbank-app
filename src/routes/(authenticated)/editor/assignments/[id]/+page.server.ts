@@ -316,8 +316,9 @@ export const load = withAuthenticatedLoad<
 		assignmentName: string;
 	})[] = [];
 	let agent: ElevenLabsEditorAgent | null = null;
+	let agentCatalog: ElevenLabsAgentCatalogEntry[] = [];
 	try {
-		const agentCatalog = await listElevenLabsDialogbankAgents(process.env);
+		agentCatalog = await listElevenLabsDialogbankAgents(process.env);
 		const ownedAgents = await event.locals.db
 			.select({
 				assignmentId: assignments.id,
@@ -350,6 +351,14 @@ export const load = withAuthenticatedLoad<
 
 	try {
 		if (!assignment.elevenLabsAgentId) throw new Error("No assignment agent selected.");
+		// Resolving the target can create a branch on the agent.
+		if (
+			!agentCatalog.some((catalogAgent) =>
+				isDialogbankAgent(catalogAgent, assignment.elevenLabsAgentId, agentCatalogTag),
+			)
+		) {
+			throw new Error("The assignment agent is not in the Dialogbank catalog.");
+		}
 		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
 			process.env,
 			assignment.elevenLabsAgentId,
@@ -380,6 +389,27 @@ function errorStatus(cause: unknown): number {
 	if (cause instanceof ElevenLabsError) return cause.statusCode || 502;
 	if (isHttpError(cause)) return cause.status;
 	return 500;
+}
+
+function isDialogbankAgent(
+	catalogAgent: ElevenLabsAgentCatalogEntry,
+	agentId: string | null,
+	requiredTag: string,
+): boolean {
+	return catalogAgent.id === agentId && isSelectableDialogbankAgent(catalogAgent, requiredTag);
+}
+
+// Dialogbank never writes to an agent outside its catalog, not even to clean up
+// after itself. Throws when the catalog cannot be loaded, since the agent then
+// cannot be checked.
+async function isInDialogbankCatalog(agentId: string): Promise<boolean> {
+	const requiredTag = resolveElevenLabsDialogbankAgentTag(process.env);
+	const agentCatalog = await listElevenLabsDialogbankAgents(process.env);
+	return agentCatalog.some((catalogAgent) => isDialogbankAgent(catalogAgent, agentId, requiredTag));
+}
+
+function notInCatalogMessage(): string {
+	return `Der Agent ist nicht mit dem Tag ${resolveElevenLabsDialogbankAgentTag(process.env)} für die Dialogbank freigegeben.`;
 }
 
 function parseAssignmentId(rawId: string): number {
@@ -440,6 +470,7 @@ async function configureAssignmentAgent(
 			.where(ownedByAgent)
 			.limit(1);
 		if (!assignment) throw error(409, "Der Agent ist dem Einsatz nicht mehr zugewiesen.");
+		if (!(await isInDialogbankCatalog(agentId))) throw error(409, notInCatalogMessage());
 		const elevenLabsQuestions = await loadElevenLabsQuestions(db, id);
 		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
 		const reader = createElevenLabsAgentReader(process.env);
@@ -474,28 +505,42 @@ async function configureAssignmentAgent(
 	}
 }
 
+type AgentDisconnectResult =
+	| { ok: true; agentWasInCatalog: boolean }
+	| { ok: false; status: number; message: string };
+
 async function disconnectAssignmentAgent(
 	db: DbClient,
 	id: number,
 	agentId: string,
-): Promise<AgentConfigurationResult> {
+): Promise<AgentDisconnectResult> {
+	let agentWasInCatalog: boolean;
 	try {
-		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
-		const reader = createElevenLabsAgentReader(process.env);
-		const writer = createElevenLabsAgentWriter(process.env);
-		const existingAgent = await reader.get(agentTarget.agentId, {
-			branchId: agentTarget.branchId,
-		});
-		await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
+		agentWasInCatalog = await isInDialogbankCatalog(agentId);
 	} catch (cause) {
-		// A deleted remote agent is already detached from the assignment.
-		if (!(cause instanceof ElevenLabsError && cause.statusCode === 404)) {
-			const message = describeError(cause);
-			await db
-				.update(assignments)
-				.set({ agentConfigurationError: message })
-				.where(eq(assignments.id, id));
-			return { ok: false, status: errorStatus(cause), message };
+		return { ok: false, status: errorStatus(cause), message: describeError(cause) };
+	}
+	// An agent outside the catalog is only detached here: it keeps the assignment
+	// id, so its conversations would still be attributed to this assignment.
+	if (agentWasInCatalog) {
+		try {
+			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
+			const reader = createElevenLabsAgentReader(process.env);
+			const writer = createElevenLabsAgentWriter(process.env);
+			const existingAgent = await reader.get(agentTarget.agentId, {
+				branchId: agentTarget.branchId,
+			});
+			await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
+		} catch (cause) {
+			// A deleted remote agent is already detached from the assignment.
+			if (!(cause instanceof ElevenLabsError && cause.statusCode === 404)) {
+				const message = describeError(cause);
+				await db
+					.update(assignments)
+					.set({ agentConfigurationError: message })
+					.where(eq(assignments.id, id));
+				return { ok: false, status: errorStatus(cause), message };
+			}
 		}
 	}
 
@@ -508,7 +553,7 @@ async function disconnectAssignmentAgent(
 			agentConfigurationError: null,
 		})
 		.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, agentId)));
-	return { ok: true };
+	return { ok: true, agentWasInCatalog };
 }
 
 export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], Actions>({
@@ -563,7 +608,9 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			return {
 				success: true,
 				action: "connectAgent",
-				message: "Einsatz gespeichert und Agent getrennt.",
+				message: disconnected.agentWasInCatalog
+					? "Einsatz gespeichert und Agent getrennt."
+					: `Einsatz gespeichert und Agent getrennt. ${notInCatalogMessage()} Er wurde in ElevenLabs deshalb nicht verändert und enthält weiterhin die ID dieses Einsatzes.`,
 			};
 		}
 
@@ -585,24 +632,17 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			});
 		}
 
-		const requiredTag = resolveElevenLabsDialogbankAgentTag(process.env);
-		let selectedCatalogAgent: ElevenLabsAgentCatalogEntry | undefined;
+		let selectedAgentIsInCatalog: boolean;
 		try {
-			const agentCatalog = await listElevenLabsDialogbankAgents(process.env);
-			selectedCatalogAgent = agentCatalog.find(
-				(agent) => agent.id === selectedAgentId && isSelectableDialogbankAgent(agent, requiredTag),
-			);
+			selectedAgentIsInCatalog = await isInDialogbankCatalog(selectedAgentId);
 		} catch (cause) {
 			return fail(errorStatus(cause), {
 				action: "connectAgent",
 				message: `Agentenkatalog konnte nicht geprüft werden: ${describeError(cause)}`,
 			});
 		}
-		if (!selectedCatalogAgent) {
-			return fail(400, {
-				action: "connectAgent",
-				message: `Der Agent muss aktiv und mit dem Tag ${requiredTag} für die Dialogbank freigegeben sein.`,
-			});
+		if (!selectedAgentIsInCatalog) {
+			return fail(400, { action: "connectAgent", message: notInCatalogMessage() });
 		}
 
 		const newlyClaimedAgent = !currentAgentId;
