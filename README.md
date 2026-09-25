@@ -252,11 +252,9 @@ The script runs on your machine with your own Infisical session; no deployment c
 in CI. It checks the required variables, that the branch is pushed, and that the Infisical sync
 exists before changing anything. Then it:
 
-1. creates (or reuses) the Neon branch `preview/<branch>` from `PARENT_BRANCH_ID` and picks
-   the ElevenLabs agent branch name `preview/<branch>/<timestamp>`, reusing the name of an
-   earlier `preview:up` if one of its agent branches is still active,
-2. writes `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_NAME` and `ORIGIN` into the
-   Infisical `prod` folder `/preview`,
+1. creates (or reuses) the Neon branch `preview/<branch>` from `PARENT_BRANCH_ID`,
+2. writes `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_NAME` (`preview/<branch>`)
+   and `ORIGIN` into the Infisical `prod` folder `/preview`,
 3. runs that folder's Netlify sync (Netlify's `branch-deploy` context) and waits for it to finish,
 4. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`.
 
@@ -296,7 +294,8 @@ infisical run --env test -- pnpm run preview:down [branch]
 
 It resets `/preview` to the placeholders if it belongs to that branch, deletes the Neon branch,
 and archives its ElevenLabs branches on every agent tagged `ELEVENLABS_DIALOGBANK_AGENT_TAG`
-(default `dialogbank`). The branch's last Netlify deploy stays reachable, without a
+(default `dialogbank`). A later `preview:up` for the same branch starts over with fresh
+`preview/<branch>` branches created from `main`. The branch's last Netlify deploy stays reachable, without a
 database, until you delete it in the Netlify UI.
 
 To upload sourcemaps from Netlify builds, the deployment environment also needs:

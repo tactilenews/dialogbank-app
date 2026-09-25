@@ -30,7 +30,6 @@ const UP_ENVIRONMENT = [
 	"NEON_API_KEY",
 	"NEON_PROJECT_ID",
 	"PARENT_BRANCH_ID",
-	"ELEVENLABS_API_KEY",
 	"NETLIFY_BUILD_HOOK_URL",
 ];
 const DOWN_ENVIRONMENT = ["NEON_API_KEY", "NEON_PROJECT_ID", "ELEVENLABS_API_KEY"];
@@ -115,6 +114,11 @@ function validateBranchName(branch: string): void {
 	if (label.length > 63) {
 		throw new Error(`"${label}" exceeds the 63 character limit of a DNS label`);
 	}
+}
+
+// Names both the Neon branch and, on every agent, the ElevenLabs branch.
+function previewResourceName(branch: string): string {
+	return `preview/${branch}`;
 }
 
 // The build hook builds whatever the remote branch points to, so a local commit
@@ -213,16 +217,6 @@ async function deleteNeonBranch(name: string): Promise<void> {
 	await neonRequest(`/projects/${projectId}/branches/${branch.id}`, { method: "DELETE" });
 }
 
-// The app creates the ElevenLabs branch named ELEVENLABS_AGENT_BRANCH_NAME on
-// each agent the first time a preview uses it, so every agent Dialogbank can
-// select must be searched. ElevenLabs cannot filter branches by name or page
-// past one response, so only active branches are searched: archived ones pile
-// up over time, while active previews stay few. Names get a timestamp so that a
-// new branch never reuses the name of an archived one.
-function elevenLabsBranchPrefix(branch: string): string {
-	return `preview/${branch}/`;
-}
-
 async function listDialogbankAgentIds(client: ElevenLabsClient): Promise<string[]> {
 	const tag = process.env.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
 	const agentIds: string[] = [];
@@ -235,46 +229,27 @@ async function listDialogbankAgentIds(client: ElevenLabsClient): Promise<string[
 	return agentIds;
 }
 
-async function findActiveElevenLabsBranches(branch: string) {
+// The app creates the ElevenLabs branch named ELEVENLABS_AGENT_BRANCH_NAME on
+// each agent the first time a preview uses it, so every agent Dialogbank can
+// select has to be searched. ElevenLabs cannot filter branches by name or page
+// past one response, so only active branches are searched: archived ones pile
+// up over time, while active previews stay few.
+async function archiveElevenLabsBranches(name: string): Promise<void> {
 	const client = new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_API_KEY") });
 	const limit = 100;
-	const branchesPerAgent = await Promise.all(
-		(await listDialogbankAgentIds(client)).map(async (agentId) => {
-			const { results } = await client.conversationalAi.agents.branches.list(agentId, {
-				includeArchived: false,
-				limit,
-			});
-			if (results.length >= limit) {
-				throw new Error(
-					`Agent ${agentId} has ${limit}+ active branches; archive unused ones first`,
-				);
-			}
-			return results
-				.filter((candidate) => candidate.name.startsWith(elevenLabsBranchPrefix(branch)))
-				.map((candidate) => ({ agentId, id: candidate.id, name: candidate.name }));
-		}),
-	);
-	return { client, branches: branchesPerAgent.flat() };
-}
-
-// Reuse the name of an earlier `up` so that the preview keeps the agent
-// configuration it was given.
-async function resolveElevenLabsBranchName(branch: string): Promise<string> {
-	const { branches } = await findActiveElevenLabsBranches(branch);
-	const [latest] = branches
-		.map((candidate) => candidate.name)
-		.sort((left, right) => right.localeCompare(left));
-	if (latest) return latest;
-	const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-	return `${elevenLabsBranchPrefix(branch)}${timestamp}`;
-}
-
-async function archiveElevenLabsBranches(branch: string): Promise<void> {
-	const { client, branches } = await findActiveElevenLabsBranches(branch);
-	for (const candidate of branches) {
-		await client.conversationalAi.agents.branches.update(candidate.agentId, candidate.id, {
-			isArchived: true,
+	for (const agentId of await listDialogbankAgentIds(client)) {
+		const { results } = await client.conversationalAi.agents.branches.list(agentId, {
+			includeArchived: false,
+			limit,
 		});
+		if (results.length >= limit) {
+			throw new Error(`Agent ${agentId} has ${limit}+ active branches; archive unused ones first`);
+		}
+		for (const candidate of results.filter((candidate) => candidate.name === name)) {
+			await client.conversationalAi.agents.branches.update(agentId, candidate.id, {
+				isArchived: true,
+			});
+		}
 	}
 }
 
@@ -429,14 +404,11 @@ async function up(): Promise<void> {
 	requireBuildHookUrl();
 	requirePushedBranch(branch);
 	const { id: syncId } = await findPreviewSync();
-	const name = `preview/${branch}`;
+	const name = previewResourceName(branch);
 	const origin = `https://${branch}--${NETLIFY_SITE_NAME}.netlify.app`;
 
-	console.log(`Provisioning Neon and ElevenLabs branches for "${branch}"`);
-	const [databaseUrl, elevenLabsBranchName] = await Promise.all([
-		provisionNeonBranch(name),
-		resolveElevenLabsBranchName(branch),
-	]);
+	console.log(`Provisioning Neon branch for "${branch}"`);
+	const databaseUrl = await provisionNeonBranch(name);
 
 	const previousBranch = readPreviewBranch();
 	if (previousBranch && previousBranch !== branch) {
@@ -450,7 +422,7 @@ async function up(): Promise<void> {
 	writePreviewSecrets({
 		PREVIEW_BRANCH: branch,
 		DATABASE_URL: databaseUrl,
-		ELEVENLABS_AGENT_BRANCH_NAME: elevenLabsBranchName,
+		ELEVENLABS_AGENT_BRANCH_NAME: name,
 		ORIGIN: origin,
 	});
 
@@ -477,7 +449,8 @@ async function down(): Promise<void> {
 	}
 
 	console.log(`Deleting Neon branch and archiving ElevenLabs branches for "${branch}"`);
-	await Promise.all([deleteNeonBranch(`preview/${branch}`), archiveElevenLabsBranches(branch)]);
+	const name = previewResourceName(branch);
+	await Promise.all([deleteNeonBranch(name), archiveElevenLabsBranches(name)]);
 	console.log(
 		`Done. The last deploy at https://${branch}--${NETLIFY_SITE_NAME}.netlify.app stays reachable until you delete it in Netlify, but its database is gone.`,
 	);
