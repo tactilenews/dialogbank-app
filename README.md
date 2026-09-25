@@ -331,6 +331,14 @@ infisical run --env dev -- docker compose run --rm -e SEED_USER_ACCOUNTS="$(infi
 
 Running the script on the host only works against a database that is reachable from there, with `SEED_USER_ACCOUNTS` set the same way and `DATABASE_URL` pointing at that database.
 
+A [preview](#preview-deployments)'s Neon branch is such a database. It starts as a copy of `PARENT_BRANCH_ID`, including its users, so seed it only if you need different accounts. `preview:seed` runs `db:seed` against it, with the preview's `DATABASE_URL`, `ORIGIN` and `BETTER_AUTH_SECRET` from Netlify, and refuses a branch that has no preview values of its own (defaults to the current branch):
+
+```sh
+SEED_USER_ACCOUNTS="$(infisical secrets --env prod --path user-accounts -o json)" pnpm run preview:seed [branch]
+```
+
+Use `--env dev` in `SEED_USER_ACCOUNTS` to sign in to the preview with the dev accounts instead.
+
 ## Project Status
 
 Current state:
