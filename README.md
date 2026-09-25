@@ -223,6 +223,7 @@ Relevant Netlify behavior in this repository:
 
 - Netlify builds the app with `pnpm run build`
 - Production deploys run `pnpm run db:migrate && pnpm run build`
+- Branch deploys (previews) run the same, but only when `pnpm run preview:up` triggers them for its branch; deploy previews for pull requests are skipped
 - The Sentry Vite integration uploads sourcemaps during builds and uses `COMMIT_REF` as the release when available
 
 In practice, Netlify receives the production runtime variables from Infisical sync, especially:
@@ -236,29 +237,57 @@ In practice, Netlify receives the production runtime variables from Infisical sy
 - `SENTRY_DSN`
 - `PUBLIC_SENTRY_DSN` if browser-side Sentry reporting is desired
 
-### Opt-in pull request previews
+### Preview deployments
 
-Add the `preview` label to an internal pull request to provision and deploy an isolated preview.
-The workflow uses the deterministic name `preview/pr-<number>` for both the Neon branch and
-the ElevenLabs agent branch, then deploys it at
-`https://pr-<number>--<site-name>.netlify.app`. Further commits redeploy the same resources.
-Removing the label or closing the pull request deletes the alias's Netlify deploys, then
-deletes the Neon branch and archives the ElevenLabs branch. Because ElevenLabs' branch list endpoint has no pagination, the workflow
-stores each PR's ElevenLabs branch ID in a hidden marker inside the bot's preview-deployment
-comment on the pull request rather than relying solely on a name search. This state needs no
-extra token scopes beyond `pull-requests: write` and disappears with the pull request.
+To show a branch to someone before merging, deploy it as a Netlify branch deploy with its own
+Neon branch and ElevenLabs agent branch. Push the branch, then run from it:
 
-Infisical remains the source of truth for stable credentials. Sync these values to GitHub
-Actions secrets:
+```sh
+infisical run --env test -- pnpm run preview:up
+```
 
-- `NEON_API_KEY`, `NEON_PROJECT_ID`, and `PARENT_BRANCH_ID`
-- `ELEVENLABS_API_KEY`, `ELEVENLABS_AGENT_ID`, and `ELEVENLABS_AGENT_PARENT_BRANCH_ID`
-- `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`
+The script runs on your machine with your own Infisical session; no deployment credentials live
+in CI. It checks the required variables, that the branch is pushed, and that the Infisical sync
+exists before changing anything. Then it:
 
-The generated database URL and ElevenLabs branch ID are passed directly to the individual
-Netlify deploy, so they do not require an Infisical environment or folder per pull request.
-Preview provisioning is disabled for pull requests from forks because those builds cannot be
-trusted with provider credentials.
+1. creates (or reuses) the Neon branch `preview/<branch>` from `PARENT_BRANCH_ID` and an
+   ElevenLabs agent branch `preview/<branch>/<timestamp>` from the latest committed version of
+   `ELEVENLABS_AGENT_PARENT_BRANCH_ID`,
+2. writes `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_ID` and `ORIGIN` into the
+   Infisical `prod` folder `/preview`,
+3. runs that folder's Netlify sync (Netlify's `branch-deploy` context) and waits for it to finish,
+4. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`.
+
+The preview is served at `https://<branch>--dialogbank.netlify.app`, so branch names must be
+lowercase letters, digits, and single dashes. Branch deploys run migrations before building.
+Netlify does not build branches on push, so run `preview:up` again to deploy new commits; it
+reuses the existing Neon and ElevenLabs branches.
+
+`/preview` holds the values of one branch at a time. `netlify.toml` also skips every branch
+deploy whose `BRANCH` differs from `PREVIEW_BRANCH` (and fails the build if the skip does not
+apply), so a branch never builds against another branch's database. Running `preview:up` on
+another branch takes over `/preview`: the previous preview keeps serving its last deploy, but
+can no longer be redeployed, and its resources stay until you run `preview:down` for it. Deploy
+previews for pull requests are skipped altogether. Nothing prevents two people from running
+`preview:up` or `preview:down` at the same time, so coordinate if more than one person sets up
+previews.
+
+`/preview` imports the `prod` root folder, so it inherits shared keys such as the ElevenLabs API
+key and Sentry settings, and overrides `BETTER_AUTH_SECRET` so previews and production do not
+share a signing key. Because of that import, the four preview keys are never deleted from
+`/preview`, only reset to placeholders that cannot connect anywhere; otherwise branch deploys
+would receive production's `DATABASE_URL`. `pnpm run preview:init` writes those placeholders
+once, before the `/preview` sync is created.
+
+To tear a preview down, run (defaults to the current branch):
+
+```sh
+infisical run --env test -- pnpm run preview:down [branch]
+```
+
+It resets `/preview` to the placeholders if it belongs to that branch, deletes the Neon branch,
+and archives the ElevenLabs branch. The branch's last Netlify deploy stays reachable, without a
+database, until you delete it in the Netlify UI.
 
 To upload sourcemaps from Netlify builds, the deployment environment also needs:
 
@@ -283,7 +312,6 @@ By default, the script syncs test-related values such as:
 - `ELEVENLABS_API_KEY`
 - `NEON_API_KEY`
 - `NEON_PROJECT_ID`
-- `NETLIFY_AUTH_TOKEN` and `NETLIFY_SITE_ID`, so the `preview` label also works on Dependabot pull requests
 - `PARENT_BRANCH_ID`
 
 This supports two distinct flows:
