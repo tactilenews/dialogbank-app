@@ -58,8 +58,13 @@ test.describe("Assignments E2E", () => {
 		await expect(page.getByText("Problem mit Gelsenkirchen (neu)", { exact: false })).toBeVisible();
 
 		// Saving also configures the agent connected to the assignment
+		// Matching the start reports an error message in full instead of timing out,
+		// and ElevenLabs round trips get more time than the default.
 		await page.getByRole("button", { name: "Speichern" }).click();
-		await expect(page.getByText("Einsatz gespeichert und Agent aktualisiert.")).toBeVisible();
+		await expect(page.getByText(/^Einsatz gespeichert/)).toHaveText(
+			"Einsatz gespeichert und Agent aktualisiert.",
+			{ timeout: 20_000 },
+		);
 		await expect(page.getByRole("button", { name: /neu konfigurieren$/ })).not.toBeVisible();
 
 		// Assert DB state: question-classification links created

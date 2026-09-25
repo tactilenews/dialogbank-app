@@ -389,7 +389,7 @@ function makeEnhancer() {
 				<optgroup label="Verfügbare Agenten">
 					{#if data.assignment.elevenLabsAgentId && !selectedAgentIsInCatalog}
 						<option value={data.assignment.elevenLabsAgentId}>
-							{data.assignment.elevenLabsAgentId} (nicht im Katalog)
+							{data.assignment.elevenLabsAgentId}{data.agentCatalogError ? "" : " (nicht im Katalog)"}
 						</option>
 					{/if}
 					{#each data.availableAgents as catalogAgent (catalogAgent.id)}
@@ -397,7 +397,11 @@ function makeEnhancer() {
 					{/each}
 				</optgroup>
 			</select>
-			{#if data.availableAgents.length === 0 && data.unavailableAgents.length === 0}
+			{#if data.agentCatalogError}
+				<p class="mt-1 text-xs text-red-700">
+					Agentenkatalog konnte nicht geladen werden: {data.agentCatalogError}
+				</p>
+			{:else if data.availableAgents.length === 0 && data.unavailableAgents.length === 0}
 				<p class="mt-1 text-xs text-gray-500">
 					Keine Dialogbank-Agenten gefunden. Markieren Sie geeignete ElevenLabs-Agenten mit dem
 					Tag {data.agentCatalogTag}.

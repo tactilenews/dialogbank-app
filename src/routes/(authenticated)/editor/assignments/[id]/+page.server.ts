@@ -317,6 +317,7 @@ export const load = withAuthenticatedLoad<
 	})[] = [];
 	let agent: ElevenLabsEditorAgent | null = null;
 	let agentCatalog: ElevenLabsAgentCatalogEntry[] = [];
+	let agentCatalogError: string | null = null;
 	try {
 		agentCatalog = await listElevenLabsDialogbankAgents(process.env);
 		const ownedAgents = await event.locals.db
@@ -345,8 +346,9 @@ export const load = withAuthenticatedLoad<
 					]
 				: [];
 		});
-	} catch {
-		// non-fatal: show catalog as unavailable
+	} catch (cause) {
+		// non-fatal: the page says the catalog is unavailable instead of empty
+		agentCatalogError = describeError(cause);
 	}
 
 	try {
@@ -376,6 +378,7 @@ export const load = withAuthenticatedLoad<
 		availableAgents,
 		unavailableAgents,
 		agentCatalogTag,
+		agentCatalogError,
 		agent,
 	};
 });

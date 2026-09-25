@@ -774,4 +774,20 @@ describe("/editor/assignments/[id] +page.server", () => {
 			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, 1) }),
 		).resolves.toMatchObject({ elevenLabsAgentId: "agent_current" });
 	});
+
+	it("load: reports a catalog that failed to load", async ({ db, expect, schema }) => {
+		elevenLabs.listElevenLabsDialogbankAgents.mockRejectedValue(
+			new ElevenLabsError({ message: "ElevenLabs unavailable", statusCode: 503 }),
+		);
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1"),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(load(event as unknown as Parameters<typeof load>[0])).resolves.toMatchObject({
+			availableAgents: [],
+			agentCatalogError: expect.stringContaining("ElevenLabs unavailable"),
+		});
+	});
 });

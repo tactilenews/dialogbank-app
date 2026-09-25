@@ -50,5 +50,6 @@ export const assignmentEditorPageData: PageData = {
 		},
 	],
 	agentCatalogTag: "dialogbank",
+	agentCatalogError: null,
 	agent: null,
 };

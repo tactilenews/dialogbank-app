@@ -72,4 +72,28 @@ describe("/editor/assignments/[id] +page.svelte", () => {
 			.element(page.getByText(/nicht gleichzeitig in mehreren Browserfenstern/))
 			.toBeVisible();
 	});
+
+	it("reports a catalog that failed to load instead of calling it empty", async () => {
+		render(Page, {
+			props: {
+				data: {
+					...assignmentEditorPageData,
+					availableAgents: [],
+					unavailableAgents: [],
+					agentCatalogError: "ElevenLabs unavailable",
+				},
+				form: {},
+			},
+		});
+
+		await expect
+			.element(page.getByText("Agentenkatalog konnte nicht geladen werden: ElevenLabs unavailable"))
+			.toBeVisible();
+		await expect
+			.element(page.getByText("Keine Dialogbank-Agenten gefunden.", { exact: false }))
+			.not.toBeInTheDocument();
+		await expect
+			.element(page.getByRole("option", { name: "agent_current", exact: true }))
+			.toBeInTheDocument();
+	});
 });
