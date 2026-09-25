@@ -37,6 +37,23 @@ let agentSwitchRequiresDisconnect = $derived(
 			selectedAgentId !== data.assignment.elevenLabsAgentId,
 	),
 );
+// Saving configures the agent too, so this only happens when that failed or the
+// assignment was saved before saving did so.
+let agentNeedsConfiguration = $derived(
+	Boolean(
+		data.assignment.elevenLabsAgentId &&
+			(data.assignment.agentConfigurationError ||
+				!data.assignment.agentConfiguredAt ||
+				data.assignment.updatedAt > data.assignment.agentConfiguredAt),
+	),
+);
+let agentIsUpToDate = $derived(
+	Boolean(
+		data.assignment.elevenLabsAgentId &&
+			selectedAgentId === data.assignment.elevenLabsAgentId &&
+			!agentNeedsConfiguration,
+	),
+);
 type NewClassification = { label: string; emoji: string | null };
 
 type QuestionItem = {
@@ -346,13 +363,14 @@ function makeEnhancer() {
 				{/if}
 			</p>
 		{/if}
-		<form method="POST" use:enhance={makeEnhancer()} class="mb-6">
+		<div class="mb-6">
 			<label for="elevenLabsAgentId" class="mb-1 block text-sm font-medium text-gray-700">
 				Agent
 			</label>
 			<select
 				id="elevenLabsAgentId"
 				name="elevenLabsAgentId"
+				form="assignment-form"
 				bind:value={selectedAgentId}
 				class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
 			>
@@ -387,8 +405,14 @@ function makeEnhancer() {
 			{/if}
 
 			<div class="mt-3 flex flex-wrap items-center gap-3">
+			{#if agentIsUpToDate}
+				<p class="text-sm text-gray-600">
+					{selectedAgent?.name ?? selectedAgentId} ist verbunden. Speichern aktualisiert den Agenten.
+				</p>
+			{:else}
 			<button
 				type="submit"
+				form="assignment-form"
 				formaction="?/connectAgent"
 				disabled={submitting || agentSwitchRequiresDisconnect || (!selectedAgentId && !data.assignment.elevenLabsAgentId)}
 				class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
@@ -405,11 +429,12 @@ function makeEnhancer() {
 					{selectedAgent?.name ?? selectedAgentId} verbinden
 				{/if}
 			</button>
+			{/if}
 			{#if form?.message && form.action === "connectAgent"}
 				<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">{form.message}</p>
 			{/if}
 			</div>
-		</form>
+		</div>
 
 		{#if data.agent}
 			<div>

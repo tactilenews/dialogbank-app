@@ -1,5 +1,5 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
-import { error, fail } from "@sveltejs/kit";
+import { error, fail, isHttpError } from "@sveltejs/kit";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
@@ -371,111 +371,203 @@ export const load = withAuthenticatedLoad<
 	};
 });
 
+function describeError(cause: unknown): string {
+	if (isHttpError(cause)) return cause.body.message;
+	return cause instanceof Error && cause.message ? cause.message : "Unbekannter Fehler";
+}
+
+function errorStatus(cause: unknown): number {
+	if (cause instanceof ElevenLabsError) return cause.statusCode || 502;
+	if (isHttpError(cause)) return cause.status;
+	return 500;
+}
+
+function parseAssignmentId(rawId: string): number {
+	const id = parseInt(rawId, 10);
+	if (Number.isNaN(id)) throw error(404, "Einsatz nicht gefunden.");
+	return id;
+}
+
+// Every action on the page submits the assignment form, so what the editor sees
+// is what gets saved, and what gets configured on the agent.
+async function saveAssignmentForm(db: DbClient, id: number, formData: FormData) {
+	const name = (formData.get("name") as string | null)?.trim();
+	if (!name) return fail(400, { message: "Name ist erforderlich." });
+
+	const location = (formData.get("location") as string | null)?.trim() || null;
+	const client = (formData.get("client") as string | null)?.trim() || null;
+	const promptSupplement = (formData.get("promptSupplement") as string | null)?.trim() || null;
+
+	const slug = await createUniqueAssignmentSlug(db, name, id);
+	const questionItems = parseQuestionItems(formData);
+
+	const saved = await persistAssignmentAndQuestions(db, id, questionItems, {
+		name,
+		slug,
+		location,
+		client,
+		promptSupplement,
+	});
+	if (!saved) {
+		throw error(404, "Einsatz nicht gefunden.");
+	}
+}
+
+async function loadAssignmentAgentId(db: DbClient, id: number): Promise<string | null> {
+	const [assignment] = await db
+		.select({ elevenLabsAgentId: assignments.elevenLabsAgentId })
+		.from(assignments)
+		.where(eq(assignments.id, id))
+		.limit(1);
+	if (!assignment) throw error(404, "Einsatz nicht gefunden.");
+	return assignment.elevenLabsAgentId;
+}
+
+type AgentConfigurationResult = { ok: true } | { ok: false; status: number; message: string };
+
+// Writes the saved assignment to its agent. The database stays the source of
+// truth: a failed write is recorded for the editor to retry, never rolled back.
+async function configureAssignmentAgent(
+	db: DbClient,
+	id: number,
+	agentId: string,
+): Promise<AgentConfigurationResult> {
+	const ownedByAgent = and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, agentId));
+	try {
+		const [assignment] = await db
+			.select({ promptSupplement: assignments.promptSupplement })
+			.from(assignments)
+			.where(ownedByAgent)
+			.limit(1);
+		if (!assignment) throw error(409, "Der Agent ist dem Einsatz nicht mehr zugewiesen.");
+		const elevenLabsQuestions = await loadElevenLabsQuestions(db, id);
+		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
+		const reader = createElevenLabsAgentReader(process.env);
+		const writer = createElevenLabsAgentWriter(process.env);
+		const existingAgent = await reader.get(agentTarget.agentId, {
+			branchId: agentTarget.branchId,
+		});
+		const versionId = await updateElevenLabsAgentQuestions(
+			agentTarget,
+			elevenLabsQuestions,
+			existingAgent,
+			writer,
+			{ promptSupplement: assignment.promptSupplement, assignmentId: id },
+		);
+		// Sharing one timestamp lets the page tell whether the assignment changed
+		// after its agent was last configured.
+		const configuredAt = new Date();
+		await db
+			.update(assignments)
+			.set({
+				elevenLabsAgentVersionId: versionId,
+				agentConfiguredAt: configuredAt,
+				agentConfigurationError: null,
+				updatedAt: configuredAt,
+			})
+			.where(ownedByAgent);
+		return { ok: true };
+	} catch (cause) {
+		const message = describeError(cause);
+		await db.update(assignments).set({ agentConfigurationError: message }).where(ownedByAgent);
+		return { ok: false, status: errorStatus(cause), message };
+	}
+}
+
+async function disconnectAssignmentAgent(
+	db: DbClient,
+	id: number,
+	agentId: string,
+): Promise<AgentConfigurationResult> {
+	try {
+		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
+		const reader = createElevenLabsAgentReader(process.env);
+		const writer = createElevenLabsAgentWriter(process.env);
+		const existingAgent = await reader.get(agentTarget.agentId, {
+			branchId: agentTarget.branchId,
+		});
+		await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
+	} catch (cause) {
+		// A deleted remote agent is already detached from the assignment.
+		if (!(cause instanceof ElevenLabsError && cause.statusCode === 404)) {
+			const message = describeError(cause);
+			await db
+				.update(assignments)
+				.set({ agentConfigurationError: message })
+				.where(eq(assignments.id, id));
+			return { ok: false, status: errorStatus(cause), message };
+		}
+	}
+
+	await db
+		.update(assignments)
+		.set({
+			elevenLabsAgentId: null,
+			elevenLabsAgentVersionId: null,
+			agentConfiguredAt: null,
+			agentConfigurationError: null,
+		})
+		.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, agentId)));
+	return { ok: true };
+}
+
 export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], Actions>({
 	save: async (event) => {
-		const id = parseInt(event.params.id, 10);
-		if (Number.isNaN(id)) throw error(404, "Einsatz nicht gefunden.");
-
+		const id = parseAssignmentId(event.params.id);
 		const formData = await event.request.formData();
-		const name = (formData.get("name") as string | null)?.trim();
-		if (!name) return fail(400, { message: "Name ist erforderlich." });
+		const invalid = await saveAssignmentForm(event.locals.db, id, formData);
+		if (invalid) return invalid;
 
-		const location = (formData.get("location") as string | null)?.trim() || null;
-		const client = (formData.get("client") as string | null)?.trim() || null;
-		const promptSupplement = (formData.get("promptSupplement") as string | null)?.trim() || null;
-
-		const slug = await createUniqueAssignmentSlug(event.locals.db, name, id);
-		const questionItems = parseQuestionItems(formData);
-
-		const saved = await persistAssignmentAndQuestions(event.locals.db, id, questionItems, {
-			name,
-			slug,
-			location,
-			client,
-			promptSupplement,
-		});
-		if (!saved) {
-			throw error(404, "Einsatz nicht gefunden.");
+		const agentId = await loadAssignmentAgentId(event.locals.db, id);
+		if (!agentId) {
+			return { success: true, action: "save", message: "Einsatz gespeichert." };
 		}
 
+		const configured = await configureAssignmentAgent(event.locals.db, id, agentId);
+		if (!configured.ok) {
+			return fail(configured.status, {
+				action: "save",
+				message: `Einsatz gespeichert, aber der Agent konnte nicht aktualisiert werden: ${configured.message}`,
+			});
+		}
 		return {
 			success: true,
 			action: "save",
-			message: "Einsatz gespeichert.",
+			message: "Einsatz gespeichert und Agent aktualisiert.",
 		};
 	},
 
 	connectAgent: async (event) => {
-		const id = parseInt(event.params.id, 10);
-		if (Number.isNaN(id)) throw error(404, "Einsatz nicht gefunden.");
+		const id = parseAssignmentId(event.params.id);
 		const formData = await event.request.formData();
-		const selectedAgentId = parseElevenLabsAgentId(formData);
+		const invalid = await saveAssignmentForm(event.locals.db, id, formData);
+		if (invalid) return invalid;
 
-		const [assignment] = await event.locals.db
-			.select({
-				elevenLabsAgentId: assignments.elevenLabsAgentId,
-				promptSupplement: assignments.promptSupplement,
-			})
-			.from(assignments)
-			.where(eq(assignments.id, id))
-			.limit(1);
-		if (!assignment) throw error(404, "Einsatz nicht gefunden.");
+		const selectedAgentId = parseElevenLabsAgentId(formData);
+		const currentAgentId = await loadAssignmentAgentId(event.locals.db, id);
 
 		if (!selectedAgentId) {
-			if (!assignment.elevenLabsAgentId) {
+			if (!currentAgentId) {
 				return fail(400, {
 					action: "connectAgent",
 					message: "Dem Einsatz ist kein Agent zugewiesen.",
 				});
 			}
-			try {
-				const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
-					process.env,
-					assignment.elevenLabsAgentId,
-				);
-				const reader = createElevenLabsAgentReader(process.env);
-				const writer = createElevenLabsAgentWriter(process.env);
-				const existingAgent = await reader.get(agentTarget.agentId, {
-					branchId: agentTarget.branchId,
+			const disconnected = await disconnectAssignmentAgent(event.locals.db, id, currentAgentId);
+			if (!disconnected.ok) {
+				return fail(disconnected.status, {
+					action: "connectAgent",
+					message: `Einsatz gespeichert, aber der Agent konnte nicht getrennt werden: ${disconnected.message}`,
 				});
-				await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
-			} catch (cause) {
-				if (cause instanceof ElevenLabsError && cause.statusCode === 404) {
-					// A deleted remote agent is already detached from the assignment.
-				} else {
-					await event.locals.db
-						.update(assignments)
-						.set({
-							agentConfigurationError: cause instanceof Error ? cause.message : "Unknown error",
-						})
-						.where(eq(assignments.id, id));
-					if (!(cause instanceof ElevenLabsError)) throw cause;
-					return fail(cause.statusCode || 500, {
-						action: "connectAgent",
-						message: `Agent konnte nicht getrennt werden: ${cause.message || "Unbekannter Fehler"}`,
-					});
-				}
 			}
-
-			await event.locals.db
-				.update(assignments)
-				.set({
-					elevenLabsAgentId: null,
-					elevenLabsAgentVersionId: null,
-					agentConfiguredAt: null,
-					agentConfigurationError: null,
-				})
-				.where(
-					and(
-						eq(assignments.id, id),
-						eq(assignments.elevenLabsAgentId, assignment.elevenLabsAgentId),
-					),
-				);
-
-			return { success: true, action: "connectAgent", message: "Agent getrennt." };
+			return {
+				success: true,
+				action: "connectAgent",
+				message: "Einsatz gespeichert und Agent getrennt.",
+			};
 		}
 
-		if (assignment.elevenLabsAgentId && assignment.elevenLabsAgentId !== selectedAgentId) {
+		if (currentAgentId && currentAgentId !== selectedAgentId) {
 			return fail(409, {
 				action: "connectAgent",
 				message: "Der aktuelle Agent muss zuerst getrennt werden.",
@@ -501,9 +593,9 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				(agent) => agent.id === selectedAgentId && isSelectableDialogbankAgent(agent, requiredTag),
 			);
 		} catch (cause) {
-			return fail(cause instanceof ElevenLabsError ? cause.statusCode || 502 : 502, {
+			return fail(errorStatus(cause), {
 				action: "connectAgent",
-				message: `Agentenkatalog konnte nicht geprüft werden: ${cause instanceof Error ? cause.message : "Unbekannter Fehler"}`,
+				message: `Agentenkatalog konnte nicht geprüft werden: ${describeError(cause)}`,
 			});
 		}
 		if (!selectedCatalogAgent) {
@@ -513,7 +605,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			});
 		}
 
-		const newlyClaimedAgent = !assignment.elevenLabsAgentId;
+		const newlyClaimedAgent = !currentAgentId;
 		if (newlyClaimedAgent) {
 			try {
 				const claimedAssignments = await event.locals.db
@@ -539,47 +631,19 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			}
 		}
 
-		try {
-			const elevenLabsQuestions = await loadElevenLabsQuestions(event.locals.db, id);
-			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
-				process.env,
-				selectedAgentId,
-			);
-			const reader = createElevenLabsAgentReader(process.env);
-			const writer = createElevenLabsAgentWriter(process.env);
-			const existingAgent = await reader.get(agentTarget.agentId, {
-				branchId: agentTarget.branchId,
-			});
-			const versionId = await updateElevenLabsAgentQuestions(
-				agentTarget,
-				elevenLabsQuestions,
-				existingAgent,
-				writer,
-				{ promptSupplement: assignment.promptSupplement, assignmentId: id },
-			);
-			await event.locals.db
-				.update(assignments)
-				.set({
-					elevenLabsAgentVersionId: versionId,
-					agentConfiguredAt: new Date(),
-					agentConfigurationError: null,
-				})
-				.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, selectedAgentId)));
-		} catch (cause) {
-			await event.locals.db
-				.update(assignments)
-				.set({ agentConfigurationError: cause instanceof Error ? cause.message : "Unknown error" })
-				.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, selectedAgentId)));
-			if (!(cause instanceof ElevenLabsError)) throw cause;
-			return fail(cause.statusCode || 500, {
+		const configured = await configureAssignmentAgent(event.locals.db, id, selectedAgentId);
+		if (!configured.ok) {
+			return fail(configured.status, {
 				action: "connectAgent",
-				message: `Agent konnte nicht verbunden werden: ${cause.message || "Unbekannter Fehler"}`,
+				message: `Einsatz gespeichert, aber der Agent konnte nicht konfiguriert werden: ${configured.message}`,
 			});
 		}
 		return {
 			success: true,
 			action: "connectAgent",
-			message: newlyClaimedAgent ? "Agent verbunden." : "Agent neu konfiguriert.",
+			message: newlyClaimedAgent
+				? "Einsatz gespeichert und Agent verbunden."
+				: "Einsatz gespeichert und Agent neu konfiguriert.",
 		};
 	},
 });

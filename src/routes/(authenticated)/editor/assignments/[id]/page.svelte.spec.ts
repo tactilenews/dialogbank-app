@@ -5,7 +5,7 @@ import Page from "./+page.svelte";
 import { assignmentEditorPageData } from "./page.svelte.spec/data";
 
 describe("/editor/assignments/[id] +page.svelte", () => {
-	it("groups agents in the agent panel and labels the reconnect action", async () => {
+	it("groups agents in the agent panel", async () => {
 		render(Page, { props: { data: assignmentEditorPageData, form: {} } });
 
 		const agentSelect = page.getByRole("combobox", { name: "Agent" });
@@ -14,6 +14,40 @@ describe("/editor/assignments/[id] +page.svelte", () => {
 		expect(document.querySelector('optgroup[label="Nicht verfügbare Agenten"]')).not.toBeNull();
 		await expect.element(page.getByRole("option", { name: "Tom — Bahnhof" })).toBeDisabled();
 		expect(document.querySelector('optgroup[label="Verfügbare Agenten"]')).not.toBeNull();
+	});
+
+	it("submits the agent selection with the assignment form", async () => {
+		render(Page, { props: { data: assignmentEditorPageData, form: {} } });
+
+		await expect
+			.element(page.getByRole("combobox", { name: "Agent" }))
+			.toHaveAttribute("form", "assignment-form");
+	});
+
+	it("offers no reconfiguration while the agent is up to date, since saving updates it", async () => {
+		render(Page, { props: { data: assignmentEditorPageData, form: {} } });
+
+		await expect.element(page.getByText("Nadia ist verbunden.", { exact: false })).toBeVisible();
+		await expect
+			.element(page.getByRole("button", { name: "Nadia neu konfigurieren" }))
+			.not.toBeInTheDocument();
+	});
+
+	it.each([
+		["the last configuration failed", { agentConfigurationError: "ElevenLabs unavailable" }],
+		["the assignment changed after it", { updatedAt: new Date("2026-09-21T00:00:00.000Z") }],
+		["it was never configured", { agentConfiguredAt: null }],
+	])("offers reconfiguring the agent when %s", async (_, assignment) => {
+		render(Page, {
+			props: {
+				data: {
+					...assignmentEditorPageData,
+					assignment: { ...assignmentEditorPageData.assignment, ...assignment },
+				},
+				form: {},
+			},
+		});
+
 		await expect
 			.element(page.getByRole("button", { name: "Nadia neu konfigurieren" }))
 			.toBeEnabled();

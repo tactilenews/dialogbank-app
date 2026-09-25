@@ -57,10 +57,10 @@ test.describe("Assignments E2E", () => {
 		// Verify "Problem mit Gelsenkirchen (neu)" chip appears
 		await expect(page.getByText("Problem mit Gelsenkirchen (neu)", { exact: false })).toBeVisible();
 
+		// Saving also configures the agent connected to the assignment
 		await page.getByRole("button", { name: "Speichern" }).click();
-		await expect(page.getByText("Einsatz gespeichert.")).toBeVisible();
-		await page.getByRole("button", { name: /neu konfigurieren$/ }).click();
-		await expect(page.getByText("Agent neu konfiguriert.")).toBeVisible();
+		await expect(page.getByText("Einsatz gespeichert und Agent aktualisiert.")).toBeVisible();
+		await expect(page.getByRole("button", { name: /neu konfigurieren$/ })).not.toBeVisible();
 
 		// Assert DB state: question-classification links created
 		const questionRows = await db.select().from(schema.questions);
