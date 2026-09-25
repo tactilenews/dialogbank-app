@@ -21,6 +21,7 @@ import {
 	resolveElevenLabsAgentBranchName,
 	resolveElevenLabsAgentTargetForAgentId,
 	resolveElevenLabsDialogbankAgentTag,
+	resolveElevenLabsPostCallWebhookId,
 	updateElevenLabsAgentQuestions,
 } from "./agent";
 
@@ -30,6 +31,7 @@ const agentTarget = {
 	agentId: "agent_main_123",
 	branchId: "agtbrch_e2e_123",
 	workflowNodeId: WORKFLOW_NODE_ID,
+	postCallWebhookId: "wh_env",
 };
 
 describe("isSelectableDialogbankAgent", () => {
@@ -122,6 +124,34 @@ describe("resolveElevenLabsAgentBranchName", () => {
 	});
 });
 
+describe("resolveElevenLabsPostCallWebhookId", () => {
+	it("returns the configured webhook id", () => {
+		expect(resolveElevenLabsPostCallWebhookId({ ELEVENLABS_POST_CALL_WEBHOOK_ID: " wh_1 " })).toBe(
+			"wh_1",
+		);
+	});
+
+	it("turns none into no webhook", () => {
+		expect(
+			resolveElevenLabsPostCallWebhookId({ ELEVENLABS_POST_CALL_WEBHOOK_ID: "none" }),
+		).toBeNull();
+	});
+
+	it.each([
+		["missing", undefined],
+		["the preview placeholder", "unset"],
+	])("rejects a webhook id that is %s", (_, webhookId) => {
+		expect(() =>
+			resolveElevenLabsPostCallWebhookId({ ELEVENLABS_POST_CALL_WEBHOOK_ID: webhookId }),
+		).toThrow(
+			expect.objectContaining({
+				status: 500,
+				body: { message: "ELEVENLABS_POST_CALL_WEBHOOK_ID is not configured on the server." },
+			}),
+		);
+	});
+});
+
 describe("resolveElevenLabsAgentTargetForAgentId", () => {
 	function createBranchReader(
 		overrides: Partial<{
@@ -141,6 +171,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 		} = overrides;
 		return {
 			getMainBranchId: vi.fn().mockResolvedValue(mainBranchId),
+			setPostCallWebhook: vi.fn().mockResolvedValue(undefined),
 			list: vi.fn().mockResolvedValue(branches),
 			get: vi.fn().mockResolvedValue({ mostRecentVersions }),
 			create: vi.fn().mockResolvedValue({
@@ -155,7 +186,11 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
-				{ ELEVENLABS_AGENT_BRANCH_NAME: "main", ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID },
+				{
+					ELEVENLABS_AGENT_BRANCH_NAME: "main",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
 				"agent_main_123",
 				branchReader,
 			),
@@ -163,6 +198,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			agentId: "agent_main_123",
 			branchId: "agtbrch_main_123",
 			workflowNodeId: WORKFLOW_NODE_ID,
+			postCallWebhookId: "wh_env",
 		});
 		expect(branchReader.getMainBranchId).toHaveBeenCalledWith("agent_main_123");
 		expect(branchReader.create).not.toHaveBeenCalled();
@@ -173,7 +209,11 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
-				{ ELEVENLABS_AGENT_BRANCH_NAME: "main", ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID },
+				{
+					ELEVENLABS_AGENT_BRANCH_NAME: "main",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
 				"agent_main_123",
 				branchReader,
 			),
@@ -197,6 +237,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 				{
 					ELEVENLABS_AGENT_ID: "agent_default",
 					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},
 				"agent_other",
@@ -206,6 +247,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			agentId: "agent_other",
 			branchId: "agtbrch_preview_123",
 			workflowNodeId: WORKFLOW_NODE_ID,
+			postCallWebhookId: "wh_env",
 		});
 		expect(branchReader.create).not.toHaveBeenCalled();
 	});
@@ -222,6 +264,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			resolveElevenLabsAgentTargetForAgentId(
 				{
 					ELEVENLABS_AGENT_BRANCH_NAME: "development",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},
 				"agent_main_123",
@@ -237,6 +280,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			resolveElevenLabsAgentTargetForAgentId(
 				{
 					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},
 				"agent_main_123",
@@ -246,6 +290,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			agentId: "agent_main_123",
 			branchId: "agtbrch_created",
 			workflowNodeId: WORKFLOW_NODE_ID,
+			postCallWebhookId: "wh_env",
 		});
 
 		expect(branchReader.get).toHaveBeenCalledWith("agent_main_123", "agtbrch_main_123");
@@ -254,6 +299,45 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			name: "preview/feature",
 			description: 'Branch "preview/feature", created automatically by Dialogbank.',
 		});
+	});
+
+	it("points a created branch at this environment's webhook instead of the one copied from main", async () => {
+		const branchReader = createBranchReader();
+
+		await resolveElevenLabsAgentTargetForAgentId(
+			{
+				ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
+				ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_preview",
+				ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+			},
+			"agent_main_123",
+			branchReader,
+		);
+
+		expect(branchReader.setPostCallWebhook).toHaveBeenCalledWith(
+			"agent_main_123",
+			"agtbrch_created",
+			"wh_preview",
+		);
+	});
+
+	it("rejects without creating a branch when no webhook is configured", async () => {
+		const branchReader = createBranchReader();
+
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{
+					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
+				"agent_main_123",
+				branchReader,
+			),
+		).rejects.toMatchObject({
+			status: 500,
+			body: { message: "ELEVENLABS_POST_CALL_WEBHOOK_ID is not configured on the server." },
+		});
+		expect(branchReader.create).not.toHaveBeenCalled();
 	});
 
 	it("uses the branch a concurrent request created when the name is taken", async () => {
@@ -275,6 +359,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			resolveElevenLabsAgentTargetForAgentId(
 				{
 					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},
 				"agent_main_123",
@@ -292,6 +377,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			resolveElevenLabsAgentTargetForAgentId(
 				{
 					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},
 				"agent_main_123",
@@ -308,6 +394,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			resolveElevenLabsAgentTargetForAgentId(
 				{
 					ELEVENLABS_AGENT_BRANCH_NAME: "development",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},
 				"agent_main_123",
@@ -327,6 +414,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			resolveElevenLabsAgentTargetForAgentId(
 				{
 					ELEVENLABS_AGENT_BRANCH_NAME: "development",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},
 				"agent_main_123",
@@ -344,7 +432,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 	it("rejects when the workflow node id is missing", async () => {
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
-				{ ELEVENLABS_AGENT_BRANCH_NAME: "main" },
+				{ ELEVENLABS_AGENT_BRANCH_NAME: "main", ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env" },
 				"agent_main_123",
 				createBranchReader(),
 			),
@@ -681,6 +769,7 @@ describe("updateElevenLabsAgentQuestions", () => {
 							branchId?: string;
 							platformSettings?: {
 								dataCollection?: Record<string, AnalysisProperty>;
+								workspaceOverrides?: { webhooks: { postCallWebhookId: string | null } };
 							};
 							workflow?: unknown;
 						},
@@ -726,6 +815,29 @@ describe("updateElevenLabsAgentQuestions", () => {
 		await expect(
 			updateElevenLabsAgentQuestions(agentTarget, [makeQuestion("Frage?")], existingAgent, writer),
 		).resolves.toBe("agtvrsn_test");
+	});
+
+	it.each([
+		["this environment's webhook", "wh_env"],
+		["no webhook", null],
+	])("points the configured branch at %s", async (_, postCallWebhookId) => {
+		const writer = makeWriter();
+		const existingAgent: AgentReaderResponse = {
+			name: "Test",
+			conversationConfig: {},
+			workflow: makeWorkflow("Stelle der Person nacheinander diese Fragen:\n\n1. Frage?"),
+		};
+
+		await updateElevenLabsAgentQuestions(
+			{ ...agentTarget, postCallWebhookId },
+			[makeQuestion("Frage?")],
+			existingAgent,
+			writer,
+		);
+
+		expect(writer.update.mock.calls[0][1].platformSettings?.workspaceOverrides).toEqual({
+			webhooks: { postCallWebhookId },
+		});
 	});
 
 	it("preserves all other workflow nodes unchanged", async () => {

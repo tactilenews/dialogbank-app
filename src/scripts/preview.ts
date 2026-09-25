@@ -8,6 +8,7 @@ const NEON_API_BASE = "https://console.neon.tech/api/v2";
 const INFISICAL_DEFAULT_DOMAIN = "https://app.infisical.com/api";
 const NETLIFY_BUILD_HOOK_PREFIX = "https://api.netlify.com/build_hooks/";
 const NETLIFY_SITE_NAME = "dialogbank";
+const POST_CALL_WEBHOOK_PATH = "/webhook/elevenlabs/post-call";
 
 // The folder whose Netlify sync feeds the `branch-deploy` context. It holds the
 // values of one preview at a time; `netlify.toml` refuses to build any other branch.
@@ -22,6 +23,8 @@ const PREVIEW_PLACEHOLDERS = {
 	PREVIEW_BRANCH: UNSET,
 	DATABASE_URL: "postgres://unset:unset@preview-unset.invalid/unset",
 	ELEVENLABS_AGENT_BRANCH_NAME: UNSET,
+	ELEVENLABS_POST_CALL_WEBHOOK_ID: UNSET,
+	ELEVENLABS_WEBHOOK_SECRET: UNSET,
 	ORIGIN: "https://preview-unset.invalid",
 };
 type PreviewValues = Record<keyof typeof PREVIEW_PLACEHOLDERS, string>;
@@ -30,6 +33,7 @@ const UP_ENVIRONMENT = [
 	"NEON_API_KEY",
 	"NEON_PROJECT_ID",
 	"PARENT_BRANCH_ID",
+	"ELEVENLABS_API_KEY",
 	"NETLIFY_BUILD_HOOK_URL",
 ];
 const DOWN_ENVIRONMENT = ["NEON_API_KEY", "NEON_PROJECT_ID", "ELEVENLABS_API_KEY"];
@@ -114,6 +118,10 @@ function validateBranchName(branch: string): void {
 	if (label.length > 63) {
 		throw new Error(`"${label}" exceeds the 63 character limit of a DNS label`);
 	}
+}
+
+function previewOrigin(branch: string): string {
+	return `https://${branch}--${NETLIFY_SITE_NAME}.netlify.app`;
 }
 
 // Names both the Neon branch and, on every agent, the ElevenLabs branch.
@@ -229,14 +237,19 @@ async function listDialogbankAgentIds(client: ElevenLabsClient): Promise<string[
 	return agentIds;
 }
 
+function createElevenLabsClient(): ElevenLabsClient {
+	return new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_API_KEY") });
+}
+
 // The app creates the ElevenLabs branch named ELEVENLABS_AGENT_BRANCH_NAME on
 // each agent the first time a preview uses it, so every agent Dialogbank can
-// select has to be searched. ElevenLabs cannot filter branches by name or page
-// past one response, so only active branches are searched: archived ones pile
-// up over time, while active previews stay few.
-async function archiveElevenLabsBranches(name: string): Promise<void> {
-	const client = new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_API_KEY") });
+// select has to be searched. Agents outside that catalog are never touched.
+// ElevenLabs cannot filter branches by name or page past one response, so only
+// active branches are searched: archived ones pile up over time, while active
+// previews stay few.
+async function findPreviewAgentBranches(client: ElevenLabsClient, name: string) {
 	const limit = 100;
+	const found: { agentId: string; branchId: string }[] = [];
 	for (const agentId of await listDialogbankAgentIds(client)) {
 		const { results } = await client.conversationalAi.agents.branches.list(agentId, {
 			includeArchived: false,
@@ -246,11 +259,73 @@ async function archiveElevenLabsBranches(name: string): Promise<void> {
 			throw new Error(`Agent ${agentId} has ${limit}+ active branches; archive unused ones first`);
 		}
 		for (const candidate of results.filter((candidate) => candidate.name === name)) {
-			await client.conversationalAi.agents.branches.update(agentId, candidate.id, {
-				isArchived: true,
-			});
+			found.push({ agentId, branchId: candidate.id });
 		}
 	}
+	return found;
+}
+
+async function archiveElevenLabsBranches(name: string): Promise<void> {
+	const client = createElevenLabsClient();
+	for (const { agentId, branchId } of await findPreviewAgentBranches(client, name)) {
+		await client.conversationalAi.agents.branches.update(agentId, branchId, { isArchived: true });
+	}
+}
+
+function previewWebhookUrl(origin: string): string {
+	return `${origin}${POST_CALL_WEBHOOK_PATH}`;
+}
+
+async function findPreviewWebhookIds(client: ElevenLabsClient, origin: string) {
+	const { webhooks } = await client.webhooks.list();
+	return webhooks
+		.filter((webhook) => webhook.webhookUrl === previewWebhookUrl(origin))
+		.map((webhook) => webhook.webhookId);
+}
+
+async function deletePreviewWebhooks(client: ElevenLabsClient, webhookIds: string[]) {
+	for (const webhookId of webhookIds) await client.webhooks.delete(webhookId);
+}
+
+// Each preview gets its own workspace webhook, so its conversations reach its
+// own deploy instead of the main branch's webhook, which the agent branches
+// start with. ElevenLabs returns the signing secret only when it creates a
+// webhook, so an existing one is reused only while `/preview` still holds its
+// secret; otherwise a new one replaces it.
+async function provisionPreviewWebhook(
+	client: ElevenLabsClient,
+	branch: string,
+	origin: string,
+	ownsPreview: boolean,
+) {
+	const existingIds = await findPreviewWebhookIds(client, origin);
+	if (ownsPreview) {
+		const webhookId = readPreviewSecret("ELEVENLABS_POST_CALL_WEBHOOK_ID");
+		const secret = readPreviewSecret("ELEVENLABS_WEBHOOK_SECRET");
+		if (secret && secret !== UNSET && existingIds.includes(webhookId)) {
+			return { webhookId, secret, replacedIds: [] };
+		}
+	}
+
+	const created = await client.webhooks.create({
+		settings: {
+			authType: "hmac",
+			name: `Dialogbank ${previewResourceName(branch)}`,
+			webhookUrl: previewWebhookUrl(origin),
+		},
+	});
+	if (!created.webhookSecret) throw new Error("ElevenLabs returned no secret for the new webhook");
+
+	// Branches the app created for an earlier `up` still point at the old webhook.
+	for (const target of await findPreviewAgentBranches(client, previewResourceName(branch))) {
+		await client.conversationalAi.agents.update(target.agentId, {
+			branchId: target.branchId,
+			platformSettings: {
+				workspaceOverrides: { webhooks: { postCallWebhookId: created.webhookId } },
+			},
+		});
+	}
+	return { webhookId: created.webhookId, secret: created.webhookSecret, replacedIds: existingIds };
 }
 
 // Use the same Infisical instance as the CLI, whose session token the API calls
@@ -405,12 +480,16 @@ async function up(): Promise<void> {
 	requirePushedBranch(branch);
 	const { id: syncId } = await findPreviewSync();
 	const name = previewResourceName(branch);
-	const origin = `https://${branch}--${NETLIFY_SITE_NAME}.netlify.app`;
+	const origin = previewOrigin(branch);
 
-	console.log(`Provisioning Neon branch for "${branch}"`);
-	const databaseUrl = await provisionNeonBranch(name);
-
+	console.log(`Provisioning Neon branch and ElevenLabs webhook for "${branch}"`);
+	const client = createElevenLabsClient();
 	const previousBranch = readPreviewBranch();
+	const [databaseUrl, webhook] = await Promise.all([
+		provisionNeonBranch(name),
+		provisionPreviewWebhook(client, branch, origin, previousBranch === branch),
+	]);
+
 	if (previousBranch && previousBranch !== branch) {
 		console.log(
 			`Taking over Infisical ${INFISICAL_PREVIEW_PATH} from "${previousBranch}". Its last deploy keeps working but cannot be redeployed; run \`pnpm run preview:down ${previousBranch}\` once it is no longer needed.`,
@@ -423,11 +502,14 @@ async function up(): Promise<void> {
 		PREVIEW_BRANCH: branch,
 		DATABASE_URL: databaseUrl,
 		ELEVENLABS_AGENT_BRANCH_NAME: name,
+		ELEVENLABS_POST_CALL_WEBHOOK_ID: webhook.webhookId,
+		ELEVENLABS_WEBHOOK_SECRET: webhook.secret,
 		ORIGIN: origin,
 	});
 
 	console.log("Syncing Infisical to Netlify");
 	await syncPreviewSecrets(syncId);
+	await deletePreviewWebhooks(client, webhook.replacedIds);
 
 	console.log("Triggering Netlify build");
 	await triggerNetlifyBuild(branch);
@@ -448,11 +530,16 @@ async function down(): Promise<void> {
 		await syncPreviewSecrets(syncId);
 	}
 
-	console.log(`Deleting Neon branch and archiving ElevenLabs branches for "${branch}"`);
-	const name = previewResourceName(branch);
-	await Promise.all([deleteNeonBranch(name), archiveElevenLabsBranches(name)]);
 	console.log(
-		`Done. The last deploy at https://${branch}--${NETLIFY_SITE_NAME}.netlify.app stays reachable until you delete it in Netlify, but its database is gone.`,
+		`Deleting Neon branch, archiving ElevenLabs branches and deleting the webhook for "${branch}"`,
+	);
+	const name = previewResourceName(branch);
+	const client = createElevenLabsClient();
+	const origin = previewOrigin(branch);
+	await Promise.all([deleteNeonBranch(name), archiveElevenLabsBranches(name)]);
+	await deletePreviewWebhooks(client, await findPreviewWebhookIds(client, origin));
+	console.log(
+		`Done. The last deploy at ${origin} stays reachable until you delete it in Netlify, but its database is gone.`,
 	);
 }
 

@@ -36,11 +36,18 @@ type AgentWriter = {
 		agentId: string,
 		request: {
 			branchId?: string;
-			platformSettings?: { dataCollection?: Record<string, AnalysisProperty> };
+			platformSettings?: {
+				dataCollection?: Record<string, AnalysisProperty>;
+				workspaceOverrides?: PostCallWebhookOverride;
+			};
 			workflow?: AgentWorkflowRequestModel;
 		},
 	) => Promise<{ versionId?: string }>;
 };
+
+// `null` removes the branch's override, leaving it without a post-call webhook
+// as long as the workspace sets none by default.
+type PostCallWebhookOverride = { webhooks: { postCallWebhookId: string | null } };
 
 export type AgentBranchSummary = { id: string; name: string; isArchived: boolean };
 
@@ -57,6 +64,11 @@ export type AgentBranchReader = {
 		agentId: string,
 		request: { parentVersionId: string; name: string; description: string },
 	) => Promise<{ createdBranchId: string }>;
+	setPostCallWebhook: (
+		agentId: string,
+		branchId: string,
+		postCallWebhookId: string | null,
+	) => Promise<void>;
 };
 
 export type AgentCatalogReader = {
@@ -67,6 +79,7 @@ export type ElevenLabsAgentTarget = {
 	agentId: string;
 	branchId?: string;
 	workflowNodeId: string;
+	postCallWebhookId: string | null;
 };
 
 export type ElevenLabsAgentCatalogEntry = {
@@ -90,6 +103,7 @@ export type ElevenLabsEnv = {
 	ELEVENLABS_AGENT_BRANCH_NAME?: string;
 	ELEVENLABS_API_KEY?: string;
 	ELEVENLABS_DIALOGBANK_AGENT_TAG?: string;
+	ELEVENLABS_POST_CALL_WEBHOOK_ID?: string;
 	ELEVENLABS_WORKFLOW_NODE_ID?: string;
 };
 
@@ -135,24 +149,38 @@ export function resolveElevenLabsAgentBranchName(environment: ElevenLabsEnv): st
 	return branchName;
 }
 
+const NO_POST_CALL_WEBHOOK = "none";
+
+// Every branch Dialogbank uses gets this environment's post-call webhook. A new
+// branch starts as a copy of the main branch, so it would otherwise send its
+// conversations to production.
+export function resolveElevenLabsPostCallWebhookId(environment: ElevenLabsEnv): string | null {
+	const webhookId = environment.ELEVENLABS_POST_CALL_WEBHOOK_ID?.trim();
+	if (!webhookId || webhookId === UNSET_BRANCH_NAME) {
+		throw error(500, "ELEVENLABS_POST_CALL_WEBHOOK_ID is not configured on the server.");
+	}
+	return webhookId === NO_POST_CALL_WEBHOOK ? null : webhookId;
+}
+
 export async function resolveElevenLabsAgentTargetForAgentId(
 	environment: ElevenLabsEnv,
 	agentId: string,
 	branchReader?: AgentBranchReader,
 ): Promise<ElevenLabsAgentTarget> {
 	const branchName = resolveElevenLabsAgentBranchName(environment);
+	const postCallWebhookId = resolveElevenLabsPostCallWebhookId(environment);
 	const reader = branchReader ?? createElevenLabsAgentBranchReader(environment);
 	const branchId =
 		branchName === MAIN_BRANCH_NAME
 			? await requireMainBranchId(agentId, reader)
-			: await findOrCreateElevenLabsBranch(agentId, branchName, reader);
+			: await findOrCreateElevenLabsBranch(agentId, branchName, postCallWebhookId, reader);
 
 	const workflowNodeId = environment.ELEVENLABS_WORKFLOW_NODE_ID;
 	if (!workflowNodeId) {
 		throw error(500, "ELEVENLABS_WORKFLOW_NODE_ID is not configured on the server.");
 	}
 
-	return { agentId, branchId, workflowNodeId };
+	return { agentId, branchId, workflowNodeId, postCallWebhookId };
 }
 
 export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): AgentBranchReader {
@@ -176,6 +204,12 @@ export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): A
 			client.conversationalAi.agents.branches.get(agentId, branchId),
 		create: async (agentId, request) =>
 			client.conversationalAi.agents.branches.create(agentId, request),
+		setPostCallWebhook: async (agentId, branchId, postCallWebhookId) => {
+			await updateAgent(client, agentId, {
+				branchId,
+				platformSettings: { workspaceOverrides: postCallWebhookOverride(postCallWebhookId) },
+			});
+		},
 	};
 }
 
@@ -212,6 +246,7 @@ async function requireMainBranchId(agentId: string, reader: AgentBranchReader): 
 async function findOrCreateElevenLabsBranch(
 	agentId: string,
 	branchName: string,
+	postCallWebhookId: string | null,
 	reader: AgentBranchReader,
 ): Promise<string> {
 	const branches = await reader.list(agentId);
@@ -231,6 +266,9 @@ async function findOrCreateElevenLabsBranch(
 			name: branchName,
 			description: `Branch "${branchName}", created automatically by Dialogbank.`,
 		});
+		// Before anyone can call the new branch, which would send its conversation
+		// to the main branch's webhook.
+		await reader.setPostCallWebhook(agentId, created.createdBranchId, postCallWebhookId);
 		return created.createdBranchId;
 	} catch (cause) {
 		if (!isBranchNameConflict(cause)) throw cause;
@@ -313,6 +351,23 @@ export function createElevenLabsAgentCatalogReader(environment: ElevenLabsEnv): 
 	};
 }
 
+function postCallWebhookOverride(postCallWebhookId: string | null): PostCallWebhookOverride {
+	return { webhooks: { postCallWebhookId } };
+}
+
+// The SDK types `postCallWebhookId` as an optional string, but only `null`
+// removes an override (verified against the API).
+function updateAgent(
+	client: ElevenLabsClient,
+	agentId: string,
+	request: Parameters<AgentWriter["update"]>[1],
+) {
+	return client.conversationalAi.agents.update(
+		agentId,
+		request as Parameters<ElevenLabsClient["conversationalAi"]["agents"]["update"]>[1],
+	);
+}
+
 export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWriter {
 	const apiKey = environment.ELEVENLABS_API_KEY;
 	if (!apiKey) {
@@ -324,7 +379,7 @@ export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWr
 	});
 
 	return {
-		update: async (agentId, request) => client.conversationalAi.agents.update(agentId, request),
+		update: async (agentId, request) => updateAgent(client, agentId, request),
 	};
 }
 
@@ -500,7 +555,10 @@ export async function updateElevenLabsAgentQuestions(
 	const updatedAgent = await writer.update(target.agentId, {
 		branchId: target.branchId,
 		workflow: updatedWorkflow,
-		platformSettings: { dataCollection: newDataCollection },
+		platformSettings: {
+			dataCollection: newDataCollection,
+			workspaceOverrides: postCallWebhookOverride(target.postCallWebhookId),
+		},
 	});
 	return updatedAgent.versionId ?? null;
 }

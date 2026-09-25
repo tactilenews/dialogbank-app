@@ -24,6 +24,7 @@ beforeEach(() => {
 		agentId,
 		branchId: "agtbrch_test",
 		workflowNodeId: "node_test",
+		postCallWebhookId: null,
 	}));
 	elevenLabs.createElevenLabsAgentReader.mockReturnValue({ get: vi.fn().mockResolvedValue({}) });
 	elevenLabs.createElevenLabsAgentWriter.mockReturnValue({ update: vi.fn() });
