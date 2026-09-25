@@ -89,7 +89,10 @@ export function parseElevenLabsWebhook(payload: unknown) {
 
 		switch (id) {
 			case "assignment_id":
-				assignmentId ??= parseAssignmentId(val);
+				// Post-call analysis does not fill in constant values: `value` is what the
+				// LLM found in the transcript, so the caller could choose it. The constant
+				// Dialogbank configured on the agent comes back in the schema instead.
+				assignmentId ??= parseAssignmentId(result.json_schema?.constant_value);
 				break;
 			case "first_name":
 				firstName = val as string;

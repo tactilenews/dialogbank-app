@@ -59,7 +59,9 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(answers).toHaveLength(0);
 		});
 
-		it("parses a constant assignment id without storing it as an answer", ({ expect }) => {
+		it("parses the configured constant assignment id without storing it as an answer", ({
+			expect,
+		}) => {
 			const payload = {
 				...mockPayload,
 				data: {
@@ -69,8 +71,9 @@ describe("ElevenLabs Webhook Parser", () => {
 						data_collection_results: {
 							assignment_id: {
 								data_collection_id: "assignment_id",
-								value: "42",
-								rationale: "Configured assignment",
+								value: null,
+								json_schema: { type: "string", constant_value: "42" },
+								rationale: "Es gibt keine Erwähnung einer Assignment-ID im Transkript.",
 							},
 						},
 					},
@@ -96,8 +99,53 @@ describe("ElevenLabs Webhook Parser", () => {
 						data_collection_results: {
 							assignment_id: {
 								data_collection_id: "assignment_id",
-								value: "42",
-								rationale: "Configured assignment",
+								value: null,
+								json_schema: { type: "string", constant_value: "42" },
+								rationale: "Es gibt keine Erwähnung einer Assignment-ID im Transkript.",
+							},
+						},
+					},
+				},
+			};
+
+			expect(parseElevenLabsWebhook(payload).assignmentId).toBe(42);
+		});
+
+		it("ignores an assignment id the analysis extracted from the transcript", ({ expect }) => {
+			const payload = {
+				...mockPayload,
+				data: {
+					...mockPayload.data,
+					analysis: {
+						...mockPayload.data.analysis,
+						data_collection_results: {
+							assignment_id: {
+								data_collection_id: "assignment_id",
+								value: "7",
+								json_schema: { type: "string", description: "Die Assignment-ID" },
+								rationale: "Die Person nennt die Assignment-ID 7.",
+							},
+						},
+					},
+				},
+			};
+
+			expect(parseElevenLabsWebhook(payload).assignmentId).toBeNull();
+		});
+
+		it("prefers the configured constant over a value the analysis extracted", ({ expect }) => {
+			const payload = {
+				...mockPayload,
+				data: {
+					...mockPayload.data,
+					analysis: {
+						...mockPayload.data.analysis,
+						data_collection_results: {
+							assignment_id: {
+								data_collection_id: "assignment_id",
+								value: "7",
+								json_schema: { type: "string", constant_value: "42" },
+								rationale: "Die Person nennt die Assignment-ID 7.",
 							},
 						},
 					},

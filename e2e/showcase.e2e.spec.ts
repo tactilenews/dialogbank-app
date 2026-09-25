@@ -72,8 +72,9 @@ test.describe("Showcase E2E", () => {
 					data_collection_results: {
 						assignment_id: {
 							data_collection_id: "assignment_id",
-							value: "1",
-							rationale: "Configured assignment",
+							value: null,
+							json_schema: { type: "string", constant_value: "1" },
+							rationale: "Es gibt keine Erwähnung einer Assignment-ID im Transkript.",
 						},
 						first_name: {
 							data_collection_id: "first_name",
