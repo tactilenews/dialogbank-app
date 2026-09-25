@@ -49,7 +49,7 @@ These variables are used by the application:
 - `ORIGIN`: canonical app URL used by auth; if omitted, the app falls back to `URL` or the incoming request origin
 - `ELEVENLABS_API_KEY`: server-side API key used to read agent details
 - `ELEVENLABS_AGENT_ID`: the ElevenLabs conversational agent wired to this app
-- `ELEVENLABS_AGENT_BRANCH_NAME`: the agent branch the app reads and writes on every agent: `main` in production, `development` in `dev`, and a per-branch name for previews (see [Preview deployments](#preview-deployments)); a missing branch other than `main` is created from `main`
+- `ELEVENLABS_AGENT_BRANCH_NAME`: the agent branch the app reads and writes on every agent: `main` in production, `development` in `dev`, and a per-branch name for previews (see [Preview deployments](#preview-deployments)). `main` stands for each agent's main branch, whatever ElevenLabs calls it (some agents call it `Main`); any other branch is looked up by its exact name and created from the main branch if it is missing
 - `ELEVENLABS_WEBHOOK_SECRET`: secret used to verify `ElevenLabs-Signature`
 - `SENTRY_DSN`: server-side Sentry DSN
 - `PUBLIC_SENTRY_DSN`: optional browser-side Sentry DSN

@@ -47,6 +47,7 @@ export type AgentBranchSummary = { id: string; name: string; isArchived: boolean
 export type AgentBranchVersion = { id: string; seqNoInBranch: number; timeCommittedSecs: number };
 
 export type AgentBranchReader = {
+	getMainBranchId: (agentId: string) => Promise<string | undefined>;
 	list: (agentId: string) => Promise<AgentBranchSummary[]>;
 	get: (
 		agentId: string,
@@ -122,6 +123,8 @@ export function isSelectableDialogbankAgent(
 // `pnpm preview:init` and `pnpm preview:down` reset the preview's branch name to
 // this placeholder instead of deleting it, see `src/scripts/preview.ts`.
 const UNSET_BRANCH_NAME = "unset";
+// Refers to each agent's main branch, whatever it is called: ElevenLabs names
+// it "Main" on some agents.
 const MAIN_BRANCH_NAME = "main";
 
 export function resolveElevenLabsAgentBranchName(environment: ElevenLabsEnv): string {
@@ -139,14 +142,10 @@ export async function resolveElevenLabsAgentTargetForAgentId(
 ): Promise<ElevenLabsAgentTarget> {
 	const branchName = resolveElevenLabsAgentBranchName(environment);
 	const reader = branchReader ?? createElevenLabsAgentBranchReader(environment);
-	const branches = await reader.list(agentId);
-	let branchId = branches.find((branch) => !branch.isArchived && branch.name === branchName)?.id;
-	if (!branchId) {
-		if (branchName === MAIN_BRANCH_NAME) {
-			throw error(500, `ElevenLabs branch "${branchName}" was not found for agent ${agentId}.`);
-		}
-		branchId = await createElevenLabsBranchFromMain(agentId, branchName, branches, reader);
-	}
+	const branchId =
+		branchName === MAIN_BRANCH_NAME
+			? await requireMainBranchId(agentId, reader)
+			: await findOrCreateElevenLabsBranch(agentId, branchName, reader);
 
 	const workflowNodeId = environment.ELEVENLABS_WORKFLOW_NODE_ID;
 	if (!workflowNodeId) {
@@ -164,6 +163,8 @@ export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): A
 
 	const client = new ElevenLabsClient({ apiKey });
 	return {
+		getMainBranchId: async (agentId) =>
+			(await client.conversationalAi.agents.get(agentId)).mainBranchId,
 		list: async (agentId) => {
 			const response = await client.conversationalAi.agents.branches.list(agentId, {
 				includeArchived: false,
@@ -200,20 +201,24 @@ function selectLatestCommittedVersionId(
 	return latestVersion.id;
 }
 
-async function createElevenLabsBranchFromMain(
+async function requireMainBranchId(agentId: string, reader: AgentBranchReader): Promise<string> {
+	const mainBranchId = await reader.getMainBranchId(agentId);
+	if (!mainBranchId) {
+		throw error(500, `ElevenLabs agent ${agentId} has no main branch.`);
+	}
+	return mainBranchId;
+}
+
+async function findOrCreateElevenLabsBranch(
 	agentId: string,
 	branchName: string,
-	branches: AgentBranchSummary[],
 	reader: AgentBranchReader,
 ): Promise<string> {
-	const mainBranch = branches.find(
-		(branch) => !branch.isArchived && branch.name === MAIN_BRANCH_NAME,
-	);
-	if (!mainBranch) {
-		throw error(500, `ElevenLabs branch "${MAIN_BRANCH_NAME}" was not found for agent ${agentId}.`);
-	}
+	const branches = await reader.list(agentId);
+	const existing = branches.find((branch) => !branch.isArchived && branch.name === branchName);
+	if (existing) return existing.id;
 
-	const mainBranchDetails = await reader.get(agentId, mainBranch.id);
+	const mainBranchDetails = await reader.get(agentId, await requireMainBranchId(agentId, reader));
 	const parentVersionId = selectLatestCommittedVersionId(
 		mainBranchDetails,
 		agentId,
