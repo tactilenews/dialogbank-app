@@ -340,6 +340,15 @@ infisical run --env dev -- docker compose run --rm -e SEED_USER_ACCOUNTS="$(infi
 
 Running the script on the host only works against a database that is reachable from there, with `SEED_USER_ACCOUNTS` set the same way and `DATABASE_URL` pointing at that database.
 
+A [preview](#preview-deployments)'s Neon branch is such a database. It starts as a copy of `PARENT_BRANCH_ID`, including its users, so seed it only if you need different accounts. Take `DATABASE_URL`, `ORIGIN` and `BETTER_AUTH_SECRET` from Infisical `prod` `/preview`, after checking that `/preview` belongs to your branch: otherwise `DATABASE_URL` is a placeholder or another branch's database.
+
+```sh
+infisical secrets get PREVIEW_BRANCH --env prod --path /preview --plain
+SEED_USER_ACCOUNTS="$(infisical secrets --env prod --path user-accounts -o json)" infisical run --env prod --path /preview -- pnpm run db:seed
+```
+
+Use `--env dev` in `SEED_USER_ACCOUNTS` to sign in to the preview with the dev accounts instead.
+
 ## Project Status
 
 Current state:
