@@ -22,7 +22,7 @@ describe("resolveElevenLabsBranchContext", () => {
 });
 
 describe("ElevenLabs branch lifecycle helpers", () => {
-	it("creates a branch from the latest committed parent version", async () => {
+	it("creates a named branch from the latest committed parent version", async () => {
 		const get = vi.fn().mockResolvedValue({
 			mostRecentVersions: [{ id: "version_7", seqNoInBranch: 7, timeCommittedSecs: 100 }],
 		});
@@ -50,7 +50,10 @@ describe("ElevenLabs branch lifecycle helpers", () => {
 				},
 				new Date("2026-03-31T10:00:00.000Z"),
 			),
-		).resolves.toBe("agtbrch_e2e_123");
+		).resolves.toEqual({
+			branchId: "agtbrch_e2e_123",
+			name: expect.stringMatching(/^dialogbank-e2e-2026-03-31T10-00-00-000Z-/),
+		});
 
 		expect(get).toHaveBeenCalledWith("agent_123", "agtbrch_main_123");
 		expect(create).toHaveBeenCalledWith(

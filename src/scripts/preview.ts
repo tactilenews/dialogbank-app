@@ -3,7 +3,6 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
-import { selectLatestCommittedVersionId } from "../lib/server/elevenlabs/branch.ts";
 
 const NEON_API_BASE = "https://console.neon.tech/api/v2";
 const INFISICAL_DEFAULT_DOMAIN = "https://app.infisical.com/api";
@@ -22,7 +21,7 @@ const UNSET = "unset";
 const PREVIEW_PLACEHOLDERS = {
 	PREVIEW_BRANCH: UNSET,
 	DATABASE_URL: "postgres://unset:unset@preview-unset.invalid/unset",
-	ELEVENLABS_AGENT_BRANCH_ID: UNSET,
+	ELEVENLABS_AGENT_BRANCH_NAME: UNSET,
 	ORIGIN: "https://preview-unset.invalid",
 };
 type PreviewValues = Record<keyof typeof PREVIEW_PLACEHOLDERS, string>;
@@ -32,16 +31,9 @@ const UP_ENVIRONMENT = [
 	"NEON_PROJECT_ID",
 	"PARENT_BRANCH_ID",
 	"ELEVENLABS_API_KEY",
-	"ELEVENLABS_AGENT_ID",
-	"ELEVENLABS_AGENT_PARENT_BRANCH_ID",
 	"NETLIFY_BUILD_HOOK_URL",
 ];
-const DOWN_ENVIRONMENT = [
-	"NEON_API_KEY",
-	"NEON_PROJECT_ID",
-	"ELEVENLABS_API_KEY",
-	"ELEVENLABS_AGENT_ID",
-];
+const DOWN_ENVIRONMENT = ["NEON_API_KEY", "NEON_PROJECT_ID", "ELEVENLABS_API_KEY"];
 
 const SYNC_TIMEOUT_MS = 120_000;
 const SYNC_POLL_INTERVAL_MS = 2_000;
@@ -221,54 +213,66 @@ async function deleteNeonBranch(name: string): Promise<void> {
 	await neonRequest(`/projects/${projectId}/branches/${branch.id}`, { method: "DELETE" });
 }
 
-// ElevenLabs cannot filter branches by name or page past one response, so only
-// active branches are searched: archived ones pile up over time, while active
-// previews stay few. Names get a timestamp so that a new branch never reuses the
-// name of an archived one.
+// The app creates the ElevenLabs branch named ELEVENLABS_AGENT_BRANCH_NAME on
+// each agent the first time a preview uses it, so every agent Dialogbank can
+// select must be searched. ElevenLabs cannot filter branches by name or page
+// past one response, so only active branches are searched: archived ones pile
+// up over time, while active previews stay few. Names get a timestamp so that a
+// new branch never reuses the name of an archived one.
 function elevenLabsBranchPrefix(branch: string): string {
 	return `preview/${branch}/`;
 }
 
-async function findActiveElevenLabsBranches(
-	client: ElevenLabsClient,
-	agentId: string,
-	branch: string,
-) {
-	const limit = 100;
-	const { results } = await client.conversationalAi.agents.branches.list(agentId, {
-		includeArchived: false,
-		limit,
-	});
-	if (results.length >= limit) {
-		throw new Error(`Agent ${agentId} has ${limit}+ active branches; archive unused ones first`);
-	}
-	return results.filter((candidate) => candidate.name.startsWith(elevenLabsBranchPrefix(branch)));
+async function listDialogbankAgentIds(client: ElevenLabsClient): Promise<string[]> {
+	const tag = process.env.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
+	const agentIds: string[] = [];
+	let cursor: string | undefined;
+	do {
+		const page = await client.conversationalAi.agents.list({ tags: tag, pageSize: 100, cursor });
+		agentIds.push(...page.agents.map((agent) => agent.agentId));
+		cursor = page.hasMore ? page.nextCursor : undefined;
+	} while (cursor);
+	return agentIds;
 }
 
-async function provisionElevenLabsBranch(branch: string): Promise<string> {
-	const agentId = requireEnvironment("ELEVENLABS_AGENT_ID");
-	const parentBranchId = requireEnvironment("ELEVENLABS_AGENT_PARENT_BRANCH_ID");
+async function findActiveElevenLabsBranches(branch: string) {
 	const client = new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_API_KEY") });
+	const limit = 100;
+	const branchesPerAgent = await Promise.all(
+		(await listDialogbankAgentIds(client)).map(async (agentId) => {
+			const { results } = await client.conversationalAi.agents.branches.list(agentId, {
+				includeArchived: false,
+				limit,
+			});
+			if (results.length >= limit) {
+				throw new Error(
+					`Agent ${agentId} has ${limit}+ active branches; archive unused ones first`,
+				);
+			}
+			return results
+				.filter((candidate) => candidate.name.startsWith(elevenLabsBranchPrefix(branch)))
+				.map((candidate) => ({ agentId, id: candidate.id, name: candidate.name }));
+		}),
+	);
+	return { client, branches: branchesPerAgent.flat() };
+}
 
-	const [existing] = await findActiveElevenLabsBranches(client, agentId, branch);
-	if (existing) return existing.id;
-
-	const parentBranch = await client.conversationalAi.agents.branches.get(agentId, parentBranchId);
+// Reuse the name of an earlier `up` so that the preview keeps the agent
+// configuration it was given.
+async function resolveElevenLabsBranchName(branch: string): Promise<string> {
+	const { branches } = await findActiveElevenLabsBranches(branch);
+	const [latest] = branches
+		.map((candidate) => candidate.name)
+		.sort((left, right) => right.localeCompare(left));
+	if (latest) return latest;
 	const timestamp = new Date().toISOString().replace(/\D/g, "").slice(0, 14);
-	const created = await client.conversationalAi.agents.branches.create(agentId, {
-		parentVersionId: selectLatestCommittedVersionId(parentBranch),
-		name: `${elevenLabsBranchPrefix(branch)}${timestamp}`,
-		description: `Preview environment for ${branch}`,
-	});
-	return created.createdBranchId;
+	return `${elevenLabsBranchPrefix(branch)}${timestamp}`;
 }
 
 async function archiveElevenLabsBranches(branch: string): Promise<void> {
-	const agentId = requireEnvironment("ELEVENLABS_AGENT_ID");
-	const client = new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_API_KEY") });
-
-	for (const candidate of await findActiveElevenLabsBranches(client, agentId, branch)) {
-		await client.conversationalAi.agents.branches.update(agentId, candidate.id, {
+	const { client, branches } = await findActiveElevenLabsBranches(branch);
+	for (const candidate of branches) {
+		await client.conversationalAi.agents.branches.update(candidate.agentId, candidate.id, {
 			isArchived: true,
 		});
 	}
@@ -355,11 +359,11 @@ async function syncPreviewSecrets(syncId: string): Promise<void> {
 // With --plain the CLI prints nothing for a missing secret. Any other failure,
 // such as an expired session, must abort: `down` would otherwise delete the
 // database while `/preview` still points at it.
-function readPreviewBranchSecret(): string {
+function readPreviewSecret(key: string): string {
 	return infisical(
 		"secrets",
 		"get",
-		"PREVIEW_BRANCH",
+		key,
 		"--env",
 		INFISICAL_ENVIRONMENT,
 		"--path",
@@ -369,13 +373,13 @@ function readPreviewBranchSecret(): string {
 }
 
 function readPreviewBranch(): string | undefined {
-	const value = readPreviewBranchSecret();
+	const value = readPreviewSecret("PREVIEW_BRANCH");
 	return value && value !== UNSET ? value : undefined;
 }
 
 // Secrets go through a private temporary file instead of command-line arguments,
 // which other local processes could read.
-function writePreviewSecrets(values: PreviewValues): void {
+function writePreviewSecrets(values: Partial<PreviewValues>): void {
 	const directory = mkdtempSync(join(tmpdir(), "preview-"));
 	const file = join(directory, "preview.env");
 	try {
@@ -429,9 +433,9 @@ async function up(): Promise<void> {
 	const origin = `https://${branch}--${NETLIFY_SITE_NAME}.netlify.app`;
 
 	console.log(`Provisioning Neon and ElevenLabs branches for "${branch}"`);
-	const [databaseUrl, elevenLabsBranchId] = await Promise.all([
+	const [databaseUrl, elevenLabsBranchName] = await Promise.all([
 		provisionNeonBranch(name),
-		provisionElevenLabsBranch(branch),
+		resolveElevenLabsBranchName(branch),
 	]);
 
 	const previousBranch = readPreviewBranch();
@@ -446,7 +450,7 @@ async function up(): Promise<void> {
 	writePreviewSecrets({
 		PREVIEW_BRANCH: branch,
 		DATABASE_URL: databaseUrl,
-		ELEVENLABS_AGENT_BRANCH_ID: elevenLabsBranchId,
+		ELEVENLABS_AGENT_BRANCH_NAME: elevenLabsBranchName,
 		ORIGIN: origin,
 	});
 
@@ -479,17 +483,21 @@ async function down(): Promise<void> {
 	);
 }
 
-// Runs once, before the `/preview` sync is created: that sync starts by copying
-// the folder to Netlify, and without these values the folder would hand
-// branch deploys the production values it imports.
+// Runs before the `/preview` sync is created, and again whenever a key is added
+// to the placeholders: that sync starts by copying the folder to Netlify, and
+// without these values the folder would hand branch deploys the production
+// values it imports. Keys that already exist are left alone.
 function init(): void {
-	if (readPreviewBranchSecret() !== "") {
+	const missing = Object.fromEntries(
+		Object.entries(PREVIEW_PLACEHOLDERS).filter(([key]) => readPreviewSecret(key) === ""),
+	);
+	if (Object.keys(missing).length === 0) {
 		console.log(`Infisical ${INFISICAL_PREVIEW_PATH} is already initialized`);
 		return;
 	}
-	writePreviewSecrets(PREVIEW_PLACEHOLDERS);
+	writePreviewSecrets(missing);
 	console.log(
-		`Wrote placeholder values to Infisical ${INFISICAL_ENVIRONMENT} ${INFISICAL_PREVIEW_PATH}`,
+		`Wrote placeholders for ${Object.keys(missing).join(", ")} to Infisical ${INFISICAL_ENVIRONMENT} ${INFISICAL_PREVIEW_PATH}`,
 	);
 }
 

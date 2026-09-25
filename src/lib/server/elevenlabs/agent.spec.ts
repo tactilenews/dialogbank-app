@@ -10,7 +10,6 @@ import {
 	buildQuestionDataCollectionEntries,
 	buildWorkflowNodeAdditionalPrompt,
 	type ElevenLabsAgentCatalogEntry,
-	type ElevenLabsEnv,
 	getElevenLabsEditorAgent,
 	isSelectableDialogbankAgent,
 	listElevenLabsDialogbankAgents,
@@ -18,7 +17,7 @@ import {
 	parseQuestionsFromWorkflowNodePrompt,
 	type Question,
 	removeElevenLabsAgentAssignment,
-	resolveElevenLabsAgentTarget,
+	resolveElevenLabsAgentBranchName,
 	resolveElevenLabsAgentTargetForAgentId,
 	resolveElevenLabsDialogbankAgentTag,
 	updateElevenLabsAgentQuestions,
@@ -99,49 +98,36 @@ describe("slugify", () => {
 	});
 });
 
-describe("resolveElevenLabsAgentTarget", () => {
-	it("returns the configured agent, branch, and workflow node ids", async () => {
-		const environment: ElevenLabsEnv = {
-			ELEVENLABS_AGENT_ID: "agent_main_123",
-			ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_main_123",
-			ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
-		};
-
-		await expect(resolveElevenLabsAgentTarget(environment)).resolves.toEqual({
-			agentId: "agent_main_123",
-			branchId: "agtbrch_main_123",
-			workflowNodeId: WORKFLOW_NODE_ID,
-		});
+describe("resolveElevenLabsAgentBranchName", () => {
+	it("returns the configured branch name", () => {
+		expect(resolveElevenLabsAgentBranchName({ ELEVENLABS_AGENT_BRANCH_NAME: " main " })).toBe(
+			"main",
+		);
 	});
 
-	it("resolves the development branch by name outside production", async () => {
-		const environment: ElevenLabsEnv = {
-			ELEVENLABS_AGENT_ID: "agent_main_123",
-			ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
-		};
+	it.each([
+		["missing", undefined],
+		["empty", ""],
+		["the preview placeholder", "unset"],
+	])("rejects a branch name that is %s", (_, branchName) => {
+		expect(() =>
+			resolveElevenLabsAgentBranchName({ ELEVENLABS_AGENT_BRANCH_NAME: branchName }),
+		).toThrow(
+			expect.objectContaining({
+				status: 500,
+				body: { message: "ELEVENLABS_AGENT_BRANCH_NAME is not configured on the server." },
+			}),
+		);
+	});
+});
+
+describe("resolveElevenLabsAgentTargetForAgentId", () => {
+	it("resolves the configured branch name on any agent", async () => {
 		const branchReader = {
 			list: vi.fn().mockResolvedValue([
 				{ id: "agtbrch_main_123", name: "main", isArchived: false },
-				{ id: "agtbrch_dev_123", name: "development", isArchived: false },
+				{ id: "agtbrch_preview_123", name: "preview/feature/20260925", isArchived: false },
 			]),
-			get: vi.fn(),
-			create: vi.fn(),
-		};
-
-		await expect(
-			resolveElevenLabsAgentTargetForAgentId(environment, "agent_main_123", branchReader),
-		).resolves.toEqual({
-			agentId: "agent_main_123",
-			branchId: "agtbrch_dev_123",
-			workflowNodeId: WORKFLOW_NODE_ID,
-		});
-	});
-
-	it("does not apply another agent's explicit CI branch", async () => {
-		const branchReader = {
-			list: vi
-				.fn()
-				.mockResolvedValue([{ id: "agtbrch_other_dev", name: "development", isArchived: false }]),
 			get: vi.fn(),
 			create: vi.fn(),
 		};
@@ -149,23 +135,24 @@ describe("resolveElevenLabsAgentTarget", () => {
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
 				{
-					ELEVENLABS_AGENT_ID: "agent_ci_fixture",
-					ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_ci_fixture",
+					ELEVENLABS_AGENT_ID: "agent_default",
+					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature/20260925",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},
 				"agent_other",
 				branchReader,
 			),
-		).resolves.toMatchObject({
+		).resolves.toEqual({
 			agentId: "agent_other",
-			branchId: "agtbrch_other_dev",
+			branchId: "agtbrch_preview_123",
+			workflowNodeId: WORKFLOW_NODE_ID,
 		});
 	});
 
-	it("resolves the main branch by name in production", async () => {
+	it("ignores archived branches with the configured name", async () => {
 		const branchReader = {
 			list: vi.fn().mockResolvedValue([
-				{ id: "agtbrch_main_123", name: "main", isArchived: false },
+				{ id: "agtbrch_archived", name: "development", isArchived: true },
 				{ id: "agtbrch_dev_123", name: "development", isArchived: false },
 			]),
 			get: vi.fn(),
@@ -175,46 +162,16 @@ describe("resolveElevenLabsAgentTarget", () => {
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
 				{
-					NODE_ENV: "production",
+					ELEVENLABS_AGENT_BRANCH_NAME: "development",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
 				},
 				"agent_main_123",
 				branchReader,
 			),
-		).resolves.toMatchObject({ branchId: "agtbrch_main_123" });
+		).resolves.toMatchObject({ branchId: "agtbrch_dev_123" });
 	});
 
-	it("rejects when neither the expected branch nor a main branch to fork from exists", async () => {
-		await expect(
-			resolveElevenLabsAgentTargetForAgentId(
-				{ ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID },
-				"agent_main_123",
-				{ list: vi.fn().mockResolvedValue([]), get: vi.fn(), create: vi.fn() },
-			),
-		).rejects.toMatchObject({
-			status: 500,
-			body: {
-				message: 'ElevenLabs branch "main" was not found for agent agent_main_123.',
-			},
-		});
-	});
-
-	it("rejects when the production main branch is missing", async () => {
-		await expect(
-			resolveElevenLabsAgentTargetForAgentId(
-				{ NODE_ENV: "production", ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID },
-				"agent_main_123",
-				{ list: vi.fn().mockResolvedValue([]), get: vi.fn(), create: vi.fn() },
-			),
-		).rejects.toMatchObject({
-			status: 500,
-			body: {
-				message: 'ElevenLabs branch "main" was not found for agent agent_main_123.',
-			},
-		});
-	});
-
-	it("creates the development branch from main when it does not exist yet", async () => {
+	it("creates a missing branch from the latest committed version of main", async () => {
 		const branchReader = {
 			list: vi
 				.fn()
@@ -226,28 +183,63 @@ describe("resolveElevenLabsAgentTarget", () => {
 				],
 			}),
 			create: vi.fn().mockResolvedValue({
-				createdBranchId: "agtbrch_dev_new",
+				createdBranchId: "agtbrch_preview_new",
 				createdVersionId: "version_new",
 			}),
 		};
 
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
-				{ ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID },
+				{
+					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature/20260925",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
 				"agent_main_123",
 				branchReader,
 			),
 		).resolves.toEqual({
 			agentId: "agent_main_123",
-			branchId: "agtbrch_dev_new",
+			branchId: "agtbrch_preview_new",
 			workflowNodeId: WORKFLOW_NODE_ID,
 		});
 
 		expect(branchReader.get).toHaveBeenCalledWith("agent_main_123", "agtbrch_main_123");
 		expect(branchReader.create).toHaveBeenCalledWith("agent_main_123", {
 			parentVersionId: "version_latest",
-			name: "development",
-			description: "Development branch, created automatically by Dialogbank.",
+			name: "preview/feature/20260925",
+			description: 'Branch "preview/feature/20260925", created automatically by Dialogbank.',
+		});
+	});
+
+	it("rejects without creating anything when the main branch itself is missing", async () => {
+		const branchReader = { list: vi.fn().mockResolvedValue([]), get: vi.fn(), create: vi.fn() };
+
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{ ELEVENLABS_AGENT_BRANCH_NAME: "main", ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID },
+				"agent_main_123",
+				branchReader,
+			),
+		).rejects.toMatchObject({
+			status: 500,
+			body: { message: 'ElevenLabs branch "main" was not found for agent agent_main_123.' },
+		});
+		expect(branchReader.create).not.toHaveBeenCalled();
+	});
+
+	it("rejects when there is no main branch to create a missing branch from", async () => {
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{
+					ELEVENLABS_AGENT_BRANCH_NAME: "development",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
+				"agent_main_123",
+				{ list: vi.fn().mockResolvedValue([]), get: vi.fn(), create: vi.fn() },
+			),
+		).rejects.toMatchObject({
+			status: 500,
+			body: { message: 'ElevenLabs branch "main" was not found for agent agent_main_123.' },
 		});
 	});
 
@@ -262,7 +254,10 @@ describe("resolveElevenLabsAgentTarget", () => {
 
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
-				{ ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID },
+				{
+					ELEVENLABS_AGENT_BRANCH_NAME: "development",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
 				"agent_main_123",
 				branchReader,
 			),
@@ -276,35 +271,23 @@ describe("resolveElevenLabsAgentTarget", () => {
 	});
 
 	it("rejects when the workflow node id is missing", async () => {
-		const environment: ElevenLabsEnv = {
-			ELEVENLABS_AGENT_ID: "agent_main_123",
-			ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_main_123",
+		const branchReader = {
+			list: vi
+				.fn()
+				.mockResolvedValue([{ id: "agtbrch_main_123", name: "main", isArchived: false }]),
+			get: vi.fn(),
+			create: vi.fn(),
 		};
 
-		await expect(resolveElevenLabsAgentTarget(environment)).rejects.toMatchObject({
-			status: 500,
-			body: {
-				message: "ELEVENLABS_WORKFLOW_NODE_ID is not configured on the server.",
-			},
-		});
-	});
-});
-
-describe("resolveElevenLabsAgentTargetForAgentId", () => {
-	it("uses an explicit branch for its configured agent", async () => {
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
-				{
-					ELEVENLABS_AGENT_ID: "agent_assignment_123",
-					ELEVENLABS_AGENT_BRANCH_ID: "agtbrch_main_123",
-					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
-				},
-				"agent_assignment_123",
+				{ ELEVENLABS_AGENT_BRANCH_NAME: "main" },
+				"agent_main_123",
+				branchReader,
 			),
-		).resolves.toEqual({
-			agentId: "agent_assignment_123",
-			branchId: "agtbrch_main_123",
-			workflowNodeId: WORKFLOW_NODE_ID,
+		).rejects.toMatchObject({
+			status: 500,
+			body: { message: "ELEVENLABS_WORKFLOW_NODE_ID is not configured on the server." },
 		});
 	});
 });

@@ -134,7 +134,7 @@ export async function createEphemeralElevenLabsBranch(
 		description: `Ephemeral Dialogbank E2E branch created at ${now.toISOString()}`,
 	});
 
-	return createdBranch.createdBranchId;
+	return { branchId: createdBranch.createdBranchId, name };
 }
 
 export async function deleteElevenLabsBranch(

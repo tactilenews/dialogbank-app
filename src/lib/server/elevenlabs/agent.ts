@@ -86,11 +86,10 @@ export type ElevenLabsEditorAgent = {
 
 export type ElevenLabsEnv = {
 	ELEVENLABS_AGENT_ID?: string;
-	ELEVENLABS_AGENT_BRANCH_ID?: string;
+	ELEVENLABS_AGENT_BRANCH_NAME?: string;
 	ELEVENLABS_API_KEY?: string;
 	ELEVENLABS_DIALOGBANK_AGENT_TAG?: string;
 	ELEVENLABS_WORKFLOW_NODE_ID?: string;
-	NODE_ENV?: string;
 };
 
 const agentListResponseSchema = z.object({
@@ -120,15 +119,17 @@ export function isSelectableDialogbankAgent(
 	return !agent.archived && agent.tags.includes(requiredTag);
 }
 
-export async function resolveElevenLabsAgentTarget(
-	environment: ElevenLabsEnv,
-): Promise<ElevenLabsAgentTarget> {
-	const agentId = environment.ELEVENLABS_AGENT_ID;
-	if (!agentId) {
-		throw error(500, "ELEVENLABS_AGENT_ID is not configured on the server.");
-	}
+// `pnpm preview:init` and `pnpm preview:down` reset the preview's branch name to
+// this placeholder instead of deleting it, see `src/scripts/preview.ts`.
+const UNSET_BRANCH_NAME = "unset";
+const MAIN_BRANCH_NAME = "main";
 
-	return resolveElevenLabsAgentTargetForAgentId(environment, agentId);
+export function resolveElevenLabsAgentBranchName(environment: ElevenLabsEnv): string {
+	const branchName = environment.ELEVENLABS_AGENT_BRANCH_NAME?.trim();
+	if (!branchName || branchName === UNSET_BRANCH_NAME) {
+		throw error(500, "ELEVENLABS_AGENT_BRANCH_NAME is not configured on the server.");
+	}
+	return branchName;
 }
 
 export async function resolveElevenLabsAgentTargetForAgentId(
@@ -136,21 +137,15 @@ export async function resolveElevenLabsAgentTargetForAgentId(
 	agentId: string,
 	branchReader?: AgentBranchReader,
 ): Promise<ElevenLabsAgentTarget> {
-	let branchId =
-		environment.ELEVENLABS_AGENT_ID === agentId
-			? environment.ELEVENLABS_AGENT_BRANCH_ID
-			: undefined;
+	const branchName = resolveElevenLabsAgentBranchName(environment);
+	const reader = branchReader ?? createElevenLabsAgentBranchReader(environment);
+	const branches = await reader.list(agentId);
+	let branchId = branches.find((branch) => !branch.isArchived && branch.name === branchName)?.id;
 	if (!branchId) {
-		const branchName = environment.NODE_ENV === "production" ? "main" : "development";
-		const reader = branchReader ?? createElevenLabsAgentBranchReader(environment);
-		const branches = await reader.list(agentId);
-		branchId = branches.find((branch) => !branch.isArchived && branch.name === branchName)?.id;
-		if (!branchId) {
-			if (branchName === "main") {
-				throw error(500, `ElevenLabs branch "${branchName}" was not found for agent ${agentId}.`);
-			}
-			branchId = await createElevenLabsDevelopmentBranch(agentId, branchName, branches, reader);
+		if (branchName === MAIN_BRANCH_NAME) {
+			throw error(500, `ElevenLabs branch "${branchName}" was not found for agent ${agentId}.`);
 		}
+		branchId = await createElevenLabsBranchFromMain(agentId, branchName, branches, reader);
 	}
 
 	const workflowNodeId = environment.ELEVENLABS_WORKFLOW_NODE_ID;
@@ -205,24 +200,30 @@ function selectLatestCommittedVersionId(
 	return latestVersion.id;
 }
 
-async function createElevenLabsDevelopmentBranch(
+async function createElevenLabsBranchFromMain(
 	agentId: string,
 	branchName: string,
 	branches: AgentBranchSummary[],
 	reader: AgentBranchReader,
 ): Promise<string> {
-	const mainBranch = branches.find((branch) => !branch.isArchived && branch.name === "main");
+	const mainBranch = branches.find(
+		(branch) => !branch.isArchived && branch.name === MAIN_BRANCH_NAME,
+	);
 	if (!mainBranch) {
-		throw error(500, `ElevenLabs branch "main" was not found for agent ${agentId}.`);
+		throw error(500, `ElevenLabs branch "${MAIN_BRANCH_NAME}" was not found for agent ${agentId}.`);
 	}
 
 	const mainBranchDetails = await reader.get(agentId, mainBranch.id);
-	const parentVersionId = selectLatestCommittedVersionId(mainBranchDetails, agentId, "main");
+	const parentVersionId = selectLatestCommittedVersionId(
+		mainBranchDetails,
+		agentId,
+		MAIN_BRANCH_NAME,
+	);
 
 	const created = await reader.create(agentId, {
 		parentVersionId,
 		name: branchName,
-		description: "Development branch, created automatically by Dialogbank.",
+		description: `Branch "${branchName}", created automatically by Dialogbank.`,
 	});
 
 	return created.createdBranchId;

@@ -49,6 +49,7 @@ These variables are used by the application:
 - `ORIGIN`: canonical app URL used by auth; if omitted, the app falls back to `URL` or the incoming request origin
 - `ELEVENLABS_API_KEY`: server-side API key used to read agent details
 - `ELEVENLABS_AGENT_ID`: the ElevenLabs conversational agent wired to this app
+- `ELEVENLABS_AGENT_BRANCH_NAME`: the agent branch the app reads and writes on every agent: `main` in production, `development` in `dev`, and a per-branch name for previews (see [Preview deployments](#preview-deployments)); a missing branch other than `main` is created from `main`
 - `ELEVENLABS_WEBHOOK_SECRET`: secret used to verify `ElevenLabs-Signature`
 - `SENTRY_DSN`: server-side Sentry DSN
 - `PUBLIC_SENTRY_DSN`: optional browser-side Sentry DSN
@@ -233,6 +234,7 @@ In practice, Netlify receives the production runtime variables from Infisical sy
 - `ORIGIN`
 - `ELEVENLABS_API_KEY`
 - `ELEVENLABS_AGENT_ID`
+- `ELEVENLABS_AGENT_BRANCH_NAME` (`main`)
 - `ELEVENLABS_WEBHOOK_SECRET`
 - `SENTRY_DSN`
 - `PUBLIC_SENTRY_DSN` if browser-side Sentry reporting is desired
@@ -250,10 +252,10 @@ The script runs on your machine with your own Infisical session; no deployment c
 in CI. It checks the required variables, that the branch is pushed, and that the Infisical sync
 exists before changing anything. Then it:
 
-1. creates (or reuses) the Neon branch `preview/<branch>` from `PARENT_BRANCH_ID` and an
-   ElevenLabs agent branch `preview/<branch>/<timestamp>` from the latest committed version of
-   `ELEVENLABS_AGENT_PARENT_BRANCH_ID`,
-2. writes `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_ID` and `ORIGIN` into the
+1. creates (or reuses) the Neon branch `preview/<branch>` from `PARENT_BRANCH_ID` and picks
+   the ElevenLabs agent branch name `preview/<branch>/<timestamp>`, reusing the name of an
+   earlier `preview:up` if one of its agent branches is still active,
+2. writes `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_NAME` and `ORIGIN` into the
    Infisical `prod` folder `/preview`,
 3. runs that folder's Netlify sync (Netlify's `branch-deploy` context) and waits for it to finish,
 4. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`.
@@ -262,6 +264,11 @@ The preview is served at `https://<branch>--dialogbank.netlify.app`, so branch n
 lowercase letters, digits, and single dashes. Branch deploys run migrations before building.
 Netlify does not build branches on push, so run `preview:up` again to deploy new commits; it
 reuses the existing Neon and ElevenLabs branches.
+
+The script creates no ElevenLabs branches itself. The preview app creates the branch named
+`ELEVENLABS_AGENT_BRANCH_NAME` from `main` on each agent the first time it reads or writes that
+agent, just like `development` in the `dev` environment, so editing an assignment in a preview
+never touches production's `main` branches.
 
 `/preview` holds the values of one branch at a time. `netlify.toml` also skips every branch
 deploy whose `BRANCH` differs from `PREVIEW_BRANCH` (and fails the build if the skip does not
@@ -274,10 +281,12 @@ previews.
 
 `/preview` imports the `prod` root folder, so it inherits shared keys such as the ElevenLabs API
 key and Sentry settings, and overrides `BETTER_AUTH_SECRET` so previews and production do not
-share a signing key. Because of that import, the four preview keys are never deleted from
+share a signing key. Because of that import, the preview keys are never deleted from
 `/preview`, only reset to placeholders that cannot connect anywhere; otherwise branch deploys
-would receive production's `DATABASE_URL`. `pnpm run preview:init` writes those placeholders
-once, before the `/preview` sync is created.
+would receive production's `DATABASE_URL` and `ELEVENLABS_AGENT_BRANCH_NAME`. The app refuses the
+`unset` branch name placeholder. `pnpm run preview:init` writes the placeholders that are missing
+from `/preview`: run it before the `/preview` sync is created, and again whenever a preview key is
+added.
 
 To tear a preview down, run (defaults to the current branch):
 
@@ -286,7 +295,8 @@ infisical run --env test -- pnpm run preview:down [branch]
 ```
 
 It resets `/preview` to the placeholders if it belongs to that branch, deletes the Neon branch,
-and archives the ElevenLabs branch. The branch's last Netlify deploy stays reachable, without a
+and archives its ElevenLabs branches on every agent tagged `ELEVENLABS_DIALOGBANK_AGENT_TAG`
+(default `dialogbank`). The branch's last Netlify deploy stays reachable, without a
 database, until you delete it in the Netlify UI.
 
 To upload sourcemaps from Netlify builds, the deployment environment also needs:

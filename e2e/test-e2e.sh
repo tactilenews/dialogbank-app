@@ -15,8 +15,12 @@ cleanup() {
 
 trap cleanup EXIT
 
-branch_id="$(node --experimental-strip-types ./e2e/create-elevenlabs-branch.ts)"
+branch="$(node --experimental-strip-types ./e2e/create-elevenlabs-branch.ts)"
+branch_id="${branch%% *}"
+branch_name="${branch#* }"
+# The fixtures restore the branch by id; the app under test looks it up by name.
 export ELEVENLABS_AGENT_BRANCH_ID="${branch_id}"
+export ELEVENLABS_AGENT_BRANCH_NAME="${branch_name}"
 
-echo "[dialogbank e2e] using ElevenLabs branch ${ELEVENLABS_AGENT_BRANCH_ID}"
+echo "[dialogbank e2e] using ElevenLabs branch ${ELEVENLABS_AGENT_BRANCH_NAME} (${ELEVENLABS_AGENT_BRANCH_ID})"
 pnpm exec playwright test "$@"
