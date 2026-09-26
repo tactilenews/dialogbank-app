@@ -12,7 +12,7 @@ async function signIn(page: Page) {
 }
 
 test.describe("Assignments E2E", () => {
-	test("creates a new assignment with questions and classifications and activates it against ElevenLabs", async ({
+	test("saves assignment questions and classifications and configures ElevenLabs", async ({
 		auth,
 		db,
 		page,
@@ -57,9 +57,15 @@ test.describe("Assignments E2E", () => {
 		// Verify "Problem mit Gelsenkirchen (neu)" chip appears
 		await expect(page.getByText("Problem mit Gelsenkirchen (neu)", { exact: false })).toBeVisible();
 
-		// Activate
-		await page.getByRole("button", { name: "Aktivieren & Agent konfigurieren" }).click();
-		await expect(page.getByText("Einsatz aktiviert und Agent konfiguriert.")).toBeVisible();
+		// Saving also configures the agent connected to the assignment
+		// Matching the start reports an error message in full instead of timing out,
+		// and ElevenLabs round trips get more time than the default.
+		await page.getByRole("button", { name: "Speichern" }).click();
+		await expect(page.getByText(/^Einsatz gespeichert/)).toHaveText(
+			"Einsatz gespeichert und Agent aktualisiert.",
+			{ timeout: 20_000 },
+		);
+		await expect(page.getByRole("button", { name: /neu konfigurieren$/ })).not.toBeVisible();
 
 		// Assert DB state: question-classification links created
 		const questionRows = await db.select().from(schema.questions);

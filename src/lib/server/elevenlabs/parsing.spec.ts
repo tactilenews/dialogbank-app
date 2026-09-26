@@ -59,6 +59,28 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(answers).toHaveLength(0);
 		});
 
+		it("does not store an assignment id written by earlier versions as an answer", ({ expect }) => {
+			const payload = {
+				...mockPayload,
+				data: {
+					...mockPayload.data,
+					analysis: {
+						...mockPayload.data.analysis,
+						data_collection_results: {
+							assignment_id: {
+								data_collection_id: "assignment_id",
+								value: null,
+								json_schema: { type: "string", constant_value: "42" },
+								rationale: "Es gibt keine Erwähnung einer Assignment-ID im Transkript.",
+							},
+						},
+					},
+				},
+			};
+
+			expect(parseElevenLabsWebhook(payload).answers).toHaveLength(0);
+		});
+
 		it("parses real sample data (samplePayload1 - empty results)", ({ expect }) => {
 			const data = parseElevenLabsWebhook(samplePayload1);
 

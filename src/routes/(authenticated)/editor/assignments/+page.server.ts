@@ -16,7 +16,7 @@ export const load = withAuthenticatedLoad<
 			slug: assignments.slug,
 			location: assignments.location,
 			client: assignments.client,
-			isActive: assignments.isActive,
+			elevenLabsAgentId: assignments.elevenLabsAgentId,
 			createdAt: assignments.createdAt,
 			questionCount: count(questions.id),
 		})

@@ -6,7 +6,9 @@ import type { RequestEventWithLocals } from "$lib/server/kit";
 export function verifyElevenLabsSignature(body: string, header: string): boolean {
 	const webhookSecret = env.ELEVENLABS_WEBHOOK_SECRET;
 
-	if (!webhookSecret) {
+	// `pnpm preview:init` and `pnpm preview:down` reset the preview's secret to
+	// "unset", which anyone could sign with.
+	if (!webhookSecret || webhookSecret === "unset") {
 		throw new Error("ELEVENLABS_WEBHOOK_SECRET is not set");
 	}
 

@@ -49,6 +49,8 @@ These variables are used by the application:
 - `ORIGIN`: canonical app URL used by auth; if omitted, the app falls back to `URL` or the incoming request origin
 - `ELEVENLABS_API_KEY`: server-side API key used to read agent details
 - `ELEVENLABS_AGENT_ID`: the ElevenLabs conversational agent wired to this app
+- `ELEVENLABS_AGENT_BRANCH_NAME`: the agent branch the app reads and writes on every agent: `main` in production, `development` in `dev`, and a per-branch name for previews (see [Preview deployments](#preview-deployments)). `main` stands for each agent's main branch, whatever ElevenLabs calls it (some agents call it `Main`); any other branch is looked up by its exact name and created from the main branch if it is missing
+- `ELEVENLABS_POST_CALL_WEBHOOK_ID`: the ElevenLabs workspace webhook that receives the post-call webhooks of the agent branches the app uses, or `none` for no webhook (see [Webhook Wiring](#webhook-wiring))
 - `ELEVENLABS_WEBHOOK_SECRET`: secret used to verify `ElevenLabs-Signature`
 - `SENTRY_DSN`: server-side Sentry DSN
 - `PUBLIC_SENTRY_DSN`: optional browser-side Sentry DSN
@@ -166,13 +168,15 @@ It fetches the agent from ElevenLabs and displays its name and system prompt in 
 
 ### Webhook Wiring
 
-Configure ElevenLabs to send post-call webhooks to:
+ElevenLabs sends post-call webhooks to:
 
 ```text
 <ORIGIN>/webhook/elevenlabs/post-call
 ```
 
 The app expects the `ElevenLabs-Signature` header and verifies it with `ELEVENLABS_WEBHOOK_SECRET`.
+
+Each environment registers its URL as a workspace webhook in ElevenLabs and sets its ID as `ELEVENLABS_POST_CALL_WEBHOOK_ID`, together with the webhook's signing secret as `ELEVENLABS_WEBHOOK_SECRET`. The app points every agent branch it creates or configures at that webhook: a new branch starts as a copy of the agent's main branch, and would otherwise send its conversations to production. `none` removes the branch's webhook instead, which E2E uses, since the tests post signed webhooks themselves. Previews register and delete their webhook themselves (see [Preview deployments](#preview-deployments)).
 
 After verification, the payload is parsed and stored as:
 
@@ -185,7 +189,7 @@ If you are wiring a new agent to the app, the minimal setup is:
 
 1. Create or choose the ElevenLabs conversational agent.
 2. Set `ELEVENLABS_AGENT_ID` and `ELEVENLABS_API_KEY` in the app environment.
-3. Configure the agent's post-call webhook URL to point to this app's `/webhook/elevenlabs/post-call` endpoint.
+3. Register this app's `/webhook/elevenlabs/post-call` endpoint as a workspace webhook in ElevenLabs and set its ID as `ELEVENLABS_POST_CALL_WEBHOOK_ID`.
 4. Copy the webhook signing secret into `ELEVENLABS_WEBHOOK_SECRET`.
 5. Trigger a test conversation and confirm that the webhook produces stored conversation and answer data.
 
@@ -233,6 +237,8 @@ In practice, Netlify receives the production runtime variables from Infisical sy
 - `ORIGIN`
 - `ELEVENLABS_API_KEY`
 - `ELEVENLABS_AGENT_ID`
+- `ELEVENLABS_AGENT_BRANCH_NAME` (`main`)
+- `ELEVENLABS_POST_CALL_WEBHOOK_ID`
 - `ELEVENLABS_WEBHOOK_SECRET`
 - `SENTRY_DSN`
 - `PUBLIC_SENTRY_DSN` if browser-side Sentry reporting is desired
@@ -250,18 +256,27 @@ The script runs on your machine with your own Infisical session; no deployment c
 in CI. It checks the required variables, that the branch is pushed, and that the Infisical sync
 exists before changing anything. Then it:
 
-1. creates (or reuses) the Neon branch `preview/<branch>` from `PARENT_BRANCH_ID` and an
-   ElevenLabs agent branch `preview/<branch>/<timestamp>` from the latest committed version of
-   `ELEVENLABS_AGENT_PARENT_BRANCH_ID`,
-2. writes `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_ID` and `ORIGIN` into the
-   Infisical `prod` folder `/preview`,
-3. runs that folder's Netlify sync (Netlify's `branch-deploy` context) and waits for it to finish,
-4. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`.
+1. creates (or reuses) the Neon branch `preview/<branch>` from `PARENT_BRANCH_ID`,
+2. registers (or reuses) an ElevenLabs workspace webhook for the preview's
+   `/webhook/elevenlabs/post-call`. ElevenLabs reveals a webhook's signing secret only when it
+   creates the webhook, so after another branch took over `/preview`, a new webhook replaces the
+   old one and existing `preview/<branch>` agent branches are pointed at it,
+3. writes `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_NAME` (`preview/<branch>`),
+   `ELEVENLABS_POST_CALL_WEBHOOK_ID`, `ELEVENLABS_WEBHOOK_SECRET` and `ORIGIN` into the Infisical
+   `prod` folder `/preview`,
+4. runs that folder's Netlify sync (Netlify's `branch-deploy` context) and waits for it to finish,
+5. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`.
 
 The preview is served at `https://<branch>--dialogbank.netlify.app`, so branch names must be
 lowercase letters, digits, and single dashes. Branch deploys run migrations before building.
 Netlify does not build branches on push, so run `preview:up` again to deploy new commits; it
 reuses the existing Neon and ElevenLabs branches.
+
+The script creates no ElevenLabs branches itself. The preview app creates the branch named
+`ELEVENLABS_AGENT_BRANCH_NAME` from `main` on each agent the first time it reads or writes that
+agent, just like `development` in the `dev` environment, so editing an assignment in a preview
+never touches production's `main` branches, and points it at the preview's webhook, so calls on
+the preview never reach production.
 
 `/preview` holds the values of one branch at a time. `netlify.toml` also skips every branch
 deploy whose `BRANCH` differs from `PREVIEW_BRANCH` (and fails the build if the skip does not
@@ -274,10 +289,12 @@ previews.
 
 `/preview` imports the `prod` root folder, so it inherits shared keys such as the ElevenLabs API
 key and Sentry settings, and overrides `BETTER_AUTH_SECRET` so previews and production do not
-share a signing key. Because of that import, the four preview keys are never deleted from
+share a signing key. Because of that import, the preview keys are never deleted from
 `/preview`, only reset to placeholders that cannot connect anywhere; otherwise branch deploys
-would receive production's `DATABASE_URL`. `pnpm run preview:init` writes those placeholders
-once, before the `/preview` sync is created.
+would receive production's `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_NAME`, webhook and webhook
+secret. The app refuses the `unset` placeholders. `pnpm run preview:init` writes the placeholders that are missing
+from `/preview`: run it before the `/preview` sync is created, and again whenever a preview key is
+added.
 
 To tear a preview down, run (defaults to the current branch):
 
@@ -286,7 +303,9 @@ infisical run --env test -- pnpm run preview:down [branch]
 ```
 
 It resets `/preview` to the placeholders if it belongs to that branch, deletes the Neon branch,
-and archives the ElevenLabs branch. The branch's last Netlify deploy stays reachable, without a
+archives its ElevenLabs branches on every agent tagged `ELEVENLABS_DIALOGBANK_AGENT_TAG`
+(default `dialogbank`), and deletes the preview's workspace webhook. A later `preview:up` for the same branch starts over with fresh
+`preview/<branch>` branches created from `main`. The branch's last Netlify deploy stays reachable, without a
 database, until you delete it in the Netlify UI.
 
 To upload sourcemaps from Netlify builds, the deployment environment also needs:
@@ -330,6 +349,15 @@ infisical run --env dev -- docker compose run --rm -e SEED_USER_ACCOUNTS="$(infi
 ```
 
 Running the script on the host only works against a database that is reachable from there, with `SEED_USER_ACCOUNTS` set the same way and `DATABASE_URL` pointing at that database.
+
+A [preview](#preview-deployments)'s Neon branch is such a database. It starts as a copy of `PARENT_BRANCH_ID`, including its users, so seed it only if you need different accounts. Take `DATABASE_URL`, `ORIGIN` and `BETTER_AUTH_SECRET` from Infisical `prod` `/preview`, after checking that `/preview` belongs to your branch: otherwise `DATABASE_URL` is a placeholder or another branch's database.
+
+```sh
+infisical secrets get PREVIEW_BRANCH --env prod --path /preview --plain
+SEED_USER_ACCOUNTS="$(infisical secrets --env prod --path user-accounts -o json)" infisical run --env prod --path /preview -- pnpm run db:seed
+```
+
+Use `--env dev` in `SEED_USER_ACCOUNTS` to sign in to the preview with the dev accounts instead.
 
 ## Project Status
 

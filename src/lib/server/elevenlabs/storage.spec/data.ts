@@ -9,7 +9,7 @@ export const samplePayload1: ElevenLabsWebhookPayload = {
 	type: "post_call_transcription",
 	data: {
 		conversation_id: "conv_4401kjbexa6tfnz97e45sy0666d9",
-		agent_id: "agent_0501kjanbz0qe07rt0vnskaz2aag",
+		agent_id: "agent_test",
 		analysis: {
 			transcript_summary:
 				"The user initiated the conversation in German and immediately requested to end the call.",
@@ -26,10 +26,16 @@ export const samplePayload2: ElevenLabsWebhookPayload = {
 	type: "post_call_transcription",
 	data: {
 		conversation_id: "conv_7501kkbqgsfsfjf8smjkdsn7pt6q",
-		agent_id: "agent_0501kjanbz0qe07rt0vnskaz2aag",
+		agent_id: "agent_test",
 		analysis: {
 			transcript_summary: "The conversation began with the WDR AI agent, Nadia...",
 			data_collection_results: {
+				assignment_id: {
+					data_collection_id: "assignment_id",
+					value: null,
+					json_schema: { type: "string", constant_value: "1" },
+					rationale: "Es gibt keine Erwähnung einer Assignment-ID im Transkript.",
+				},
 				first_name: {
 					data_collection_id: "first_name",
 					value: "Fritz",

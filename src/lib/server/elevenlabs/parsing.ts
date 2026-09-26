@@ -33,6 +33,11 @@ export const elevenLabsWebhookSchema = z.object({
 	data: z.object({
 		conversation_id: z.string(),
 		agent_id: z.string(),
+		conversation_initiation_client_data: z
+			.object({
+				dynamic_variables: z.record(z.string(), z.unknown()).optional(),
+			})
+			.optional(),
 		analysis: z.object({
 			transcript_summary: z.string().optional().nullable(),
 			data_collection_results: z.record(z.string(), elevenLabsDataPointSchema).default({}),
@@ -82,6 +87,10 @@ export function parseElevenLabsWebhook(payload: unknown) {
 		}
 
 		switch (id) {
+			case "assignment_id":
+				// Written by earlier versions of Dialogbank, not an answer. Conversations
+				// are attributed by agent.
+				break;
 			case "first_name":
 				firstName = val as string;
 				break;

@@ -1,5 +1,38 @@
+import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
+import { eq } from "drizzle-orm";
+import { beforeEach, vi } from "vitest";
 import { createRequestEvent, describe, it } from "$lib/server/test/fixtures";
 import { actions, load } from "./+page.server";
+
+const elevenLabs = vi.hoisted(() => ({
+	resolveElevenLabsAgentTargetForAgentId: vi.fn(),
+	createElevenLabsAgentReader: vi.fn(),
+	createElevenLabsAgentWriter: vi.fn(),
+	listElevenLabsDialogbankAgents: vi.fn(),
+	updateElevenLabsAgentQuestions: vi.fn(),
+}));
+
+vi.mock("$lib/server/elevenlabs/agent", async (importOriginal) => ({
+	...(await importOriginal<typeof import("$lib/server/elevenlabs/agent")>()),
+	...elevenLabs,
+}));
+
+beforeEach(() => {
+	vi.resetAllMocks();
+	elevenLabs.resolveElevenLabsAgentTargetForAgentId.mockImplementation(async (_env, agentId) => ({
+		agentId,
+		branchId: "agtbrch_test",
+		workflowNodeId: "node_test",
+		postCallWebhookId: null,
+	}));
+	elevenLabs.createElevenLabsAgentReader.mockReturnValue({ get: vi.fn().mockResolvedValue({}) });
+	elevenLabs.createElevenLabsAgentWriter.mockReturnValue({ update: vi.fn() });
+	elevenLabs.listElevenLabsDialogbankAgents.mockResolvedValue([
+		{ id: "agent_current", name: "Nadia", voiceId: null, tags: ["dialogbank"], archived: false },
+		{ id: "agent_available", name: "Mara", voiceId: null, tags: ["dialogbank"], archived: false },
+	]);
+	elevenLabs.updateElevenLabsAgentQuestions.mockResolvedValue("agtvrsn_new");
+});
 
 // Use ID ranges that don't collide with other spec files
 const CLASSIFICATION_ID_OFFSET = 500;
@@ -94,6 +127,94 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		const links = await db.select().from(schema.questionClassifications);
 		expect(links).toHaveLength(2);
+	});
+
+	it("save: returns 404 when the assignment no longer exists", async ({ db, expect, schema }) => {
+		await db.delete(schema.assignments).where(eq(schema.assignments.id, 1));
+		const formData = new FormData();
+		formData.append("name", "Deleted assignment");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).rejects.toMatchObject({ status: 404 });
+	});
+
+	it("save: rolls back assignment metadata when question persistence fails", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.insert(schema.questions)
+			.values({ assignmentId: 1, text: "Bestehende Frage", displayOrder: 0 });
+		const formData = new FormData();
+		formData.append("name", "Nicht gespeichert");
+		formData.append("questions", "Ungültige Frage");
+		formData.append("question_classification_ids", "[999999]");
+		formData.append("question_new_classifications", "[]");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).rejects.toBeDefined();
+		await expect(db.query.assignments.findFirst()).resolves.toMatchObject({ name: "Standard" });
+		await expect(db.select().from(schema.questions)).resolves.toEqual([
+			expect.objectContaining({ text: "Bestehende Frage" }),
+		]);
+	});
+
+	it("connectAgent: rejects an agent owned by another assignment", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db.insert(schema.assignments).values({
+			name: "Another Assignment",
+			slug: "another-assignment",
+			elevenLabsAgentId: "agent_dialogbank_123",
+		});
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		formData.append("elevenLabsAgentId", "agent_dialogbank_123");
+
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
+		).resolves.toMatchObject({
+			status: 409,
+			data: {
+				action: "connectAgent",
+				message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
+			},
+		});
+
+		const assignment = await db.query.assignments.findFirst({
+			where: (a, { eq }) => eq(a.id, 1),
+		});
+		expect(assignment?.elevenLabsAgentId).toBeNull();
 	});
 
 	it("save: links duplicate new classifications by normalized key", async ({
@@ -242,5 +363,367 @@ describe("/editor/assignments/[id] +page.server", () => {
 		const remaining = await db.select().from(schema.questions);
 		expect(remaining).toHaveLength(1);
 		expect(remaining[0].text).toBe("Nur eine Frage");
+	});
+
+	it("save: configures the connected agent, not the one selected in the form", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_current" })
+			.where(eq(schema.assignments.id, 1));
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		formData.append("elevenLabsAgentId", "agent_replacement");
+		formData.append("questions", "Frage 1");
+		formData.append("question_classification_ids", "[]");
+		formData.append("question_new_classifications", "[]");
+
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({
+			success: true,
+			action: "save",
+		});
+		const assignment = await db.query.assignments.findFirst({
+			where: (row, { eq }) => eq(row.id, 1),
+		});
+		expect(assignment?.elevenLabsAgentId).toBe("agent_current");
+		expect(elevenLabs.resolveElevenLabsAgentTargetForAgentId).toHaveBeenCalledWith(
+			expect.anything(),
+			"agent_current",
+		);
+	});
+
+	it("save: preserves agent ownership when the assignment form has no agent field", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_current" })
+			.where(eq(schema.assignments.id, 1));
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({ success: true, action: "save" });
+
+		const assignment = await db.query.assignments.findFirst({
+			where: (row, { eq }) => eq(row.id, 1),
+		});
+		expect(assignment?.elevenLabsAgentId).toBe("agent_current");
+	});
+
+	it("save: leaves ElevenLabs alone when no agent is connected", async ({ db, expect, schema }) => {
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toEqual({ success: true, action: "save", message: "Einsatz gespeichert." });
+		expect(elevenLabs.updateElevenLabsAgentQuestions).not.toHaveBeenCalled();
+	});
+
+	it("save: configures the connected agent with the saved assignment", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_current", agentConfigurationError: "old error" })
+			.where(eq(schema.assignments.id, 1));
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		formData.append("promptSupplement", "Sei freundlich.");
+		formData.append("questions", "Neue Frage");
+		formData.append("question_classification_ids", "[]");
+		formData.append("question_new_classifications", "[]");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toEqual({
+			success: true,
+			action: "save",
+			message: "Einsatz gespeichert und Agent aktualisiert.",
+		});
+
+		expect(elevenLabs.updateElevenLabsAgentQuestions).toHaveBeenCalledWith(
+			expect.objectContaining({ agentId: "agent_current", branchId: "agtbrch_test" }),
+			[{ text: "Neue Frage", classifications: [] }],
+			expect.anything(),
+			expect.anything(),
+			{ promptSupplement: "Sei freundlich." },
+		);
+		const assignment = await db.query.assignments.findFirst({
+			where: (row, { eq }) => eq(row.id, 1),
+		});
+		expect(assignment).toMatchObject({
+			elevenLabsAgentVersionId: "agtvrsn_new",
+			agentConfigurationError: null,
+		});
+		expect(assignment?.agentConfiguredAt).toEqual(assignment?.updatedAt);
+	});
+
+	it("save: keeps the assignment and records the error when the agent cannot be updated", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_current" })
+			.where(eq(schema.assignments.id, 1));
+		elevenLabs.updateElevenLabsAgentQuestions.mockRejectedValue(
+			new ElevenLabsError({ message: "ElevenLabs unavailable", statusCode: 503 }),
+		);
+		const formData = new FormData();
+		formData.append("name", "Umbenannt");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({
+			status: 503,
+			data: {
+				action: "save",
+				message: expect.stringMatching(
+					/^Einsatz gespeichert, aber der Agent konnte nicht aktualisiert werden: .*ElevenLabs unavailable/,
+				),
+			},
+		});
+
+		const assignment = await db.query.assignments.findFirst({
+			where: (row, { eq }) => eq(row.id, 1),
+		});
+		expect(assignment?.name).toBe("Umbenannt");
+		expect(assignment?.agentConfigurationError).toContain("ElevenLabs unavailable");
+	});
+
+	it("connectAgent: saves the assignment before configuring the new agent with it", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		const formData = new FormData();
+		formData.append("name", "Ungespeicherter Name");
+		formData.append("elevenLabsAgentId", "agent_available");
+		formData.append("questions", "Ungespeicherte Frage");
+		formData.append("question_classification_ids", "[]");
+		formData.append("question_new_classifications", "[]");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/connectAgent", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
+		).resolves.toEqual({
+			success: true,
+			action: "connectAgent",
+			message: "Einsatz gespeichert und Agent verbunden.",
+		});
+
+		expect(elevenLabs.updateElevenLabsAgentQuestions).toHaveBeenCalledWith(
+			expect.objectContaining({ agentId: "agent_available" }),
+			[{ text: "Ungespeicherte Frage", classifications: [] }],
+			expect.anything(),
+			expect.anything(),
+			expect.anything(),
+		);
+		await expect(
+			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, 1) }),
+		).resolves.toMatchObject({
+			name: "Ungespeicherter Name",
+			elevenLabsAgentId: "agent_available",
+			elevenLabsAgentVersionId: "agtvrsn_new",
+		});
+	});
+
+	it("connectAgent: rejects disconnecting when no agent is connected", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/connectAgent", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
+		).resolves.toMatchObject({
+			status: 400,
+			data: {
+				action: "connectAgent",
+				message: "Dem Einsatz ist kein Agent zugewiesen.",
+			},
+		});
+	});
+
+	it("load: does not resolve an agent outside the catalog, which could create a branch on it", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_untagged" })
+			.where(eq(schema.assignments.id, 1));
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1"),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(load(event as unknown as Parameters<typeof load>[0])).resolves.toMatchObject({
+			agent: null,
+		});
+		expect(elevenLabs.resolveElevenLabsAgentTargetForAgentId).not.toHaveBeenCalled();
+	});
+
+	it("save: keeps the assignment but leaves an agent outside the catalog untouched", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_untagged" })
+			.where(eq(schema.assignments.id, 1));
+		const formData = new FormData();
+		formData.append("name", "Umbenannt");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({
+			status: 409,
+			data: {
+				action: "save",
+				message:
+					"Einsatz gespeichert, aber der Agent konnte nicht aktualisiert werden: Der Agent ist nicht mit dem Tag dialogbank für die Dialogbank freigegeben.",
+			},
+		});
+		expect(elevenLabs.resolveElevenLabsAgentTargetForAgentId).not.toHaveBeenCalled();
+		expect(elevenLabs.updateElevenLabsAgentQuestions).not.toHaveBeenCalled();
+		await expect(
+			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, 1) }),
+		).resolves.toMatchObject({
+			name: "Umbenannt",
+			agentConfigurationError: expect.stringContaining("nicht mit dem Tag dialogbank"),
+		});
+	});
+
+	it("connectAgent: disconnecting only detaches the agent in the database", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_current" })
+			.where(eq(schema.assignments.id, 1));
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/connectAgent", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
+		).resolves.toEqual({
+			success: true,
+			action: "connectAgent",
+			message: "Einsatz gespeichert und Agent getrennt.",
+		});
+		expect(elevenLabs.listElevenLabsDialogbankAgents).not.toHaveBeenCalled();
+		expect(elevenLabs.resolveElevenLabsAgentTargetForAgentId).not.toHaveBeenCalled();
+		await expect(
+			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, 1) }),
+		).resolves.toMatchObject({ elevenLabsAgentId: null });
+	});
+
+	it("load: reports a catalog that failed to load", async ({ db, expect, schema }) => {
+		elevenLabs.listElevenLabsDialogbankAgents.mockRejectedValue(
+			new ElevenLabsError({ message: "ElevenLabs unavailable", statusCode: 503 }),
+		);
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1"),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(load(event as unknown as Parameters<typeof load>[0])).resolves.toMatchObject({
+			availableAgents: [],
+			agentCatalogError: expect.stringContaining("ElevenLabs unavailable"),
+		});
 	});
 });

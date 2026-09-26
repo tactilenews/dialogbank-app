@@ -1,13 +1,17 @@
-import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
+import { ElevenLabsClient, ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import type {
 	AgentWorkflowRequestModel,
 	AnalysisProperty,
 	GetAgentResponseModel,
 } from "@elevenlabs/elevenlabs-js/api";
 import { error } from "@sveltejs/kit";
+import { z } from "zod";
 import { slugify } from "$lib/slugify";
 
 const QUESTION_KEY_PREFIX = "question_";
+// Earlier versions wrote the assignment id into the agent; configuring an agent
+// removes it, since conversations are attributed by agent now.
+const LEGACY_ASSIGNMENT_ID_KEY = "assignment_id";
 const CLASSIFICATION_KEY_PREFIX = "classification_";
 const WORKFLOW_NODE_PROMPT_PREAMBLE = "Stelle der Person nacheinander diese Fragen:\n\n";
 
@@ -35,16 +39,58 @@ type AgentWriter = {
 		agentId: string,
 		request: {
 			branchId?: string;
-			platformSettings?: { dataCollection?: Record<string, AnalysisProperty> };
+			platformSettings?: {
+				dataCollection?: Record<string, AnalysisProperty>;
+				workspaceOverrides?: PostCallWebhookOverride;
+			};
 			workflow?: AgentWorkflowRequestModel;
 		},
+	) => Promise<{ versionId?: string }>;
+};
+
+// `null` removes the branch's override, leaving it without a post-call webhook
+// as long as the workspace sets none by default.
+type PostCallWebhookOverride = { webhooks: { postCallWebhookId: string | null } };
+
+export type AgentBranchSummary = { id: string; name: string; isArchived: boolean };
+
+export type AgentBranchVersion = { id: string; seqNoInBranch: number; timeCommittedSecs: number };
+
+export type AgentBranchReader = {
+	getMainBranchId: (agentId: string) => Promise<string | undefined>;
+	list: (agentId: string) => Promise<AgentBranchSummary[]>;
+	get: (
+		agentId: string,
+		branchId: string,
+	) => Promise<{ mostRecentVersions?: AgentBranchVersion[] }>;
+	create: (
+		agentId: string,
+		request: { parentVersionId: string; name: string; description: string },
+	) => Promise<{ createdBranchId: string }>;
+	setPostCallWebhook: (
+		agentId: string,
+		branchId: string,
+		postCallWebhookId: string | null,
 	) => Promise<void>;
+};
+
+export type AgentCatalogReader = {
+	list: (request: { tag: string }) => Promise<ElevenLabsAgentCatalogEntry[]>;
 };
 
 export type ElevenLabsAgentTarget = {
 	agentId: string;
 	branchId?: string;
 	workflowNodeId: string;
+	postCallWebhookId: string | null;
+};
+
+export type ElevenLabsAgentCatalogEntry = {
+	id: string;
+	name: string;
+	voiceId: string | null;
+	tags: string[];
+	archived: boolean;
 };
 
 export type ElevenLabsEditorAgent = {
@@ -57,28 +103,196 @@ export type ElevenLabsEditorAgent = {
 
 export type ElevenLabsEnv = {
 	ELEVENLABS_AGENT_ID?: string;
-	ELEVENLABS_AGENT_BRANCH_ID?: string;
+	ELEVENLABS_AGENT_BRANCH_NAME?: string;
 	ELEVENLABS_API_KEY?: string;
+	ELEVENLABS_DIALOGBANK_AGENT_TAG?: string;
+	ELEVENLABS_POST_CALL_WEBHOOK_ID?: string;
 	ELEVENLABS_WORKFLOW_NODE_ID?: string;
 };
 
-export function resolveElevenLabsAgentTarget(environment: ElevenLabsEnv): ElevenLabsAgentTarget {
-	const agentId = environment.ELEVENLABS_AGENT_ID;
-	if (!agentId) {
-		throw error(500, "ELEVENLABS_AGENT_ID is not configured on the server.");
-	}
+const agentListResponseSchema = z.object({
+	agents: z
+		.array(
+			z.object({
+				agent_id: z.string(),
+				name: z.string(),
+				voice_id: z.string().nullable().optional(),
+				tags: z.array(z.string()).nullable().optional(),
+				archived: z.boolean().optional(),
+			}),
+		)
+		.default([]),
+	has_more: z.boolean().optional(),
+	next_cursor: z.string().nullable().optional(),
+});
 
-	const branchId = environment.ELEVENLABS_AGENT_BRANCH_ID;
-	if (!branchId) {
-		throw error(500, "ELEVENLABS_AGENT_BRANCH_ID is not configured on the server.");
+export function resolveElevenLabsDialogbankAgentTag(environment: ElevenLabsEnv): string {
+	return environment.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
+}
+
+export function isSelectableDialogbankAgent(
+	agent: ElevenLabsAgentCatalogEntry,
+	requiredTag: string,
+): boolean {
+	return !agent.archived && agent.tags.includes(requiredTag);
+}
+
+// `pnpm preview:init` and `pnpm preview:down` reset the preview's branch name to
+// this placeholder instead of deleting it, see `src/scripts/preview.ts`.
+const UNSET_BRANCH_NAME = "unset";
+// Refers to each agent's main branch, whatever it is called: ElevenLabs names
+// it "Main" on some agents.
+const MAIN_BRANCH_NAME = "main";
+
+export function resolveElevenLabsAgentBranchName(environment: ElevenLabsEnv): string {
+	const branchName = environment.ELEVENLABS_AGENT_BRANCH_NAME?.trim();
+	if (!branchName || branchName === UNSET_BRANCH_NAME) {
+		throw error(500, "ELEVENLABS_AGENT_BRANCH_NAME is not configured on the server.");
 	}
+	return branchName;
+}
+
+const NO_POST_CALL_WEBHOOK = "none";
+
+// Every branch Dialogbank uses gets this environment's post-call webhook. A new
+// branch starts as a copy of the main branch, so it would otherwise send its
+// conversations to production.
+export function resolveElevenLabsPostCallWebhookId(environment: ElevenLabsEnv): string | null {
+	const webhookId = environment.ELEVENLABS_POST_CALL_WEBHOOK_ID?.trim();
+	if (!webhookId || webhookId === UNSET_BRANCH_NAME) {
+		throw error(500, "ELEVENLABS_POST_CALL_WEBHOOK_ID is not configured on the server.");
+	}
+	return webhookId === NO_POST_CALL_WEBHOOK ? null : webhookId;
+}
+
+export async function resolveElevenLabsAgentTargetForAgentId(
+	environment: ElevenLabsEnv,
+	agentId: string,
+	branchReader?: AgentBranchReader,
+): Promise<ElevenLabsAgentTarget> {
+	const branchName = resolveElevenLabsAgentBranchName(environment);
+	const postCallWebhookId = resolveElevenLabsPostCallWebhookId(environment);
+	const reader = branchReader ?? createElevenLabsAgentBranchReader(environment);
+	const branchId =
+		branchName === MAIN_BRANCH_NAME
+			? await requireMainBranchId(agentId, reader)
+			: await findOrCreateElevenLabsBranch(agentId, branchName, postCallWebhookId, reader);
 
 	const workflowNodeId = environment.ELEVENLABS_WORKFLOW_NODE_ID;
 	if (!workflowNodeId) {
 		throw error(500, "ELEVENLABS_WORKFLOW_NODE_ID is not configured on the server.");
 	}
 
-	return { agentId, branchId, workflowNodeId };
+	return { agentId, branchId, workflowNodeId, postCallWebhookId };
+}
+
+export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): AgentBranchReader {
+	const apiKey = environment.ELEVENLABS_API_KEY;
+	if (!apiKey) {
+		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
+	}
+
+	const client = new ElevenLabsClient({ apiKey });
+	return {
+		getMainBranchId: async (agentId) =>
+			(await client.conversationalAi.agents.get(agentId)).mainBranchId,
+		list: async (agentId) => {
+			const response = await client.conversationalAi.agents.branches.list(agentId, {
+				includeArchived: false,
+				limit: 100,
+			});
+			return response.results;
+		},
+		get: async (agentId, branchId) =>
+			client.conversationalAi.agents.branches.get(agentId, branchId),
+		create: async (agentId, request) =>
+			client.conversationalAi.agents.branches.create(agentId, request),
+		setPostCallWebhook: async (agentId, branchId, postCallWebhookId) => {
+			await updateAgent(client, agentId, {
+				branchId,
+				platformSettings: { workspaceOverrides: postCallWebhookOverride(postCallWebhookId) },
+			});
+		},
+	};
+}
+
+function selectLatestCommittedVersionId(
+	branch: { mostRecentVersions?: AgentBranchVersion[] },
+	agentId: string,
+	branchName: string,
+): string {
+	const latestVersion = [...(branch.mostRecentVersions ?? [])].sort((left, right) => {
+		if (left.seqNoInBranch !== right.seqNoInBranch) {
+			return right.seqNoInBranch - left.seqNoInBranch;
+		}
+		return right.timeCommittedSecs - left.timeCommittedSecs;
+	})[0];
+
+	if (!latestVersion) {
+		throw error(
+			500,
+			`ElevenLabs branch "${branchName}" for agent ${agentId} has no committed versions to branch from.`,
+		);
+	}
+
+	return latestVersion.id;
+}
+
+async function requireMainBranchId(agentId: string, reader: AgentBranchReader): Promise<string> {
+	const mainBranchId = await reader.getMainBranchId(agentId);
+	if (!mainBranchId) {
+		throw error(500, `ElevenLabs agent ${agentId} has no main branch.`);
+	}
+	return mainBranchId;
+}
+
+async function findOrCreateElevenLabsBranch(
+	agentId: string,
+	branchName: string,
+	postCallWebhookId: string | null,
+	reader: AgentBranchReader,
+): Promise<string> {
+	const branches = await reader.list(agentId);
+	const existing = branches.find((branch) => !branch.isArchived && branch.name === branchName);
+	if (existing) return existing.id;
+
+	const mainBranchDetails = await reader.get(agentId, await requireMainBranchId(agentId, reader));
+	const parentVersionId = selectLatestCommittedVersionId(
+		mainBranchDetails,
+		agentId,
+		MAIN_BRANCH_NAME,
+	);
+
+	try {
+		const created = await reader.create(agentId, {
+			parentVersionId,
+			name: branchName,
+			description: `Branch "${branchName}", created automatically by Dialogbank.`,
+		});
+		// Before anyone can call the new branch, which would send its conversation
+		// to the main branch's webhook.
+		await reader.setPostCallWebhook(agentId, created.createdBranchId, postCallWebhookId);
+		return created.createdBranchId;
+	} catch (cause) {
+		if (!isBranchNameConflict(cause)) throw cause;
+		// ElevenLabs keeps active branch names unique, so a concurrent request
+		// created the branch in the meantime.
+		const concurrent = (await reader.list(agentId)).find(
+			(branch) => !branch.isArchived && branch.name === branchName,
+		);
+		if (!concurrent) throw cause;
+		return concurrent.id;
+	}
+}
+
+const branchNameConflictSchema = z.object({ detail: z.object({ code: z.literal("conflict") }) });
+
+function isBranchNameConflict(cause: unknown): boolean {
+	return (
+		cause instanceof ElevenLabsError &&
+		cause.statusCode === 400 &&
+		branchNameConflictSchema.safeParse(cause.body).success
+	);
 }
 
 export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentReader {
@@ -96,6 +310,67 @@ export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentRe
 	};
 }
 
+export function createElevenLabsAgentCatalogReader(environment: ElevenLabsEnv): AgentCatalogReader {
+	const apiKey = environment.ELEVENLABS_API_KEY;
+	if (!apiKey) {
+		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
+	}
+
+	return {
+		list: async ({ tag }) => {
+			const agents: ElevenLabsAgentCatalogEntry[] = [];
+			let cursor: string | undefined;
+
+			do {
+				const url = new URL("https://api.elevenlabs.io/v1/convai/agents");
+				url.searchParams.append("tags", tag);
+				if (cursor) url.searchParams.set("cursor", cursor);
+
+				const response = await fetch(url, {
+					headers: {
+						"xi-api-key": apiKey,
+					},
+				});
+
+				if (!response.ok) {
+					throw error(response.status, `ElevenLabs agents could not be loaded.`);
+				}
+
+				const page = agentListResponseSchema.parse(await response.json());
+				agents.push(
+					...page.agents.map((agent) => ({
+						id: agent.agent_id,
+						name: agent.name,
+						voiceId: agent.voice_id ?? null,
+						tags: agent.tags ?? [],
+						archived: agent.archived ?? false,
+					})),
+				);
+				cursor = page.has_more ? (page.next_cursor ?? undefined) : undefined;
+			} while (cursor);
+
+			return agents.filter((agent) => !agent.archived);
+		},
+	};
+}
+
+function postCallWebhookOverride(postCallWebhookId: string | null): PostCallWebhookOverride {
+	return { webhooks: { postCallWebhookId } };
+}
+
+// The SDK types `postCallWebhookId` as an optional string, but only `null`
+// removes an override (verified against the API).
+function updateAgent(
+	client: ElevenLabsClient,
+	agentId: string,
+	request: Parameters<AgentWriter["update"]>[1],
+) {
+	return client.conversationalAi.agents.update(
+		agentId,
+		request as Parameters<ElevenLabsClient["conversationalAi"]["agents"]["update"]>[1],
+	);
+}
+
 export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWriter {
 	const apiKey = environment.ELEVENLABS_API_KEY;
 	if (!apiKey) {
@@ -107,10 +382,16 @@ export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWr
 	});
 
 	return {
-		update: async (agentId, request) => {
-			await client.conversationalAi.agents.update(agentId, request);
-		},
+		update: async (agentId, request) => updateAgent(client, agentId, request),
 	};
+}
+
+export async function listElevenLabsDialogbankAgents(
+	environment: ElevenLabsEnv,
+	reader = createElevenLabsAgentCatalogReader(environment),
+): Promise<ElevenLabsAgentCatalogEntry[]> {
+	const tag = resolveElevenLabsDialogbankAgentTag(environment);
+	return reader.list({ tag });
 }
 
 export function parseQuestionsFromWorkflowNodePrompt(additionalPrompt: string): string[] {
@@ -225,7 +506,7 @@ export async function updateElevenLabsAgentQuestions(
 	existingAgent: AgentReaderResponse,
 	writer: AgentWriter,
 	options?: { promptSupplement?: string | null },
-): Promise<void> {
+): Promise<string | null> {
 	const existingWorkflow = existingAgent.workflow;
 	const existingNode = existingWorkflow?.nodes[target.workflowNodeId];
 
@@ -258,7 +539,7 @@ export async function updateElevenLabsAgentQuestions(
 			([key]) =>
 				!key.startsWith(QUESTION_KEY_PREFIX) &&
 				!key.startsWith(CLASSIFICATION_KEY_PREFIX) &&
-				key !== "assignment_id",
+				key !== LEGACY_ASSIGNMENT_ID_KEY,
 		),
 	);
 	const newDataCollection = {
@@ -266,9 +547,13 @@ export async function updateElevenLabsAgentQuestions(
 		...buildQuestionDataCollectionEntries(questions),
 	};
 
-	await writer.update(target.agentId, {
+	const updatedAgent = await writer.update(target.agentId, {
 		branchId: target.branchId,
 		workflow: updatedWorkflow,
-		platformSettings: { dataCollection: newDataCollection },
+		platformSettings: {
+			dataCollection: newDataCollection,
+			workspaceOverrides: postCallWebhookOverride(target.postCallWebhookId),
+		},
 	});
+	return updatedAgent.versionId ?? null;
 }
