@@ -17,7 +17,6 @@ import {
 	parseQuestionsFromDataCollection,
 	parseQuestionsFromWorkflowNodePrompt,
 	type Question,
-	removeElevenLabsAgentAssignment,
 	resolveElevenLabsAgentBranchName,
 	resolveElevenLabsAgentTargetForAgentId,
 	resolveElevenLabsDialogbankAgentTag,
@@ -900,26 +899,7 @@ describe("updateElevenLabsAgentQuestions", () => {
 		});
 	});
 
-	it("writes the assignment id as a constant data collection value", async () => {
-		const writer = makeWriter();
-		const existingAgent: AgentReaderResponse = {
-			name: "Test",
-			conversationConfig: {},
-			workflow: makeWorkflow("Stelle der Person nacheinander diese Fragen:\n\n1. Frage?"),
-		};
-
-		await expect(
-			updateElevenLabsAgentQuestions(agentTarget, [makeQuestion("Frage?")], existingAgent, writer, {
-				assignmentId: 42,
-			}),
-		).resolves.toBe("agtvrsn_test");
-
-		expect(writer.update.mock.calls[0][1].platformSettings?.dataCollection).toMatchObject({
-			assignment_id: { type: "string", constantValue: "42" },
-		});
-	});
-
-	it("removes only the assignment id when disconnecting", async () => {
+	it("removes an assignment id written by earlier versions and keeps other entries", async () => {
 		const writer = makeWriter();
 		const existingAgent: AgentReaderResponse = {
 			name: "Test",
@@ -930,20 +910,19 @@ describe("updateElevenLabsAgentQuestions", () => {
 					first_name: { type: "string", description: "What is the first name?" },
 				},
 			},
+			workflow: makeWorkflow("Stelle der Person nacheinander diese Fragen:\n\n1. Frage?"),
 		};
 
-		await expect(removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer)).resolves.toBe(
-			"agtvrsn_test",
+		await updateElevenLabsAgentQuestions(
+			agentTarget,
+			[makeQuestion("Frage?")],
+			existingAgent,
+			writer,
 		);
 
-		expect(writer.update).toHaveBeenCalledWith(agentTarget.agentId, {
-			branchId: agentTarget.branchId,
-			platformSettings: {
-				dataCollection: {
-					first_name: { type: "string", description: "What is the first name?" },
-				},
-			},
-		});
+		const dataCollection = writer.update.mock.calls[0][1].platformSettings?.dataCollection;
+		expect(dataCollection).not.toHaveProperty("assignment_id");
+		expect(dataCollection).toHaveProperty("first_name");
 	});
 
 	it("writes classification entries to dataCollection for questions that have them", async () => {

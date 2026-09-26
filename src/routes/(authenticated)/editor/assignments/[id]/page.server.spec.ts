@@ -9,7 +9,6 @@ const elevenLabs = vi.hoisted(() => ({
 	createElevenLabsAgentReader: vi.fn(),
 	createElevenLabsAgentWriter: vi.fn(),
 	listElevenLabsDialogbankAgents: vi.fn(),
-	removeElevenLabsAgentAssignment: vi.fn(),
 	updateElevenLabsAgentQuestions: vi.fn(),
 }));
 
@@ -492,7 +491,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 			[{ text: "Neue Frage", classifications: [] }],
 			expect.anything(),
 			expect.anything(),
-			{ promptSupplement: "Sei freundlich.", assignmentId: 1 },
+			{ promptSupplement: "Sei freundlich." },
 		);
 		const assignment = await db.query.assignments.findFirst({
 			where: (row, { eq }) => eq(row.id, 1),
@@ -678,7 +677,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 	});
 
-	it("connectAgent: removes the assignment from a catalog agent when disconnecting", async ({
+	it("connectAgent: disconnecting only detaches the agent in the database", async ({
 		db,
 		expect,
 		schema,
@@ -705,75 +704,11 @@ describe("/editor/assignments/[id] +page.server", () => {
 			action: "connectAgent",
 			message: "Einsatz gespeichert und Agent getrennt.",
 		});
-		expect(elevenLabs.removeElevenLabsAgentAssignment).toHaveBeenCalledOnce();
-		await expect(
-			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, 1) }),
-		).resolves.toMatchObject({ elevenLabsAgentId: null });
-	});
-
-	it("connectAgent: only detaches an agent outside the catalog without touching it", async ({
-		db,
-		expect,
-		schema,
-	}) => {
-		await db
-			.update(schema.assignments)
-			.set({ elevenLabsAgentId: "agent_untagged" })
-			.where(eq(schema.assignments.id, 1));
-		const formData = new FormData();
-		formData.append("name", "Standard");
-		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/assignments/1?/connectAgent", {
-				method: "POST",
-				body: formData,
-			}),
-			params: { id: "1" } as never,
-			locals: { user: authenticatedUser, db, schema },
-		});
-
-		await expect(
-			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
-		).resolves.toMatchObject({
-			success: true,
-			message: expect.stringContaining("enthält weiterhin die ID dieses Einsatzes"),
-		});
+		expect(elevenLabs.listElevenLabsDialogbankAgents).not.toHaveBeenCalled();
 		expect(elevenLabs.resolveElevenLabsAgentTargetForAgentId).not.toHaveBeenCalled();
-		expect(elevenLabs.removeElevenLabsAgentAssignment).not.toHaveBeenCalled();
 		await expect(
 			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, 1) }),
 		).resolves.toMatchObject({ elevenLabsAgentId: null });
-	});
-
-	it("connectAgent: keeps the agent connected when the catalog cannot be checked", async ({
-		db,
-		expect,
-		schema,
-	}) => {
-		await db
-			.update(schema.assignments)
-			.set({ elevenLabsAgentId: "agent_current" })
-			.where(eq(schema.assignments.id, 1));
-		elevenLabs.listElevenLabsDialogbankAgents.mockRejectedValue(
-			new ElevenLabsError({ message: "ElevenLabs unavailable", statusCode: 503 }),
-		);
-		const formData = new FormData();
-		formData.append("name", "Standard");
-		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/assignments/1?/connectAgent", {
-				method: "POST",
-				body: formData,
-			}),
-			params: { id: "1" } as never,
-			locals: { user: authenticatedUser, db, schema },
-		});
-
-		await expect(
-			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
-		).resolves.toMatchObject({ status: 503 });
-		expect(elevenLabs.removeElevenLabsAgentAssignment).not.toHaveBeenCalled();
-		await expect(
-			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, 1) }),
-		).resolves.toMatchObject({ elevenLabsAgentId: "agent_current" });
 	});
 
 	it("load: reports a catalog that failed to load", async ({ db, expect, schema }) => {

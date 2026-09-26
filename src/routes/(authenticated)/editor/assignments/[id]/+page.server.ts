@@ -19,7 +19,6 @@ import {
 	isSelectableDialogbankAgent,
 	listElevenLabsDialogbankAgents,
 	type Question,
-	removeElevenLabsAgentAssignment,
 	resolveElevenLabsAgentTargetForAgentId,
 	resolveElevenLabsDialogbankAgentTag,
 	updateElevenLabsAgentQuestions,
@@ -486,7 +485,7 @@ async function configureAssignmentAgent(
 			elevenLabsQuestions,
 			existingAgent,
 			writer,
-			{ promptSupplement: assignment.promptSupplement, assignmentId: id },
+			{ promptSupplement: assignment.promptSupplement },
 		);
 		// Sharing one timestamp lets the page tell whether the assignment changed
 		// after its agent was last configured.
@@ -508,45 +507,9 @@ async function configureAssignmentAgent(
 	}
 }
 
-type AgentDisconnectResult =
-	| { ok: true; agentWasInCatalog: boolean }
-	| { ok: false; status: number; message: string };
-
-async function disconnectAssignmentAgent(
-	db: DbClient,
-	id: number,
-	agentId: string,
-): Promise<AgentDisconnectResult> {
-	let agentWasInCatalog: boolean;
-	try {
-		agentWasInCatalog = await isInDialogbankCatalog(agentId);
-	} catch (cause) {
-		return { ok: false, status: errorStatus(cause), message: describeError(cause) };
-	}
-	// An agent outside the catalog is only detached here: it keeps the assignment
-	// id, so its conversations would still be attributed to this assignment.
-	if (agentWasInCatalog) {
-		try {
-			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
-			const reader = createElevenLabsAgentReader(process.env);
-			const writer = createElevenLabsAgentWriter(process.env);
-			const existingAgent = await reader.get(agentTarget.agentId, {
-				branchId: agentTarget.branchId,
-			});
-			await removeElevenLabsAgentAssignment(agentTarget, existingAgent, writer);
-		} catch (cause) {
-			// A deleted remote agent is already detached from the assignment.
-			if (!(cause instanceof ElevenLabsError && cause.statusCode === 404)) {
-				const message = describeError(cause);
-				await db
-					.update(assignments)
-					.set({ agentConfigurationError: message })
-					.where(eq(assignments.id, id));
-				return { ok: false, status: errorStatus(cause), message };
-			}
-		}
-	}
-
+// Disconnecting only changes the database: conversations are attributed by
+// agent, so the agent's configuration needs no cleanup.
+async function disconnectAssignmentAgent(db: DbClient, id: number, agentId: string) {
 	await db
 		.update(assignments)
 		.set({
@@ -556,7 +519,6 @@ async function disconnectAssignmentAgent(
 			agentConfigurationError: null,
 		})
 		.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, agentId)));
-	return { ok: true, agentWasInCatalog };
 }
 
 export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], Actions>({
@@ -601,19 +563,11 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 					message: "Dem Einsatz ist kein Agent zugewiesen.",
 				});
 			}
-			const disconnected = await disconnectAssignmentAgent(event.locals.db, id, currentAgentId);
-			if (!disconnected.ok) {
-				return fail(disconnected.status, {
-					action: "connectAgent",
-					message: `Einsatz gespeichert, aber der Agent konnte nicht getrennt werden: ${disconnected.message}`,
-				});
-			}
+			await disconnectAssignmentAgent(event.locals.db, id, currentAgentId);
 			return {
 				success: true,
 				action: "connectAgent",
-				message: disconnected.agentWasInCatalog
-					? "Einsatz gespeichert und Agent getrennt."
-					: `Einsatz gespeichert und Agent getrennt. ${notInCatalogMessage()} Er wurde in ElevenLabs deshalb nicht verändert und enthält weiterhin die ID dieses Einsatzes.`,
+				message: "Einsatz gespeichert und Agent getrennt.",
 			};
 		}
 

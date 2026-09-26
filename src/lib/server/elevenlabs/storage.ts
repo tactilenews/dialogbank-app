@@ -30,22 +30,14 @@ export async function processElevenLabsPostCall({ db, payload }: StorageInput): 
 	const data = parseElevenLabsWebhook(payload);
 	const conversationBase = data.conversation;
 
-	let assignmentId: number | null = null;
-	if (data.assignmentId !== null) {
-		const [assignment] = await db
-			.select({ id: assignments.id })
-			.from(assignments)
-			.where(eq(assignments.id, data.assignmentId))
-			.limit(1);
-		assignmentId = assignment?.id ?? null;
-	} else {
-		const matches = await db
-			.select({ id: assignments.id })
-			.from(assignments)
-			.where(eq(assignments.elevenLabsAgentId, conversationBase.agentId))
-			.limit(2);
-		assignmentId = matches.length === 1 ? matches[0].id : null;
-	}
+	// An agent belongs to at most one assignment. A conversation of an agent that
+	// belongs to none, such as one that was disconnected, is not stored.
+	const [assignment] = await db
+		.select({ id: assignments.id })
+		.from(assignments)
+		.where(eq(assignments.elevenLabsAgentId, conversationBase.agentId))
+		.limit(1);
+	const assignmentId = assignment?.id ?? null;
 
 	if (assignmentId === null) {
 		Sentry.captureMessage(
@@ -55,7 +47,6 @@ export async function processElevenLabsPostCall({ db, payload }: StorageInput): 
 				extra: {
 					conversationId: conversationBase.conversationId,
 					agentId: conversationBase.agentId,
-					assignmentId: data.assignmentId,
 				},
 			},
 		);

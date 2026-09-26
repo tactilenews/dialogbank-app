@@ -34,7 +34,11 @@ describe("ElevenLabs Storage", () => {
 		await expect(answersPromise).resolves.toHaveLength(0);
 	});
 
-	it("uses the assigned agent for legacy webhook fallback", async ({ db, expect, schema }) => {
+	it("attributes a conversation to the assignment its agent belongs to", async ({
+		db,
+		expect,
+		schema,
+	}) => {
 		await db.update(schema.assignments).set({
 			elevenLabsAgentId: "agent_test",
 		});
@@ -47,6 +51,7 @@ describe("ElevenLabs Storage", () => {
 	});
 
 	it("processes latest payload format (English IDs)", async ({ db, expect, schema }) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_test" });
 		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload2 });
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({
@@ -82,19 +87,23 @@ describe("ElevenLabs Storage", () => {
 		);
 	});
 
-	it("keeps attribution when an assignment moves to another agent", async ({ db, expect }) => {
+	it("does not store a conversation of an agent that belongs to no assignment", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_test" });
 		const payload = {
 			...samplePayload2,
 			data: {
 				...samplePayload2.data,
-				agent_id: "agent_previous",
-				conversation_id: "conversation_from_previous_agent",
+				agent_id: "agent_disconnected",
+				conversation_id: "conversation_of_disconnected_agent",
 			},
 		};
 
-		await expect(processElevenLabsPostCall({ db, payload })).resolves.toMatchObject({
-			conversationId: "conversation_from_previous_agent",
-		});
+		await expect(processElevenLabsPostCall({ db, payload })).resolves.toBeNull();
+		await expect(db.select().from(schema.conversations)).resolves.toHaveLength(0);
 	});
 
 	it("creates a classification and links it to the answer via classificationId", async ({

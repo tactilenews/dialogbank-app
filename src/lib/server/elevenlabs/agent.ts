@@ -9,6 +9,9 @@ import { z } from "zod";
 import { slugify } from "$lib/slugify";
 
 const QUESTION_KEY_PREFIX = "question_";
+// Earlier versions wrote the assignment id into the agent; configuring an agent
+// removes it, since conversations are attributed by agent now.
+const LEGACY_ASSIGNMENT_ID_KEY = "assignment_id";
 const CLASSIFICATION_KEY_PREFIX = "classification_";
 const WORKFLOW_NODE_PROMPT_PREAMBLE = "Stelle der Person nacheinander diese Fragen:\n\n";
 
@@ -502,7 +505,7 @@ export async function updateElevenLabsAgentQuestions(
 	questions: Question[],
 	existingAgent: AgentReaderResponse,
 	writer: AgentWriter,
-	options?: { promptSupplement?: string | null; assignmentId?: number },
+	options?: { promptSupplement?: string | null },
 ): Promise<string | null> {
 	const existingWorkflow = existingAgent.workflow;
 	const existingNode = existingWorkflow?.nodes[target.workflowNodeId];
@@ -536,20 +539,12 @@ export async function updateElevenLabsAgentQuestions(
 			([key]) =>
 				!key.startsWith(QUESTION_KEY_PREFIX) &&
 				!key.startsWith(CLASSIFICATION_KEY_PREFIX) &&
-				key !== "assignment_id",
+				key !== LEGACY_ASSIGNMENT_ID_KEY,
 		),
 	);
 	const newDataCollection = {
 		...baseDataCollection,
 		...buildQuestionDataCollectionEntries(questions),
-		...(options?.assignmentId === undefined
-			? {}
-			: {
-					assignment_id: {
-						type: "string" as const,
-						constantValue: String(options.assignmentId),
-					},
-				}),
 	};
 
 	const updatedAgent = await writer.update(target.agentId, {
@@ -559,24 +554,6 @@ export async function updateElevenLabsAgentQuestions(
 			dataCollection: newDataCollection,
 			workspaceOverrides: postCallWebhookOverride(target.postCallWebhookId),
 		},
-	});
-	return updatedAgent.versionId ?? null;
-}
-
-export async function removeElevenLabsAgentAssignment(
-	target: ElevenLabsAgentTarget,
-	existingAgent: AgentReaderResponse,
-	writer: AgentWriter,
-): Promise<string | null> {
-	const dataCollection = Object.fromEntries(
-		Object.entries(existingAgent.platformSettings?.dataCollection ?? {}).filter(
-			([key]) => key !== "assignment_id",
-		),
-	);
-
-	const updatedAgent = await writer.update(target.agentId, {
-		branchId: target.branchId,
-		platformSettings: { dataCollection },
 	});
 	return updatedAgent.versionId ?? null;
 }

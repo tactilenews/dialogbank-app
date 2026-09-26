@@ -70,12 +70,6 @@ test.describe("Showcase E2E", () => {
 				analysis: {
 					transcript_summary: "Auto-refresh test summary",
 					data_collection_results: {
-						assignment_id: {
-							data_collection_id: "assignment_id",
-							value: null,
-							json_schema: { type: "string", constant_value: "1" },
-							rationale: "Es gibt keine Erwähnung einer Assignment-ID im Transkript.",
-						},
 						first_name: {
 							data_collection_id: "first_name",
 							value: "Anna",

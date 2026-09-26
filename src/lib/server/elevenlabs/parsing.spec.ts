@@ -59,9 +59,7 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(answers).toHaveLength(0);
 		});
 
-		it("parses the configured constant assignment id without storing it as an answer", ({
-			expect,
-		}) => {
+		it("does not store an assignment id written by earlier versions as an answer", ({ expect }) => {
 			const payload = {
 				...mockPayload,
 				data: {
@@ -80,93 +78,7 @@ describe("ElevenLabs Webhook Parser", () => {
 				},
 			};
 
-			const result = parseElevenLabsWebhook(payload);
-
-			expect(result.assignmentId).toBe(42);
-			expect(result.answers).toHaveLength(0);
-		});
-
-		it("ignores a conflicting client-supplied assignment id", ({ expect }) => {
-			const payload = {
-				...mockPayload,
-				data: {
-					...mockPayload.data,
-					conversation_initiation_client_data: {
-						dynamic_variables: { assignment_id: "99" },
-					},
-					analysis: {
-						...mockPayload.data.analysis,
-						data_collection_results: {
-							assignment_id: {
-								data_collection_id: "assignment_id",
-								value: null,
-								json_schema: { type: "string", constant_value: "42" },
-								rationale: "Es gibt keine Erwähnung einer Assignment-ID im Transkript.",
-							},
-						},
-					},
-				},
-			};
-
-			expect(parseElevenLabsWebhook(payload).assignmentId).toBe(42);
-		});
-
-		it("ignores an assignment id the analysis extracted from the transcript", ({ expect }) => {
-			const payload = {
-				...mockPayload,
-				data: {
-					...mockPayload.data,
-					analysis: {
-						...mockPayload.data.analysis,
-						data_collection_results: {
-							assignment_id: {
-								data_collection_id: "assignment_id",
-								value: "7",
-								json_schema: { type: "string", description: "Die Assignment-ID" },
-								rationale: "Die Person nennt die Assignment-ID 7.",
-							},
-						},
-					},
-				},
-			};
-
-			expect(parseElevenLabsWebhook(payload).assignmentId).toBeNull();
-		});
-
-		it("prefers the configured constant over a value the analysis extracted", ({ expect }) => {
-			const payload = {
-				...mockPayload,
-				data: {
-					...mockPayload.data,
-					analysis: {
-						...mockPayload.data.analysis,
-						data_collection_results: {
-							assignment_id: {
-								data_collection_id: "assignment_id",
-								value: "7",
-								json_schema: { type: "string", constant_value: "42" },
-								rationale: "Die Person nennt die Assignment-ID 7.",
-							},
-						},
-					},
-				},
-			};
-
-			expect(parseElevenLabsWebhook(payload).assignmentId).toBe(42);
-		});
-
-		it("does not use a client-supplied assignment id without a configured result", ({ expect }) => {
-			const payload = {
-				...mockPayload,
-				data: {
-					...mockPayload.data,
-					conversation_initiation_client_data: {
-						dynamic_variables: { assignment_id: "99" },
-					},
-				},
-			};
-
-			expect(parseElevenLabsWebhook(payload).assignmentId).toBeNull();
+			expect(parseElevenLabsWebhook(payload).answers).toHaveLength(0);
 		});
 
 		it("parses real sample data (samplePayload1 - empty results)", ({ expect }) => {
@@ -186,7 +98,6 @@ describe("ElevenLabs Webhook Parser", () => {
 			expect(data.conversation.lastName).toBe("Haarmaan");
 			expect(data.conversation.age).toBe(49);
 			expect(data.conversation.publicationAllowed).toBe(true);
-			expect(data.assignmentId).toBe(1);
 
 			const answer1 = data.answers.find((r) => r.dataCollectionId === "answer_1");
 			expect(answer1).toBeDefined();

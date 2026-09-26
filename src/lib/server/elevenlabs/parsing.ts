@@ -64,7 +64,6 @@ export function parseElevenLabsWebhook(payload: unknown) {
 	let lastName: string | null = null;
 	let age: number | null = null;
 	let publicationAllowed: boolean | null = null;
-	let assignmentId: number | null = null;
 
 	const classificationByIndex: Record<number, string> = {};
 	const rawAnswers: {
@@ -89,10 +88,8 @@ export function parseElevenLabsWebhook(payload: unknown) {
 
 		switch (id) {
 			case "assignment_id":
-				// Post-call analysis does not fill in constant values: `value` is what the
-				// LLM found in the transcript, so the caller could choose it. The constant
-				// Dialogbank configured on the agent comes back in the schema instead.
-				assignmentId ??= parseAssignmentId(result.json_schema?.constant_value);
+				// Written by earlier versions of Dialogbank, not an answer. Conversations
+				// are attributed by agent.
 				break;
 			case "first_name":
 				firstName = val as string;
@@ -127,7 +124,6 @@ export function parseElevenLabsWebhook(payload: unknown) {
 	});
 
 	return {
-		assignmentId,
 		conversation: {
 			agentId: agent_id,
 			conversationId: conversation_id,
@@ -140,10 +136,4 @@ export function parseElevenLabsWebhook(payload: unknown) {
 		},
 		answers: otherAnswers,
 	};
-}
-
-function parseAssignmentId(value: unknown): number | null {
-	const parsed =
-		typeof value === "number" ? value : typeof value === "string" ? Number(value) : NaN;
-	return Number.isInteger(parsed) && parsed > 0 ? parsed : null;
 }
