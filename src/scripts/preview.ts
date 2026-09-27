@@ -9,6 +9,7 @@ const NEON_API_BASE = "https://console.neon.tech/api/v2";
 const INFISICAL_DEFAULT_DOMAIN = "https://app.infisical.com/api";
 const NETLIFY_BUILD_HOOK_PREFIX = "https://api.netlify.com/build_hooks/";
 const NETLIFY_SITE_NAME = "dialogbank";
+const NETLIFY_SITE_ID = `${NETLIFY_SITE_NAME}.netlify.app`;
 
 // The folder whose Netlify sync feeds the `branch-deploy` context. It holds the
 // values of one preview at a time; `netlify.toml` refuses to build any other branch.
@@ -45,6 +46,11 @@ const DOWN_ENVIRONMENT = [
 
 const SYNC_TIMEOUT_MS = 120_000;
 const SYNC_POLL_INTERVAL_MS = 2_000;
+const DEPLOY_APPEAR_TIMEOUT_MS = 120_000;
+const DEPLOY_TIMEOUT_MS = 20 * 60_000;
+const DEPLOY_POLL_INTERVAL_MS = 5_000;
+// Bounds each Netlify call, which the deadlines above cannot interrupt.
+const NETLIFY_CALL_TIMEOUT_MS = 60_000;
 
 type NeonBranch = {
 	id: string;
@@ -404,16 +410,97 @@ function requireBuildHookUrl(): string {
 	return hookUrl;
 }
 
-async function triggerNetlifyBuild(branch: string): Promise<void> {
-	const hookUrl = requireBuildHookUrl();
-	const query = new URLSearchParams({
-		trigger_branch: branch,
-		trigger_title: `pnpm preview:up for ${branch}`,
+type NetlifyDeploy = {
+	id: string;
+	state: string;
+	branch: string | null;
+	title: string | null;
+	skipped: boolean | null;
+	error_message: string | null;
+};
+
+// The signed-in user's own `netlify login` session, like the Infisical CLI
+// session above; no deployment credential is stored anywhere.
+function netlifyApi<T>(operation: string, data: Record<string, unknown>): T {
+	const output = execFileSync("netlify", ["api", operation, "--data", JSON.stringify(data)], {
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "inherit"],
+		timeout: NETLIFY_CALL_TIMEOUT_MS,
 	});
-	const response = await fetch(`${hookUrl}?${query}`, { method: "POST", body: "{}" });
+	return JSON.parse(output) as T;
+}
+
+function requireNetlifySession(): void {
+	try {
+		netlifyApi("getSite", { site_id: NETLIFY_SITE_ID });
+	} catch {
+		throw new Error(
+			`Cannot read the Netlify site ${NETLIFY_SITE_ID}; install the Netlify CLI and run \`netlify login\``,
+		);
+	}
+}
+
+function sleep(ms: number): Promise<void> {
+	return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// The title identifies the deploy the build hook starts, which it does not
+// report itself.
+async function triggerNetlifyBuild(branch: string): Promise<string> {
+	const hookUrl = requireBuildHookUrl();
+	const title = `pnpm preview:up for ${branch} at ${new Date().toISOString()}`;
+	const query = new URLSearchParams({ trigger_branch: branch, trigger_title: title });
+	const response = await fetch(`${hookUrl}?${query}`, {
+		method: "POST",
+		body: "{}",
+		signal: AbortSignal.timeout(NETLIFY_CALL_TIMEOUT_MS),
+	});
 	if (!response.ok) {
 		throw new Error(`Netlify build hook ${response.status}: ${await response.text()}`);
 	}
+	return title;
+}
+
+async function findTriggeredDeploy(branch: string, title: string): Promise<NetlifyDeploy> {
+	const deadline = Date.now() + DEPLOY_APPEAR_TIMEOUT_MS;
+	while (Date.now() < deadline) {
+		const deploys = netlifyApi<NetlifyDeploy[]>("listSiteDeploys", {
+			site_id: NETLIFY_SITE_ID,
+			per_page: 20,
+		});
+		const deploy = deploys.find(
+			(candidate) => candidate.branch === branch && candidate.title === title,
+		);
+		if (deploy) return deploy;
+		await sleep(DEPLOY_POLL_INTERVAL_MS);
+	}
+	throw new Error(`Netlify did not start a deploy for "${title}"`);
+}
+
+// Waits until the new deploy serves the preview, so that `up` only finishes
+// once the preview runs with the values it just wrote.
+async function waitForPreviewDeploy(branch: string, title: string): Promise<void> {
+	let deploy = await findTriggeredDeploy(branch, title);
+	const deadline = Date.now() + DEPLOY_TIMEOUT_MS;
+	let lastState = "";
+	while (Date.now() < deadline) {
+		if (deploy.state !== lastState) {
+			console.log(`Netlify deploy ${deploy.id}: ${deploy.state}`);
+			lastState = deploy.state;
+		}
+		// `netlify.toml` skips branch deploys that do not match PREVIEW_BRANCH. A
+		// skipped deploy can still report the state "ready", but it publishes
+		// nothing, so the skip has to be checked first.
+		if (deploy.skipped || deploy.state === "error" || deploy.state === "rejected") {
+			throw new Error(
+				`Netlify deploy ${deploy.id} did not go live (${deploy.state}): ${deploy.error_message ?? "skipped"}`,
+			);
+		}
+		if (deploy.state === "ready") return;
+		await sleep(DEPLOY_POLL_INTERVAL_MS);
+		deploy = netlifyApi<NetlifyDeploy>("getDeploy", { deploy_id: deploy.id });
+	}
+	throw new Error(`Timed out waiting for Netlify deploy ${deploy.id}`);
 }
 
 async function up(): Promise<void> {
@@ -423,6 +510,7 @@ async function up(): Promise<void> {
 	// `/preview` is taken over from another branch.
 	requireEnvironments(UP_ENVIRONMENT);
 	requireBuildHookUrl();
+	requireNetlifySession();
 	requirePushedBranch(branch);
 	const { id: syncId } = await findPreviewSync();
 	const name = `preview/${branch}`;
@@ -454,8 +542,9 @@ async function up(): Promise<void> {
 	await syncPreviewSecrets(syncId);
 
 	console.log("Triggering Netlify build");
-	await triggerNetlifyBuild(branch);
-	console.log(`Preview building at ${origin}`);
+	const title = await triggerNetlifyBuild(branch);
+	await waitForPreviewDeploy(branch, title);
+	console.log(`Preview live at ${origin}`);
 }
 
 async function down(): Promise<void> {
