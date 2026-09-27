@@ -60,9 +60,14 @@ These variables are used by the application:
 Infisical is the source of truth for application secrets:
 
 - local development commands load `dev` secrets from Infisical
-- test commands load `test` secrets from Infisical
+- tests and E2E load `dev` secrets too, the same values CI uses
+- the preview tooling (`preview:up`, `preview:down`) loads `staging` secrets
 - production secrets are synced from Infisical to Netlify
-- test secrets needed by GitHub Actions are synced from Infisical into GitHub secret stores
+- `dev` secrets needed by GitHub Actions are synced from Infisical into GitHub secret stores
+
+`dev` holds only credentials that are harmless outside the team's machines, since CI and Dependabot receive them. `staging` holds the preview tooling's privileged ones, such as the ElevenLabs key allowed to manage workspace webhooks and the Netlify build hook, and is synced nowhere.
+
+Local development, E2E and previews all start from the staging Neon project (`PARENT_BRANCH_ID`), never from production: their databases hold no production data, and the `dev` credentials that developer machines and CI hold cannot reach production's database. The one deliberate exception is [building and previewing a production bundle](#local-development), which runs on the host with `prod` values against the real database.
 
 ## Local Development
 
@@ -93,7 +98,7 @@ This starts four containers:
 
 `migrate` fails immediately (exit non-zero) if `DATABASE_URL` is missing or migrations fail, rather than letting `web`/`studio` start in a broken state — check `docker compose logs <service>` if a container isn't coming up.
 
-Published ports (`web`, `studio`, and in the e2e stack `db_e2e` and the Playwright UI) bind to `127.0.0.1` only, not Docker's default of every network interface, so none of it is reachable from your local network. The database is an ephemeral copy of production, and Drizzle Studio and Playwright's UI have no authentication. To expose them temporarily (say, to open the app on your phone), set `BIND_ADDR`, e.g. `BIND_ADDR=0.0.0.0 infisical run --env dev -- docker compose up`. The setting belongs to the compose network, so run `docker compose down` first when switching.
+Published ports (`web`, `studio`, and in the e2e stack `db_e2e` and the Playwright UI) bind to `127.0.0.1` only, not Docker's default of every network interface, so none of it is reachable from your local network. The database is an ephemeral copy of the staging database, and Drizzle Studio and Playwright's UI have no authentication. To expose them temporarily (say, to open the app on your phone), set `BIND_ADDR`, e.g. `BIND_ADDR=0.0.0.0 infisical run --env dev -- docker compose up`. The setting belongs to the compose network, so run `docker compose down` first when switching.
 
 After changing dependencies (`package.json` / `pnpm-lock.yaml`), just rebuild and restart: each container re-syncs `node_modules` at startup, since it lives in a volume that survives image rebuilds. If it ever ends up with stale packages anyway, start fresh with `infisical run --env dev -- docker compose up --build --renew-anon-volumes`.
 
@@ -113,7 +118,7 @@ infisical run --env prod -- pnpm run build
 infisical run --env prod -- pnpm run preview
 ```
 
-Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of production, so in the normal case there is nothing new to migrate — `migrate` is then a no-op.
+Because development and E2E use `neon_local`, the local database starts as an ephemeral copy of the staging database, so in the normal case there is nothing new to migrate — `migrate` is then a no-op.
 
 ## Testing
 
@@ -124,28 +129,34 @@ pnpm run test:unit -- --run
 pnpm run check
 ```
 
-Commands that need test environment secrets should run through Infisical:
+Commands that need secrets run through Infisical with the `dev` environment, which CI uses too:
 
 ```sh
-infisical run --env test -- pnpm run test
-infisical run --env test -- pnpm run test:e2e
+infisical run --env dev -- pnpm run test
+infisical run --env dev -- pnpm run test:e2e
 ```
 
 Run the full E2E flow, including the dedicated E2E database, interactively in one step:
 
 ```sh
-infisical run --env test -- docker compose -f compose.e2e.yaml up
+infisical run --env dev -- docker compose up e2e
 ```
 
 This starts `db_e2e`, waits for it to accept connections, applies pending migrations, creates an ephemeral ElevenLabs agent branch, and opens [Playwright's UI mode](https://playwright.dev/docs/test-ui-mode) instead of running tests immediately — open `http://localhost:9323` to pick and run tests interactively. The ElevenLabs branch is deleted again once the container stops (including Ctrl-C).
 
 The `e2e` container reaches the e2e database over the compose network (`db_e2e:5432`, set through `E2E_DATABASE_URL`; the tests default to the host-published `localhost:5433` when it isn't set) and publishes the UI on `127.0.0.1:9323`, like every published port here (see above): it is an unauthenticated runner holding the ElevenLabs and database credentials.
 
-Alternatively, run the services and the test runner separately (useful for repeated local runs without rebuilding the container). Both commands use `--env test`, so `db_e2e` is branched from the test Neon project the tests expect, not the dev one:
+The E2E services belong to the `e2e` profile, so `docker compose up` alone starts only development. To run development and E2E side by side, activate the profile; their ports do not overlap:
 
 ```sh
-infisical run --env test -- docker compose -f compose.e2e.yaml up db_e2e
-infisical run --env test -- pnpm run test:e2e
+infisical run --env dev -- docker compose --profile e2e up
+```
+
+Alternatively, run the services and the test runner separately (useful for repeated local runs without rebuilding the container). Both commands use `--env dev`, so `db_e2e` is branched with the same credentials and fixture agent as in CI; the database runs in the background until `docker compose stop db_e2e`:
+
+```sh
+infisical run --env dev -- docker compose up -d --wait db_e2e
+infisical run --env dev -- pnpm run test:e2e
 ```
 
 ## ElevenLabs Integration
@@ -243,7 +254,7 @@ To show a branch to someone before merging, deploy it as a Netlify branch deploy
 Neon branch and ElevenLabs agent branch. Push the branch, then run from it:
 
 ```sh
-infisical run --env test -- pnpm run preview:up
+infisical run --env staging -- pnpm run preview:up
 ```
 
 The script runs on your machine with your own Infisical and Netlify sessions, so it needs the
@@ -283,7 +294,7 @@ other processes on your machine can briefly see them.
 To tear a preview down, run (defaults to the current branch):
 
 ```sh
-infisical run --env test -- pnpm run preview:down [branch]
+infisical run --env staging -- pnpm run preview:down [branch]
 ```
 
 It deletes the branch's values in Netlify, the Neon branch, and archives the ElevenLabs branch. The branch's last Netlify deploy stays reachable, without a
@@ -303,7 +314,7 @@ GitHub Actions runs linting, type checking, unit tests, E2E tests, and productio
 This repository includes a helper script that syncs selected secrets for GitHub-hosted automation:
 
 ```sh
-infisical run --env test -- pnpm run sync:dependabot-secrets
+infisical run --env dev -- pnpm run sync:dependabot-secrets
 ```
 
 By default, the script syncs test-related values such as:
@@ -317,7 +328,7 @@ By default, the script syncs test-related values such as:
 This supports two distinct flows:
 
 - production secrets are synced from Infisical to Netlify
-- testing secrets are synced from Infisical to GitHub so workflows can run against the test environment
+- `dev` secrets are synced from Infisical to GitHub so workflows run with the same values as local tests
 
 ## Database Seeding
 

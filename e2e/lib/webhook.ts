@@ -2,7 +2,7 @@ import crypto from "node:crypto";
 
 /**
  * Creates an ElevenLabs HMAC-SHA256 signature header for testing.
- * The secret must match ELEVENLABS_WEBHOOK_SECRET in the test environment.
+ * The secret must match ELEVENLABS_WEBHOOK_SECRET in the dev environment.
  */
 export function createElevenLabsSignature(body: string): string {
 	const { env } = process;

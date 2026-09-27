@@ -60,9 +60,10 @@ dialogbank-app/
 
 - **Infisical**: All commands that require secrets (including `dev`, `build`, `preview`, `test`, `test:e2e`, and `db:*`) must be run using Infisical to provide environment variables.
   - **Usage**: `infisical run --env [env] -- [command]`
-  - **Testing**: All test-related scripts (e.g., `test`, `test:e2e`, `vitest`) **must** be run with `--env test`.
+  - **Testing**: All test-related scripts (e.g., `test`, `test:e2e`, `vitest`) **must** be run with `--env dev`, the environment CI uses too.
+  - **Preview tooling**: `preview:up` and `preview:down` run with `--env staging`, which holds their privileged credentials and is synced nowhere.
   - Example: `infisical run --env dev -- pnpm dev`
-  - Example: `infisical run --env test -- pnpm test:e2e`
+  - Example: `infisical run --env dev -- pnpm test:e2e`
   - **CI exception**: GitHub Actions workflows do not use the Infisical CLI. Infisical syncs stable credentials to GitHub Actions secrets, and workflows read them from there. Values generated at runtime (e.g. a preview's `DATABASE_URL`) are passed as step environment variables.
   - **Preview exception**: a preview's own values (`DATABASE_URL`, `ORIGIN`, `BETTER_AUTH_SECRET`, …) exist only as Netlify values of its branch, not in any Infisical environment. `pnpm run preview:seed` reads them from Netlify itself, so it runs without `infisical run`; only `SEED_USER_ACCOUNTS` comes from Infisical, as for `db:seed`.
 
@@ -73,12 +74,12 @@ dialogbank-app/
 E2E tests must be run with Infisical to load environment variables:
 
 ```sh
-infisical --env test run -- pnpm run test:e2e
+infisical --env dev run -- pnpm run test:e2e
 ```
 
 This command:
 
-- Uses Infisical to load secrets from the `test` environment
+- Uses Infisical to load secrets from the `dev` environment
 - Runs the e2e test suite using Playwright
 - Requires a test database configured in Infisical
 
@@ -88,10 +89,10 @@ All test-related scripts require Infisical:
 
 ```sh
 # Unit/component tests
-infisical --env test run -- pnpm run test
+infisical --env dev run -- pnpm run test
 
 # Vitest watch mode
-infisical --env test run -- pnpm run test:watch
+infisical --env dev run -- pnpm run test:watch
 ```
 
 ## Database
@@ -119,7 +120,7 @@ For database operations, always use the appropriate environment:
 # Development
 infisical run --env dev -- pnpm run db:migrate
 
-# Testing (the local e2e database from compose.e2e.yaml, not a secret)
+# Testing (the local e2e database `db_e2e` from compose.yaml, not a secret)
 DATABASE_URL=postgres://neon:npg@localhost:5433/neondb pnpm run db:migrate
 ```
 
