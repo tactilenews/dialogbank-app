@@ -6,18 +6,17 @@ publish = "build"
 [context.production]
 command = "pnpm run db:migrate && pnpm run build"
 
-# Branch deploys receive the values that `pnpm preview:up` last wrote to
-# Infisical `prod` `/preview`, which belong to exactly one branch. Netlify is set
-# to build no branches on push, so only the build hook that `preview:up` calls
-# starts branch deploys. As a second line of defense, any branch other than
-# PREVIEW_BRANCH is skipped, and the build command fails if the skip does not
-# apply. Branches cut before this file existed lack both checks, which is why
-# the Netlify setting matters.
+# Branch deploys receive the values that `pnpm preview:up` wrote to Netlify for
+# their own branch, including PREVIEW_BRANCH. Netlify is set to build no branches
+# on push, so only the build hook that `preview:up` calls starts branch deploys.
+# As a second line of defense, a branch without its own values is skipped, and
+# the build command fails if the skip does not apply. Branches cut before this
+# file existed lack both checks, which is why the Netlify setting matters.
 [context.branch-deploy]
 ignore = 'test "$PREVIEW_BRANCH" != "$BRANCH"'
 command = '''
 if [ "$PREVIEW_BRANCH" != "$BRANCH" ]; then
-  echo "Infisical prod /preview is set up for '$PREVIEW_BRANCH', not '$BRANCH'. Run pnpm preview:up on this branch." >&2
+  echo "Branch '$BRANCH' has no preview values in Netlify. Run pnpm preview:up on this branch." >&2
   exit 1
 fi
 pnpm run db:migrate && pnpm run build
