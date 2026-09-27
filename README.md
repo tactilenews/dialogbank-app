@@ -246,9 +246,10 @@ Neon branch and ElevenLabs agent branch. Push the branch, then run from it:
 infisical run --env test -- pnpm run preview:up
 ```
 
-The script runs on your machine with your own Infisical session; no deployment credentials live
-in CI. It checks the required variables, that the branch is pushed, and that the Infisical sync
-exists before changing anything. Then it:
+The script runs on your machine with your own Infisical and Netlify sessions, so it needs the
+[Netlify CLI](https://docs.netlify.com/cli/get-started/) and `netlify login`; no deployment
+credentials live in CI. It checks the required variables, the Netlify session, that the branch is
+pushed, and that the Infisical sync exists before changing anything. Then it:
 
 1. creates (or reuses) the Neon branch `preview/<branch>` from `PARENT_BRANCH_ID` and an
    ElevenLabs agent branch `preview/<branch>/<timestamp>` from the latest committed version of
@@ -256,7 +257,8 @@ exists before changing anything. Then it:
 2. writes `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_ID` and `ORIGIN` into the
    Infisical `prod` folder `/preview`,
 3. runs that folder's Netlify sync (Netlify's `branch-deploy` context) and waits for it to finish,
-4. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`.
+4. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`, and
+   waits until that deploy is live. It fails when the build fails or `netlify.toml` skips it.
 
 The preview is served at `https://<branch>--dialogbank.netlify.app`, so branch names must be
 lowercase letters, digits, and single dashes. Branch deploys run migrations before building.
