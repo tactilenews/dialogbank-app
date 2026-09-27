@@ -49,6 +49,8 @@ const SYNC_POLL_INTERVAL_MS = 2_000;
 const DEPLOY_APPEAR_TIMEOUT_MS = 120_000;
 const DEPLOY_TIMEOUT_MS = 20 * 60_000;
 const DEPLOY_POLL_INTERVAL_MS = 5_000;
+// Bounds each Netlify call, which the deadlines above cannot interrupt.
+const NETLIFY_CALL_TIMEOUT_MS = 60_000;
 
 type NeonBranch = {
 	id: string;
@@ -423,6 +425,7 @@ function netlifyApi<T>(operation: string, data: Record<string, unknown>): T {
 	const output = execFileSync("netlify", ["api", operation, "--data", JSON.stringify(data)], {
 		encoding: "utf8",
 		stdio: ["ignore", "pipe", "inherit"],
+		timeout: NETLIFY_CALL_TIMEOUT_MS,
 	});
 	return JSON.parse(output) as T;
 }
@@ -447,7 +450,11 @@ async function triggerNetlifyBuild(branch: string): Promise<string> {
 	const hookUrl = requireBuildHookUrl();
 	const title = `pnpm preview:up for ${branch} at ${new Date().toISOString()}`;
 	const query = new URLSearchParams({ trigger_branch: branch, trigger_title: title });
-	const response = await fetch(`${hookUrl}?${query}`, { method: "POST", body: "{}" });
+	const response = await fetch(`${hookUrl}?${query}`, {
+		method: "POST",
+		body: "{}",
+		signal: AbortSignal.timeout(NETLIFY_CALL_TIMEOUT_MS),
+	});
 	if (!response.ok) {
 		throw new Error(`Netlify build hook ${response.status}: ${await response.text()}`);
 	}
