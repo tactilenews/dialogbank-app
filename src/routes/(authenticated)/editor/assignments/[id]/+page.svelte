@@ -16,7 +16,44 @@ let { data, form }: { data: PageData; form: ActionData } = $props();
 
 let nextId = $state(0);
 let submitting = $state(false);
-
+let selectedAgentId = $state(untrack(() => data.assignment.elevenLabsAgentId ?? ""));
+let selectedAgentIsInCatalog = $derived(
+	data.assignment.elevenLabsAgentId
+		? data.availableAgents.some(
+				(catalogAgent: (typeof data.availableAgents)[number]) =>
+					catalogAgent.id === data.assignment.elevenLabsAgentId,
+			)
+		: true,
+);
+let selectedAgent = $derived(
+	data.availableAgents.find(
+		(catalogAgent: (typeof data.availableAgents)[number]) => catalogAgent.id === selectedAgentId,
+	),
+);
+let agentSwitchRequiresDisconnect = $derived(
+	Boolean(
+		selectedAgentId &&
+			data.assignment.elevenLabsAgentId &&
+			selectedAgentId !== data.assignment.elevenLabsAgentId,
+	),
+);
+// Saving configures the agent too, so this only happens when that failed or the
+// assignment was saved before saving did so.
+let agentNeedsConfiguration = $derived(
+	Boolean(
+		data.assignment.elevenLabsAgentId &&
+			(data.assignment.agentConfigurationError ||
+				!data.assignment.agentConfiguredAt ||
+				data.assignment.updatedAt > data.assignment.agentConfiguredAt),
+	),
+);
+let agentIsUpToDate = $derived(
+	Boolean(
+		data.assignment.elevenLabsAgentId &&
+			selectedAgentId === data.assignment.elevenLabsAgentId &&
+			!agentNeedsConfiguration,
+	),
+);
 type NewClassification = { label: string; emoji: string | null };
 
 type QuestionItem = {
@@ -105,9 +142,9 @@ function makeEnhancer() {
 	<div class="mb-6 flex items-center gap-3">
 		<a href={resolve("/editor/assignments")} class="text-sm text-gray-500 hover:text-gray-900">← Einsätze</a>
 		<h1 class="text-3xl font-bold">{data.assignment.name}</h1>
-		{#if data.assignment.isActive}
+		{#if data.assignment.elevenLabsAgentId}
 			<span class="rounded-full bg-green-100 px-3 py-1 text-sm font-medium text-green-700">
-				AKTIV
+				AGENT ZUGEWIESEN
 			</span>
 		{/if}
 	</div>
@@ -296,21 +333,7 @@ function makeEnhancer() {
 						{/if}
 						Speichern
 					</button>
-					<button
-						type="submit"
-						formaction="?/activate"
-						class="flex items-center gap-2 rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
-					>
-						{#if submitting}
-							<svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"></path>
-							</svg>
-						{/if}
-						Aktivieren & Agent konfigurieren
-					</button>
-
-					{#if form?.message}
+					{#if form?.message && form.action !== "connectAgent"}
 						<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">
 							{form.message}
 						</p>
@@ -322,6 +345,100 @@ function makeEnhancer() {
 
 	<div class="mt-6 rounded-lg border bg-white p-6 shadow-md">
 		<h2 class="mb-4 text-lg font-semibold">Aktueller Agent</h2>
+		{#if data.assignment.agentConfigurationError}
+			<p class="mb-4 text-sm text-red-700">{data.assignment.agentConfigurationError}</p>
+		{/if}
+		<p class="mb-4 text-sm text-amber-700">
+			Konfigurieren Sie denselben Agenten nicht gleichzeitig in mehreren Browserfenstern. Der zuletzt
+			abgeschlossene Vorgang bestimmt die Konfiguration in ElevenLabs.
+		</p>
+		{#if data.assignment.agentConfiguredAt}
+			<p class="mb-4 text-xs text-gray-500">
+				Zuletzt konfiguriert: {new Intl.DateTimeFormat("de-DE", {
+					dateStyle: "medium",
+					timeStyle: "short",
+				}).format(new Date(data.assignment.agentConfiguredAt))}
+				{#if data.assignment.elevenLabsAgentVersionId}
+					· Version {data.assignment.elevenLabsAgentVersionId}
+				{/if}
+			</p>
+		{/if}
+		<div class="mb-6">
+			<label for="elevenLabsAgentId" class="mb-1 block text-sm font-medium text-gray-700">
+				Agent
+			</label>
+			<select
+				id="elevenLabsAgentId"
+				name="elevenLabsAgentId"
+				form="assignment-form"
+				bind:value={selectedAgentId}
+				class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
+			>
+				<optgroup label="Kein Agent">
+					<option value="">Kein Agent</option>
+				</optgroup>
+				{#if data.unavailableAgents.length > 0}
+					<optgroup label="Nicht verfügbare Agenten">
+						{#each data.unavailableAgents as catalogAgent (catalogAgent.id)}
+							<option value={catalogAgent.id} disabled>
+								{catalogAgent.name} — {catalogAgent.assignmentName}
+							</option>
+						{/each}
+					</optgroup>
+				{/if}
+				<optgroup label="Verfügbare Agenten">
+					{#if data.assignment.elevenLabsAgentId && !selectedAgentIsInCatalog}
+						<option value={data.assignment.elevenLabsAgentId}>
+							{data.assignment.elevenLabsAgentId}{data.agentCatalogError ? "" : " (nicht im Katalog)"}
+						</option>
+					{/if}
+					{#each data.availableAgents as catalogAgent (catalogAgent.id)}
+						<option value={catalogAgent.id}>{catalogAgent.name}</option>
+					{/each}
+				</optgroup>
+			</select>
+			{#if data.agentCatalogError}
+				<p class="mt-1 text-xs text-red-700">
+					Agentenkatalog konnte nicht geladen werden: {data.agentCatalogError}
+				</p>
+			{:else if data.availableAgents.length === 0 && data.unavailableAgents.length === 0}
+				<p class="mt-1 text-xs text-gray-500">
+					Keine Dialogbank-Agenten gefunden. Markieren Sie geeignete ElevenLabs-Agenten mit dem
+					Tag {data.agentCatalogTag}.
+				</p>
+			{/if}
+
+			<div class="mt-3 flex flex-wrap items-center gap-3">
+			{#if agentIsUpToDate}
+				<p class="text-sm text-gray-600">
+					{selectedAgent?.name ?? selectedAgentId} ist verbunden. Speichern aktualisiert den Agenten.
+				</p>
+			{:else}
+			<button
+				type="submit"
+				form="assignment-form"
+				formaction="?/connectAgent"
+				disabled={submitting || agentSwitchRequiresDisconnect || (!selectedAgentId && !data.assignment.elevenLabsAgentId)}
+				class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
+			>
+				{#if agentSwitchRequiresDisconnect}
+					Aktuellen Agent zuerst trennen
+				{:else if !selectedAgentId && data.assignment.elevenLabsAgentId}
+					Agent trennen
+				{:else if !selectedAgentId}
+					Kein Agent ausgewählt
+				{:else if data.assignment.elevenLabsAgentId === selectedAgentId}
+					{selectedAgent?.name ?? selectedAgentId} neu konfigurieren
+				{:else}
+					{selectedAgent?.name ?? selectedAgentId} verbinden
+				{/if}
+			</button>
+			{/if}
+			{#if form?.message && form.action === "connectAgent"}
+				<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">{form.message}</p>
+			{/if}
+			</div>
+		</div>
 
 		{#if data.agent}
 			<div>
@@ -360,8 +477,8 @@ function makeEnhancer() {
 			</div>
 		{:else}
 			<p class="text-sm text-gray-400">
-				Agent-Konfiguration konnte nicht geladen werden. Stellen Sie sicher, dass
-				ELEVENLABS_AGENT_ID und ELEVENLABS_API_KEY konfiguriert sind.
+				Agent-Konfiguration konnte nicht geladen werden. Wählen Sie einen Agenten aus und
+				stellen Sie sicher, dass ELEVENLABS_API_KEY konfiguriert ist.
 			</p>
 		{/if}
 	</div>

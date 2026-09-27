@@ -1,7 +1,7 @@
 import { describe, it } from "vitest";
 import { ZodError } from "zod";
 import { parseElevenLabsWebhook } from "./parsing";
-import { samplePayload1, samplePayload2 } from "./parsing.spec/data";
+import { legacyAssignmentIdPayload, samplePayload1, samplePayload2 } from "./parsing.spec/data";
 
 describe("ElevenLabs Webhook Parser", () => {
 	const mockPayload = {
@@ -57,6 +57,10 @@ describe("ElevenLabs Webhook Parser", () => {
 			};
 			const { answers } = parseElevenLabsWebhook(emptyPayload);
 			expect(answers).toHaveLength(0);
+		});
+
+		it("does not store an assignment id written by earlier versions as an answer", ({ expect }) => {
+			expect(parseElevenLabsWebhook(legacyAssignmentIdPayload).answers).toHaveLength(0);
 		});
 
 		it("parses real sample data (samplePayload1 - empty results)", ({ expect }) => {

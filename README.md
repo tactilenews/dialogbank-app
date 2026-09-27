@@ -49,6 +49,7 @@ These variables are used by the application:
 - `ORIGIN`: canonical app URL used by auth; if omitted, the app falls back to `URL` or the incoming request origin
 - `ELEVENLABS_API_KEY`: server-side API key used to read agent details
 - `ELEVENLABS_AGENT_ID`: the ElevenLabs conversational agent wired to this app
+- `ELEVENLABS_DIALOGBANK_AGENT_TAG`: the tag that puts an ElevenLabs agent into Dialogbank's catalog (default `dialogbank`). Editors can connect only tagged agents to an assignment, and Dialogbank never writes to an agent without it; removing the tag takes an agent away from Dialogbank
 - `ELEVENLABS_AGENT_BRANCH_NAME`: the agent branch the app reads and writes: `main` in production, `development` in `dev`, and a per-branch name for previews (see [Preview deployments](#preview-deployments)). `main` stands for the agent's main branch, whatever ElevenLabs calls it (some agents call it `Main`); any other branch is looked up by its exact name and created from the main branch if it is missing
 - `ELEVENLABS_POST_CALL_WEBHOOK_ID`: the ElevenLabs workspace webhook that receives the post-call webhooks of the agent branch the app uses, or `none` for no webhook (see [Webhook Wiring](#webhook-wiring))
 - `ELEVENLABS_WEBHOOK_SECRET`: secret used to verify `ElevenLabs-Signature`
@@ -286,10 +287,10 @@ branch is pushed before changing anything. Then it:
    the old webhook's signatures.
 
 The script creates no ElevenLabs branch itself. The preview app creates the agent branch
-`preview/<branch>` from the main branch the first time it reads or writes the agent, just like
-`development` in the `dev` environment, and points it at the preview's webhook right away. So
-editing an assignment in a preview never touches production's `main` branch, and calls on the
-preview never reach production.
+`preview/<branch>` from the main branch on each agent the first time it reads or writes that
+agent, just like `development` in the `dev` environment, and points it at the preview's webhook
+right away. So editing an assignment in a preview never touches production's `main` branches,
+and calls on the preview never reach production.
 
 The preview is served at `https://<branch>--dialogbank.netlify.app`, so branch names must be
 lowercase letters, digits, and single dashes. Branch deploys run migrations before building.
@@ -317,8 +318,9 @@ infisical run --env staging -- pnpm run preview:down [branch]
 ```
 
 It deletes the branch's values and deploys in Netlify, the Neon branch and the preview's webhook,
-and archives the ElevenLabs agent branch. Afterwards, the preview's URL answers 404 instead of
-serving a deploy without its database.
+and archives the `preview/<branch>` agent branch on every agent tagged
+`ELEVENLABS_DIALOGBANK_AGENT_TAG`. Afterwards, the preview's URL answers 404 instead of serving a
+deploy without its database.
 
 To upload sourcemaps from Netlify builds, the deployment environment also needs:
 
