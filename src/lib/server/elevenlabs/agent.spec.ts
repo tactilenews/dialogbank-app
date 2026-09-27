@@ -10,13 +10,16 @@ import {
 	type AgentReaderResponse,
 	buildQuestionDataCollectionEntries,
 	buildWorkflowNodeAdditionalPrompt,
+	type ElevenLabsAgentCatalogEntry,
 	getElevenLabsEditorAgent,
+	isSelectableDialogbankAgent,
+	listElevenLabsDialogbankAgents,
 	parseQuestionsFromDataCollection,
 	parseQuestionsFromWorkflowNodePrompt,
 	type Question,
 	resolveElevenLabsAgentBranchName,
-	resolveElevenLabsAgentTarget,
 	resolveElevenLabsAgentTargetForAgentId,
+	resolveElevenLabsDialogbankAgentTag,
 	resolveElevenLabsPostCallWebhookId,
 	updateElevenLabsAgentQuestions,
 } from "./agent";
@@ -125,44 +128,6 @@ describe("resolveElevenLabsPostCallWebhookId", () => {
 				body: { message: "ELEVENLABS_POST_CALL_WEBHOOK_ID is not configured on the server." },
 			}),
 		);
-	});
-});
-
-describe("resolveElevenLabsAgentTarget", () => {
-	it("resolves the configured agent", async () => {
-		const branchReader = {
-			getMainBranchId: vi.fn().mockResolvedValue("agtbrch_main_123"),
-			getPostCallWebhookId: vi.fn(),
-			setPostCallWebhook: vi.fn(),
-			archive: vi.fn(),
-			list: vi.fn(),
-			get: vi.fn(),
-			create: vi.fn(),
-		};
-
-		await expect(
-			resolveElevenLabsAgentTarget(
-				{
-					ELEVENLABS_AGENT_ID: "agent_main_123",
-					ELEVENLABS_AGENT_BRANCH_NAME: "main",
-					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
-					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
-				},
-				branchReader,
-			),
-		).resolves.toEqual({
-			agentId: "agent_main_123",
-			branchId: "agtbrch_main_123",
-			workflowNodeId: WORKFLOW_NODE_ID,
-			postCallWebhookId: "wh_env",
-		});
-	});
-
-	it("rejects when no agent is configured", async () => {
-		await expect(resolveElevenLabsAgentTarget({})).rejects.toMatchObject({
-			status: 500,
-			body: { message: "ELEVENLABS_AGENT_ID is not configured on the server." },
-		});
 	});
 });
 
@@ -620,6 +585,60 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 	});
 });
 
+describe("isSelectableDialogbankAgent", () => {
+	it("accepts only active agents carrying the required tag", () => {
+		const agent = {
+			id: "agent_dialogbank",
+			name: "Nadia",
+			voiceId: null,
+			tags: ["dialogbank"],
+			archived: false,
+		};
+
+		expect(isSelectableDialogbankAgent(agent, "dialogbank")).toBe(true);
+		expect(isSelectableDialogbankAgent({ ...agent, tags: ["other"] }, "dialogbank")).toBe(false);
+		expect(isSelectableDialogbankAgent({ ...agent, archived: true }, "dialogbank")).toBe(false);
+	});
+});
+
+describe("resolveElevenLabsDialogbankAgentTag", () => {
+	it("returns the configured Dialogbank agent tag", () => {
+		expect(
+			resolveElevenLabsDialogbankAgentTag({
+				ELEVENLABS_DIALOGBANK_AGENT_TAG: "dialogbank-prod",
+			}),
+		).toBe("dialogbank-prod");
+	});
+
+	it("defaults to dialogbank", () => {
+		expect(resolveElevenLabsDialogbankAgentTag({})).toBe("dialogbank");
+	});
+});
+
+describe("listElevenLabsDialogbankAgents", () => {
+	it("loads agents with the configured catalog tag", async () => {
+		const entries: ElevenLabsAgentCatalogEntry[] = [
+			{
+				id: "agent_dialogbank_123",
+				name: "Dialogbank Agent",
+				voiceId: "voice_123",
+				tags: ["dialogbank-prod"],
+				archived: false,
+			},
+		];
+		const list = vi.fn().mockResolvedValue(entries);
+
+		await expect(
+			listElevenLabsDialogbankAgents(
+				{ ELEVENLABS_DIALOGBANK_AGENT_TAG: "dialogbank-prod" },
+				{ list },
+			),
+		).resolves.toEqual(entries);
+
+		expect(list).toHaveBeenCalledWith({ tag: "dialogbank-prod" });
+	});
+});
+
 describe("getElevenLabsEditorAgent", () => {
 	it("reads the configured branch and maps the editor payload", async () => {
 		const prompt = "Stelle der Person nacheinander diese Fragen:\n\n1. Wie alt sind Sie?";
@@ -912,9 +931,9 @@ describe("updateElevenLabsAgentQuestions", () => {
 							};
 							workflow?: unknown;
 						},
-					) => Promise<void>
+					) => Promise<{ versionId?: string }>
 				>()
-				.mockResolvedValue(undefined),
+				.mockResolvedValue({ versionId: "agtvrsn_test" }),
 		};
 	}
 
@@ -964,6 +983,68 @@ describe("updateElevenLabsAgentQuestions", () => {
 		expect(writer.update.mock.calls[0][1].platformSettings?.workspaceOverrides).toEqual({
 			webhooks: { postCallWebhookId },
 		});
+	});
+
+	it("returns the committed agent version", async () => {
+		const writer = makeWriter();
+		const existingAgent: AgentReaderResponse = {
+			name: "Test",
+			conversationConfig: {},
+			workflow: makeWorkflow("Stelle der Person nacheinander diese Fragen:\n\n1. Frage?"),
+		};
+
+		await expect(
+			updateElevenLabsAgentQuestions(agentTarget, [makeQuestion("Frage?")], existingAgent, writer),
+		).resolves.toBe("agtvrsn_test");
+	});
+
+	it.each([
+		["this environment's webhook", "wh_env"],
+		["no webhook", null],
+	])("points the configured branch at %s", async (_, postCallWebhookId) => {
+		const writer = makeWriter();
+		const existingAgent: AgentReaderResponse = {
+			name: "Test",
+			conversationConfig: {},
+			workflow: makeWorkflow("Stelle der Person nacheinander diese Fragen:\n\n1. Frage?"),
+		};
+
+		await updateElevenLabsAgentQuestions(
+			{ ...agentTarget, postCallWebhookId },
+			[makeQuestion("Frage?")],
+			existingAgent,
+			writer,
+		);
+
+		expect(writer.update.mock.calls[0][1].platformSettings?.workspaceOverrides).toEqual({
+			webhooks: { postCallWebhookId },
+		});
+	});
+
+	it("removes an assignment id written by earlier versions and keeps other entries", async () => {
+		const writer = makeWriter();
+		const existingAgent: AgentReaderResponse = {
+			name: "Test",
+			conversationConfig: {},
+			platformSettings: {
+				dataCollection: {
+					assignment_id: { type: "string", constantValue: "42" },
+					first_name: { type: "string", description: "What is the first name?" },
+				},
+			},
+			workflow: makeWorkflow("Stelle der Person nacheinander diese Fragen:\n\n1. Frage?"),
+		};
+
+		await updateElevenLabsAgentQuestions(
+			agentTarget,
+			[makeQuestion("Frage?")],
+			existingAgent,
+			writer,
+		);
+
+		const dataCollection = writer.update.mock.calls[0][1].platformSettings?.dataCollection;
+		expect(dataCollection).not.toHaveProperty("assignment_id");
+		expect(dataCollection).toHaveProperty("first_name");
 	});
 
 	it("preserves all other workflow nodes unchanged", async () => {

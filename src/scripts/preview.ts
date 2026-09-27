@@ -28,14 +28,8 @@ const UP_ENVIRONMENT = [
 	"NEON_PROJECT_ID",
 	"PARENT_BRANCH_ID",
 	"ELEVENLABS_ADMIN_API_KEY",
-	"ELEVENLABS_AGENT_ID",
 ];
-const DOWN_ENVIRONMENT = [
-	"NEON_API_KEY",
-	"NEON_PROJECT_ID",
-	"ELEVENLABS_ADMIN_API_KEY",
-	"ELEVENLABS_AGENT_ID",
-];
+const DOWN_ENVIRONMENT = ["NEON_API_KEY", "NEON_PROJECT_ID", "ELEVENLABS_ADMIN_API_KEY"];
 
 const DEPLOY_TIMEOUT_MS = 20 * 60_000;
 const DEPLOY_POLL_INTERVAL_MS = 5_000;
@@ -207,8 +201,18 @@ function createElevenLabsClient(): ElevenLabsClient {
 	return new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_ADMIN_API_KEY") });
 }
 
-function previewAgentIds(): string[] {
-	return [requireEnvironment("ELEVENLABS_AGENT_ID")];
+// Every agent Dialogbank can select: the preview app creates its branch on each
+// agent it uses. Agents outside that catalog are never touched.
+async function previewAgentIds(client: ElevenLabsClient): Promise<string[]> {
+	const tag = process.env.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
+	const agentIds: string[] = [];
+	let cursor: string | undefined;
+	do {
+		const page = await client.conversationalAi.agents.list({ tags: tag, pageSize: 100, cursor });
+		agentIds.push(...page.agents.map((agent) => agent.agentId));
+		cursor = page.hasMore ? page.nextCursor : undefined;
+	} while (cursor);
+	return agentIds;
 }
 
 // The app creates the agent branch named ELEVENLABS_AGENT_BRANCH_NAME the first
@@ -219,7 +223,7 @@ function previewAgentIds(): string[] {
 async function findPreviewAgentBranches(client: ElevenLabsClient, name: string) {
 	const limit = 100;
 	const found: { agentId: string; branchId: string }[] = [];
-	for (const agentId of previewAgentIds()) {
+	for (const agentId of await previewAgentIds(client)) {
 		const { results } = await client.conversationalAi.agents.branches.list(agentId, {
 			includeArchived: false,
 			limit,

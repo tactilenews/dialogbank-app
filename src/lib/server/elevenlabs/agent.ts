@@ -9,6 +9,9 @@ import { z } from "zod";
 import { slugify } from "$lib/slugify";
 
 const QUESTION_KEY_PREFIX = "question_";
+// Earlier versions wrote the assignment id into the agent; configuring an agent
+// removes it, since conversations are attributed by agent now.
+const LEGACY_ASSIGNMENT_ID_KEY = "assignment_id";
 const CLASSIFICATION_KEY_PREFIX = "classification_";
 const WORKFLOW_NODE_PROMPT_PREAMBLE = "Stelle der Person nacheinander diese Fragen:\n\n";
 
@@ -42,7 +45,7 @@ type AgentWriter = {
 			};
 			workflow?: AgentWorkflowRequestModel;
 		},
-	) => Promise<void>;
+	) => Promise<{ versionId?: string }>;
 };
 
 // `null` removes the branch's override, leaving it without a post-call webhook
@@ -73,11 +76,23 @@ export type AgentBranchReader = {
 	archive: (agentId: string, branchId: string) => Promise<void>;
 };
 
+export type AgentCatalogReader = {
+	list: (request: { tag: string }) => Promise<ElevenLabsAgentCatalogEntry[]>;
+};
+
 export type ElevenLabsAgentTarget = {
 	agentId: string;
 	branchId?: string;
 	workflowNodeId: string;
 	postCallWebhookId: string | null;
+};
+
+export type ElevenLabsAgentCatalogEntry = {
+	id: string;
+	name: string;
+	voiceId: string | null;
+	tags: string[];
+	archived: boolean;
 };
 
 export type ElevenLabsEditorAgent = {
@@ -92,9 +107,37 @@ export type ElevenLabsEnv = {
 	ELEVENLABS_AGENT_ID?: string;
 	ELEVENLABS_AGENT_BRANCH_NAME?: string;
 	ELEVENLABS_API_KEY?: string;
+	ELEVENLABS_DIALOGBANK_AGENT_TAG?: string;
 	ELEVENLABS_POST_CALL_WEBHOOK_ID?: string;
 	ELEVENLABS_WORKFLOW_NODE_ID?: string;
 };
+
+const agentListResponseSchema = z.object({
+	agents: z
+		.array(
+			z.object({
+				agent_id: z.string(),
+				name: z.string(),
+				voice_id: z.string().nullable().optional(),
+				tags: z.array(z.string()).nullable().optional(),
+				archived: z.boolean().optional(),
+			}),
+		)
+		.default([]),
+	has_more: z.boolean().optional(),
+	next_cursor: z.string().nullable().optional(),
+});
+
+export function resolveElevenLabsDialogbankAgentTag(environment: ElevenLabsEnv): string {
+	return environment.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
+}
+
+export function isSelectableDialogbankAgent(
+	agent: ElevenLabsAgentCatalogEntry,
+	requiredTag: string,
+): boolean {
+	return !agent.archived && agent.tags.includes(requiredTag);
+}
 
 // Refers to each agent's main branch, whatever it is called: ElevenLabs names
 // it "Main" on some agents.
@@ -120,17 +163,6 @@ export function resolveElevenLabsPostCallWebhookId(environment: ElevenLabsEnv): 
 		throw error(500, "ELEVENLABS_POST_CALL_WEBHOOK_ID is not configured on the server.");
 	}
 	return webhookId === NO_POST_CALL_WEBHOOK ? null : webhookId;
-}
-
-export async function resolveElevenLabsAgentTarget(
-	environment: ElevenLabsEnv,
-	branchReader?: AgentBranchReader,
-): Promise<ElevenLabsAgentTarget> {
-	const agentId = environment.ELEVENLABS_AGENT_ID;
-	if (!agentId) {
-		throw error(500, "ELEVENLABS_AGENT_ID is not configured on the server.");
-	}
-	return resolveElevenLabsAgentTargetForAgentId(environment, agentId, branchReader);
 }
 
 export async function resolveElevenLabsAgentTargetForAgentId(
@@ -336,6 +368,50 @@ export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentRe
 	};
 }
 
+export function createElevenLabsAgentCatalogReader(environment: ElevenLabsEnv): AgentCatalogReader {
+	const apiKey = environment.ELEVENLABS_API_KEY;
+	if (!apiKey) {
+		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
+	}
+
+	return {
+		list: async ({ tag }) => {
+			const agents: ElevenLabsAgentCatalogEntry[] = [];
+			let cursor: string | undefined;
+
+			do {
+				const url = new URL("https://api.elevenlabs.io/v1/convai/agents");
+				url.searchParams.append("tags", tag);
+				if (cursor) url.searchParams.set("cursor", cursor);
+
+				const response = await fetch(url, {
+					headers: {
+						"xi-api-key": apiKey,
+					},
+				});
+
+				if (!response.ok) {
+					throw error(response.status, `ElevenLabs agents could not be loaded.`);
+				}
+
+				const page = agentListResponseSchema.parse(await response.json());
+				agents.push(
+					...page.agents.map((agent) => ({
+						id: agent.agent_id,
+						name: agent.name,
+						voiceId: agent.voice_id ?? null,
+						tags: agent.tags ?? [],
+						archived: agent.archived ?? false,
+					})),
+				);
+				cursor = page.has_more ? (page.next_cursor ?? undefined) : undefined;
+			} while (cursor);
+
+			return agents.filter((agent) => !agent.archived);
+		},
+	};
+}
+
 function postCallWebhookOverride(postCallWebhookId: string | null): PostCallWebhookOverride {
 	return { webhooks: { postCallWebhookId } };
 }
@@ -364,10 +440,16 @@ export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWr
 	});
 
 	return {
-		update: async (agentId, request) => {
-			await updateAgent(client, agentId, request);
-		},
+		update: async (agentId, request) => updateAgent(client, agentId, request),
 	};
+}
+
+export async function listElevenLabsDialogbankAgents(
+	environment: ElevenLabsEnv,
+	reader = createElevenLabsAgentCatalogReader(environment),
+): Promise<ElevenLabsAgentCatalogEntry[]> {
+	const tag = resolveElevenLabsDialogbankAgentTag(environment);
+	return reader.list({ tag });
 }
 
 export function parseQuestionsFromWorkflowNodePrompt(additionalPrompt: string): string[] {
@@ -482,7 +564,7 @@ export async function updateElevenLabsAgentQuestions(
 	existingAgent: AgentReaderResponse,
 	writer: AgentWriter,
 	options?: { promptSupplement?: string | null },
-): Promise<void> {
+): Promise<string | null> {
 	const existingWorkflow = existingAgent.workflow;
 	const existingNode = existingWorkflow?.nodes[target.workflowNodeId];
 
@@ -515,7 +597,7 @@ export async function updateElevenLabsAgentQuestions(
 			([key]) =>
 				!key.startsWith(QUESTION_KEY_PREFIX) &&
 				!key.startsWith(CLASSIFICATION_KEY_PREFIX) &&
-				key !== "assignment_id",
+				key !== LEGACY_ASSIGNMENT_ID_KEY,
 		),
 	);
 	const newDataCollection = {
@@ -523,7 +605,7 @@ export async function updateElevenLabsAgentQuestions(
 		...buildQuestionDataCollectionEntries(questions),
 	};
 
-	await writer.update(target.agentId, {
+	const updatedAgent = await writer.update(target.agentId, {
 		branchId: target.branchId,
 		workflow: updatedWorkflow,
 		platformSettings: {
@@ -531,4 +613,5 @@ export async function updateElevenLabsAgentQuestions(
 			workspaceOverrides: postCallWebhookOverride(target.postCallWebhookId),
 		},
 	});
+	return updatedAgent.versionId ?? null;
 }

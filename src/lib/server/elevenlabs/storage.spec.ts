@@ -10,6 +10,9 @@ import {
 
 describe("ElevenLabs Storage", () => {
 	it("processes payload with no results", async ({ db, expect, schema }) => {
+		await db.update(schema.assignments).set({
+			elevenLabsAgentId: "agent_test",
+		});
 		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload1 });
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({
@@ -31,7 +34,24 @@ describe("ElevenLabs Storage", () => {
 		await expect(answersPromise).resolves.toHaveLength(0);
 	});
 
+	it("attributes a conversation to the assignment its agent belongs to", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db.update(schema.assignments).set({
+			elevenLabsAgentId: "agent_test",
+		});
+
+		await expect(processElevenLabsPostCall({ db, payload: samplePayload1 })).resolves.toMatchObject(
+			{
+				conversationId: samplePayload1.data.conversation_id,
+			},
+		);
+	});
+
 	it("processes latest payload format (English IDs)", async ({ db, expect, schema }) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_test" });
 		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload2 });
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({
@@ -67,11 +87,33 @@ describe("ElevenLabs Storage", () => {
 		);
 	});
 
+	it("does not store a conversation of an agent that belongs to no assignment", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_test" });
+		const payload = {
+			...samplePayload2,
+			data: {
+				...samplePayload2.data,
+				agent_id: "agent_disconnected",
+				conversation_id: "conversation_of_disconnected_agent",
+			},
+		};
+
+		await expect(processElevenLabsPostCall({ db, payload })).resolves.toBeNull();
+		await expect(db.select().from(schema.conversations)).resolves.toHaveLength(0);
+	});
+
 	it("creates a classification and links it to the answer via classificationId", async ({
 		db,
 		expect,
 		schema,
 	}) => {
+		await db.update(schema.assignments).set({
+			elevenLabsAgentId: "agent_test",
+		});
 		await processElevenLabsPostCall({ db, payload: samplePayload3 });
 
 		const storedClassifications = await db
@@ -92,6 +134,9 @@ describe("ElevenLabs Storage", () => {
 	});
 
 	it("does not store classification_N entries as answer rows", async ({ db, expect, schema }) => {
+		await db.update(schema.assignments).set({
+			elevenLabsAgentId: "agent_test",
+		});
 		await processElevenLabsPostCall({ db, payload: samplePayload3 });
 
 		const storedAnswers = await db.select().from(schema.answers);
@@ -105,6 +150,9 @@ describe("ElevenLabs Storage", () => {
 		expect,
 		schema,
 	}) => {
+		await db.update(schema.assignments).set({
+			elevenLabsAgentId: "agent_test",
+		});
 		const resultPromise = processElevenLabsPostCall({ db, payload: samplePayload4 });
 		await expect(resultPromise).resolves.toEqual(
 			expect.objectContaining({
