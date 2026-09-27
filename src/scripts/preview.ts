@@ -488,13 +488,15 @@ async function waitForPreviewDeploy(branch: string, title: string): Promise<void
 			console.log(`Netlify deploy ${deploy.id}: ${deploy.state}`);
 			lastState = deploy.state;
 		}
-		if (deploy.state === "ready") return;
-		// `netlify.toml` skips branch deploys that do not match PREVIEW_BRANCH.
+		// `netlify.toml` skips branch deploys that do not match PREVIEW_BRANCH. A
+		// skipped deploy can still report the state "ready", but it publishes
+		// nothing, so the skip has to be checked first.
 		if (deploy.skipped || deploy.state === "error" || deploy.state === "rejected") {
 			throw new Error(
 				`Netlify deploy ${deploy.id} did not go live (${deploy.state}): ${deploy.error_message ?? "skipped"}`,
 			);
 		}
+		if (deploy.state === "ready") return;
 		await sleep(DEPLOY_POLL_INTERVAL_MS);
 		deploy = netlifyApi<NetlifyDeploy>("getDeploy", { deploy_id: deploy.id });
 	}
