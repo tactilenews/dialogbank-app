@@ -1,4 +1,5 @@
 import { execFileSync } from "node:child_process";
+import { randomBytes } from "node:crypto";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { selectLatestCommittedVersionId } from "../lib/server/elevenlabs/branch.ts";
 
@@ -7,17 +8,18 @@ const NETLIFY_BUILD_HOOK_PREFIX = "https://api.netlify.com/build_hooks/";
 const NETLIFY_SITE_NAME = "dialogbank";
 const NETLIFY_SITE_ID = `${NETLIFY_SITE_NAME}.netlify.app`;
 
-// The values every preview shares, such as API keys and its own
-// BETTER_AUTH_SECRET. The folder imports `prod` `/`; the values generated for
-// each preview below replace whatever it holds under the same keys.
+// Production's values, which previews share, such as API keys and Sentry
+// settings. The values generated for each preview below replace production's
+// under the same keys.
 const INFISICAL_ENVIRONMENT = "prod";
-const INFISICAL_PREVIEW_PATH = "/preview";
+const INFISICAL_SHARED_PATH = "/";
 
 type GeneratedPreviewValues = {
 	PREVIEW_BRANCH: string;
 	DATABASE_URL: string;
 	ELEVENLABS_AGENT_BRANCH_ID: string;
 	ORIGIN: string;
+	BETTER_AUTH_SECRET: string;
 };
 
 const UP_ENVIRONMENT = [
@@ -253,7 +255,6 @@ async function archiveElevenLabsBranches(branch: string): Promise<void> {
 	}
 }
 
-// Includes the values `/preview` imports from `prod` `/`.
 function readSharedPreviewValues(): Record<string, string> {
 	const secrets = JSON.parse(
 		infisical(
@@ -261,7 +262,7 @@ function readSharedPreviewValues(): Record<string, string> {
 			"--env",
 			INFISICAL_ENVIRONMENT,
 			"--path",
-			INFISICAL_PREVIEW_PATH,
+			INFISICAL_SHARED_PATH,
 			"--format",
 			"json",
 			// Personal overrides would put the operator's own values into the preview.
@@ -269,7 +270,7 @@ function readSharedPreviewValues(): Record<string, string> {
 		),
 	) as { key: string; value: string }[];
 	if (secrets.length === 0) {
-		throw new Error(`Infisical ${INFISICAL_ENVIRONMENT} ${INFISICAL_PREVIEW_PATH} holds no values`);
+		throw new Error(`Infisical ${INFISICAL_ENVIRONMENT} ${INFISICAL_SHARED_PATH} holds no values`);
 	}
 	return Object.fromEntries(secrets.map((secret) => [secret.key, secret.value]));
 }
@@ -293,7 +294,7 @@ type NetlifyDeploy = {
 
 type NetlifyEnvVar = {
 	key: string;
-	values: { context: string; context_parameter?: string }[];
+	values: { context: string; context_parameter?: string; value?: string }[];
 };
 
 // The signed-in user's own `netlify login` session, like the Infisical CLI
@@ -333,18 +334,27 @@ function requireNetlifyAccountId(): string {
 	return netlifyAccountId;
 }
 
-function branchValueKeys(branch: string): string[] {
+function readBranchValues(branch: string): Map<string, string | undefined> {
 	const variables = netlifyApi<NetlifyEnvVar[]>("getEnvVars", {
 		account_id: requireNetlifyAccountId(),
 		site_id: NETLIFY_SITE_ID,
 	});
-	return variables
-		.filter((variable) =>
-			variable.values.some(
-				(value) => value.context === "branch" && value.context_parameter === branch,
-			),
-		)
-		.map((variable) => variable.key);
+	const values = new Map<string, string | undefined>();
+	for (const variable of variables) {
+		const value = variable.values.find(
+			(candidate) => candidate.context === "branch" && candidate.context_parameter === branch,
+		);
+		if (value) values.set(variable.key, value.value);
+	}
+	return values;
+}
+
+// Previews must not share production's signing key. A preview keeps the one an
+// earlier `up` generated, so its sessions survive redeploys.
+function previewAuthSecret(branch: string, productionSecret: string | undefined): string {
+	const existing = readBranchValues(branch).get("BETTER_AUTH_SECRET");
+	if (existing && existing !== productionSecret) return existing;
+	return randomBytes(32).toString("base64url");
 }
 
 // Values for the `branch:<branch>` context apply to that branch's deploys only,
@@ -359,7 +369,7 @@ function writeBranchValues(branch: string, values: Record<string, string>): void
 // Removes the branch's values, including keys an earlier `up` set that the
 // current one no longer does.
 function deleteBranchValues(branch: string, keepKeys: string[] = []): void {
-	for (const key of branchValueKeys(branch).filter((key) => !keepKeys.includes(key))) {
+	for (const key of [...readBranchValues(branch).keys()].filter((key) => !keepKeys.includes(key))) {
 		netlifyCli("env:unset", key, "--context", `branch:${branch}`);
 	}
 }
@@ -450,6 +460,7 @@ async function up(): Promise<void> {
 		DATABASE_URL: databaseUrl,
 		ELEVENLABS_AGENT_BRANCH_ID: elevenLabsBranchId,
 		ORIGIN: origin,
+		BETTER_AUTH_SECRET: previewAuthSecret(branch, sharedValues.BETTER_AUTH_SECRET),
 	};
 	const values = { ...sharedValues, ...generatedValues };
 	console.log(`Writing ${Object.keys(values).length} values to Netlify for branch "${branch}"`);

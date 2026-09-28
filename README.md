@@ -255,9 +255,9 @@ branch is pushed before changing anything. Then it:
    ElevenLabs agent branch `preview/<branch>/<timestamp>` from the latest committed version of
    `ELEVENLABS_AGENT_PARENT_BRANCH_ID`,
 2. writes the preview's values to Netlify as values of the `branch:<branch>` context, which
-   apply to that branch's deploys only: the shared values in the Infisical `prod` folder
-   `/preview` (your personal overrides are ignored), with `PREVIEW_BRANCH`, `DATABASE_URL`,
-   `ELEVENLABS_AGENT_BRANCH_ID` and `ORIGIN` generated for the preview,
+   apply to that branch's deploys only: the shared values of Infisical `prod` `/` (your personal
+   overrides are ignored), with `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_ID`,
+   `ORIGIN` and `BETTER_AUTH_SECRET` generated for the preview,
 3. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`, and
    waits until that deploy is live. It fails when the build fails or `netlify.toml` skips it.
 
@@ -271,10 +271,11 @@ deploy without them (and fails the build if the skip does not apply), so a branc
 against another branch's database or production's. Deploy previews for pull requests are
 skipped altogether.
 
-`/preview` imports the `prod` root folder, so previews share keys such as the ElevenLabs API key
-and Sentry settings with production; `/preview` overrides `BETTER_AUTH_SECRET` so previews and
-production do not share a signing key. The Infisical sync of `prod` `/` writes only to Netlify's
-Production context and leaves the branch values alone.
+Previews share keys such as the ElevenLabs API key and Sentry settings with production, so every
+value in `prod` `/` reaches them unless it is generated for the preview. Each preview gets its own
+`BETTER_AUTH_SECRET`, kept across `preview:up` runs so its sessions survive redeploys, so previews
+and production never share a signing key. The Infisical sync of `prod` `/` writes only to
+Netlify's Production context and leaves the branch values alone.
 
 The Netlify CLI takes the values as command-line arguments, so while `preview:up` sets them,
 other processes on your machine can briefly see them.
