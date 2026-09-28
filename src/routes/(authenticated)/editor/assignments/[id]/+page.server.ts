@@ -596,6 +596,7 @@ async function claimAssignmentAgent(
 	try {
 		selectedAgentIsInCatalog = await isInDialogbankCatalog(selectedAgentId);
 	} catch (cause) {
+		reportAgentError(cause, { assignmentId: id, agentId: selectedAgentId });
 		return {
 			ok: false,
 			status: errorStatus(cause),

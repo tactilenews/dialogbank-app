@@ -821,4 +821,38 @@ describe("/editor/assignments/[id] +page.server", () => {
 			{ extra: { assignmentId: 1, agentId: "agent_current" } },
 		);
 	});
+
+	it("save: reports a catalog that cannot be checked in the form and to Sentry", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		const unavailable = new ElevenLabsError({ message: "ElevenLabs unavailable", statusCode: 503 });
+		elevenLabs.listElevenLabsDialogbankAgents.mockRejectedValue(unavailable);
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		formData.append("elevenLabsAgentId", "agent_available");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({
+			status: 503,
+			data: {
+				message: expect.stringContaining(
+					"Einsatz gespeichert, aber der Agent konnte nicht verbunden werden: Agentenkatalog konnte nicht geprüft werden",
+				),
+			},
+		});
+		expect(sentry.captureException).toHaveBeenCalledWith(unavailable, {
+			extra: { assignmentId: 1, agentId: "agent_available" },
+		});
+	});
 });
