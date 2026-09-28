@@ -8,6 +8,7 @@ import { actions, load } from "./+page.server";
 const elevenLabs = vi.hoisted(() => ({
 	resolveElevenLabsAgentTargetForAgentId: vi.fn(),
 	createElevenLabsAgentReader: vi.fn(),
+	createElevenLabsAgentBranchReader: vi.fn(),
 	createElevenLabsAgentWriter: vi.fn(),
 	listElevenLabsDialogbankAgents: vi.fn(),
 	updateElevenLabsAgentQuestions: vi.fn(),
@@ -30,6 +31,7 @@ beforeEach(() => {
 		postCallWebhookId: null,
 	}));
 	elevenLabs.createElevenLabsAgentReader.mockReturnValue({ get: vi.fn().mockResolvedValue({}) });
+	elevenLabs.createElevenLabsAgentBranchReader.mockReturnValue({});
 	elevenLabs.createElevenLabsAgentWriter.mockReturnValue({ update: vi.fn() });
 	elevenLabs.listElevenLabsDialogbankAgents.mockResolvedValue([
 		{ id: "agent_current", name: "Nadia", voiceId: null, tags: ["dialogbank"], archived: false },
