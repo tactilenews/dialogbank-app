@@ -490,11 +490,41 @@ async function down(): Promise<void> {
 	);
 }
 
+// Seeds a preview's database with `db:seed`, which reads the accounts from
+// SEED_USER_ACCOUNTS as for any other database; only where to seed comes from
+// the preview's Netlify values. Unlike `netlify env:get`, branch values never
+// fall back to another context, so another database cannot be seeded by
+// mistake.
+function seed(): void {
+	const branch = process.argv[3] ?? git("rev-parse", "--abbrev-ref", "HEAD");
+	validateBranchName(branch);
+	const values = readBranchValues(branch);
+	if (values.get("PREVIEW_BRANCH") !== branch) {
+		throw new Error(
+			`Branch "${branch}" has no preview values in Netlify; run pnpm preview:up on it first`,
+		);
+	}
+	const target = Object.fromEntries(
+		["DATABASE_URL", "ORIGIN", "BETTER_AUTH_SECRET"].map((key) => {
+			const value = values.get(key);
+			if (!value) throw new Error(`The preview of "${branch}" has no ${key}`);
+			return [key, value];
+		}),
+	);
+
+	console.log(`Seeding the database of the preview of "${branch}"`);
+	execFileSync("pnpm", ["run", "db:seed"], {
+		stdio: "inherit",
+		env: { ...process.env, ...target },
+	});
+}
+
 async function main() {
 	const action = process.argv[2];
 	if (action === "up") return up();
 	if (action === "down") return down();
-	throw new Error('Expected action "up" or "down"');
+	if (action === "seed") return seed();
+	throw new Error('Expected action "up", "down" or "seed"');
 }
 
 try {

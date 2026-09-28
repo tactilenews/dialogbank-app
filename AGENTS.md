@@ -64,6 +64,7 @@ dialogbank-app/
   - Example: `infisical run --env dev -- pnpm dev`
   - Example: `infisical run --env test -- pnpm test:e2e`
   - **CI exception**: GitHub Actions workflows do not use the Infisical CLI. Infisical syncs stable credentials to GitHub Actions secrets, and workflows read them from there. Values generated at runtime (e.g. a preview's `DATABASE_URL`) are passed as step environment variables.
+  - **Preview exception**: a preview's own values (`DATABASE_URL`, `ORIGIN`, `BETTER_AUTH_SECRET`, …) exist only as Netlify values of its branch, not in any Infisical environment. `pnpm run preview:seed` reads them from Netlify itself, so it runs without `infisical run`; only `SEED_USER_ACCOUNTS` comes from Infisical, as for `db:seed`.
 
 ## Running Tests
 
