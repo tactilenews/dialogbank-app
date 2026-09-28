@@ -16,20 +16,25 @@ describe("/editor/assignments/[id] +page.svelte", () => {
 		expect(document.querySelector('optgroup[label="Verfügbare Agenten"]')).not.toBeNull();
 	});
 
-	it("submits the agent selection with the assignment form", async () => {
+	it("selects the agent in the assignment form, above its only submit button", async () => {
 		render(Page, { props: { data: assignmentEditorPageData, form: {} } });
 
-		await expect
-			.element(page.getByRole("combobox", { name: "Agent" }))
-			.toHaveAttribute("form", "assignment-form");
+		const form = document.querySelector("form");
+		const agentSelect = form?.querySelector('select[name="elevenLabsAgentId"]');
+		const submitButtons = document.querySelectorAll('button[type="submit"]');
+		expect(submitButtons).toHaveLength(1);
+		expect(agentSelect).not.toBeNull();
+		expect(agentSelect?.compareDocumentPosition(submitButtons[0]) ?? 0).toBe(
+			Node.DOCUMENT_POSITION_FOLLOWING,
+		);
+		await expect.element(page.getByRole("button", { name: "Speichern" })).toBeEnabled();
 	});
 
-	it("offers no reconfiguration while the agent is up to date, since saving updates it", async () => {
+	it("says nothing about updating an agent that is up to date", async () => {
 		render(Page, { props: { data: assignmentEditorPageData, form: {} } });
 
-		await expect.element(page.getByText("Nadia ist verbunden.", { exact: false })).toBeVisible();
 		await expect
-			.element(page.getByRole("button", { name: "Nadia neu konfigurieren" }))
+			.element(page.getByText("Speichern aktualisiert ihn.", { exact: false }))
 			.not.toBeInTheDocument();
 	});
 
@@ -37,7 +42,7 @@ describe("/editor/assignments/[id] +page.svelte", () => {
 		["the last configuration failed", { agentConfigurationError: "ElevenLabs unavailable" }],
 		["the assignment changed after it", { updatedAt: new Date("2026-09-21T00:00:00.000Z") }],
 		["it was never configured", { agentConfiguredAt: null }],
-	])("offers reconfiguring the agent when %s", async (_, assignment) => {
+	])("points out that saving updates the agent when %s", async (_, assignment) => {
 		render(Page, {
 			props: {
 				data: {
@@ -49,11 +54,11 @@ describe("/editor/assignments/[id] +page.svelte", () => {
 		});
 
 		await expect
-			.element(page.getByRole("button", { name: "Nadia neu konfigurieren" }))
-			.toBeEnabled();
+			.element(page.getByText("Speichern aktualisiert ihn.", { exact: false }))
+			.toBeVisible();
 	});
 
-	it("shows configuration errors and the concurrency warning", async () => {
+	it("shows configuration errors", async () => {
 		render(Page, {
 			props: {
 				data: {
@@ -68,9 +73,6 @@ describe("/editor/assignments/[id] +page.svelte", () => {
 		});
 
 		await expect.element(page.getByText("ElevenLabs unavailable")).toBeVisible();
-		await expect
-			.element(page.getByText(/nicht gleichzeitig in mehreren Browserfenstern/))
-			.toBeVisible();
 	});
 
 	it("reports a catalog that failed to load instead of calling it empty", async () => {
