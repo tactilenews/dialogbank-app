@@ -64,6 +64,7 @@ export type AgentBranchReader = {
 		agentId: string,
 		request: { parentVersionId: string; name: string; description: string },
 	) => Promise<{ createdBranchId: string }>;
+	getPostCallWebhookId: (agentId: string, branchId: string) => Promise<string | null>;
 	setPostCallWebhook: (
 		agentId: string,
 		branchId: string,
@@ -177,6 +178,10 @@ export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): A
 		archive: async (agentId, branchId) => {
 			await client.conversationalAi.agents.branches.update(agentId, branchId, { isArchived: true });
 		},
+		getPostCallWebhookId: async (agentId, branchId) => {
+			const agent = await client.conversationalAi.agents.get(agentId, { branchId });
+			return agent.platformSettings?.workspaceOverrides?.webhooks?.postCallWebhookId ?? null;
+		},
 		setPostCallWebhook: async (agentId, branchId, postCallWebhookId) => {
 			await updateAgent(client, agentId, {
 				branchId,
@@ -208,6 +213,20 @@ function selectLatestCommittedVersionId(
 	return latestVersion.id;
 }
 
+// A branch that already exists may still carry the webhook it inherited from the
+// main branch, such as one created before this check, by E2E or by hand. It is
+// read on every resolve and only written when it differs.
+async function ensurePostCallWebhook(
+	agentId: string,
+	branchId: string,
+	postCallWebhookId: string | null,
+	reader: AgentBranchReader,
+): Promise<void> {
+	if ((await reader.getPostCallWebhookId(agentId, branchId)) !== postCallWebhookId) {
+		await reader.setPostCallWebhook(agentId, branchId, postCallWebhookId);
+	}
+}
+
 async function requireMainBranchId(agentId: string, reader: AgentBranchReader): Promise<string> {
 	const mainBranchId = await reader.getMainBranchId(agentId);
 	if (!mainBranchId) {
@@ -224,7 +243,10 @@ async function findOrCreateElevenLabsBranch(
 ): Promise<string> {
 	const branches = await reader.list(agentId);
 	const existing = branches.find((branch) => !branch.isArchived && branch.name === branchName);
-	if (existing) return existing.id;
+	if (existing) {
+		await ensurePostCallWebhook(agentId, existing.id, postCallWebhookId, reader);
+		return existing.id;
+	}
 
 	const mainBranchDetails = await reader.get(agentId, await requireMainBranchId(agentId, reader));
 	const parentVersionId = selectLatestCommittedVersionId(

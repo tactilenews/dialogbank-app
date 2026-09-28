@@ -280,7 +280,6 @@ async function provisionPreviewWebhook(
 			webhookId,
 			secret,
 			replacedIds: existingIds.filter((id) => id !== webhookId),
-			created: false,
 		};
 	}
 
@@ -296,7 +295,6 @@ async function provisionPreviewWebhook(
 		webhookId: created.webhookId,
 		secret: created.webhookSecret,
 		replacedIds: existingIds,
-		created: true,
 	};
 }
 
@@ -560,10 +558,10 @@ async function up(): Promise<void> {
 	const title = await triggerNetlifyBuild(branch);
 	await waitForPreviewDeploy(branch, title);
 
-	if (webhook.created) {
-		console.log("Switching the preview's agent branches to the new webhook");
-		await switchPreviewBranchesToWebhook(client, name, webhook.webhookId);
-	}
+	// On every run, not only when the webhook is new: a run that failed before
+	// this point may have left the branches on a webhook this one now replaces.
+	console.log("Pointing the preview's agent branches at its webhook");
+	await switchPreviewBranchesToWebhook(client, name, webhook.webhookId);
 	await deletePreviewWebhooks(client, webhook.replacedIds);
 	console.log(`Preview live at ${origin}`);
 }

@@ -132,6 +132,7 @@ describe("resolveElevenLabsAgentTarget", () => {
 	it("resolves the configured agent", async () => {
 		const branchReader = {
 			getMainBranchId: vi.fn().mockResolvedValue("agtbrch_main_123"),
+			getPostCallWebhookId: vi.fn(),
 			setPostCallWebhook: vi.fn(),
 			archive: vi.fn(),
 			list: vi.fn(),
@@ -184,6 +185,7 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 		} = overrides;
 		return {
 			getMainBranchId: vi.fn().mockResolvedValue(mainBranchId),
+			getPostCallWebhookId: vi.fn().mockResolvedValue("wh_env"),
 			setPostCallWebhook: vi.fn().mockResolvedValue(undefined),
 			archive: vi.fn().mockResolvedValue(undefined),
 			list: vi.fn().mockResolvedValue(branches),
@@ -264,6 +266,57 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 			postCallWebhookId: "wh_env",
 		});
 		expect(branchReader.create).not.toHaveBeenCalled();
+	});
+
+	it("points an existing branch still on the main branch's webhook at this environment's", async () => {
+		const branchReader = createBranchReader({
+			branches: [
+				{ id: "agtbrch_main_123", name: "Main", isArchived: false },
+				{ id: "agtbrch_dev_123", name: "development", isArchived: false },
+			],
+		});
+		branchReader.getPostCallWebhookId.mockResolvedValue("wh_production");
+
+		await resolveElevenLabsAgentTargetForAgentId(
+			{
+				ELEVENLABS_AGENT_BRANCH_NAME: "development",
+				ELEVENLABS_POST_CALL_WEBHOOK_ID: "none",
+				ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+			},
+			"agent_main_123",
+			branchReader,
+		);
+
+		expect(branchReader.getPostCallWebhookId).toHaveBeenCalledWith(
+			"agent_main_123",
+			"agtbrch_dev_123",
+		);
+		expect(branchReader.setPostCallWebhook).toHaveBeenCalledWith(
+			"agent_main_123",
+			"agtbrch_dev_123",
+			null,
+		);
+	});
+
+	it("leaves an existing branch alone that already uses this environment's webhook", async () => {
+		const branchReader = createBranchReader({
+			branches: [
+				{ id: "agtbrch_main_123", name: "Main", isArchived: false },
+				{ id: "agtbrch_dev_123", name: "development", isArchived: false },
+			],
+		});
+
+		await resolveElevenLabsAgentTargetForAgentId(
+			{
+				ELEVENLABS_AGENT_BRANCH_NAME: "development",
+				ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
+				ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+			},
+			"agent_main_123",
+			branchReader,
+		);
+
+		expect(branchReader.setPostCallWebhook).not.toHaveBeenCalled();
 	});
 
 	it("ignores archived branches with the configured name", async () => {

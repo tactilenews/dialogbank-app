@@ -187,7 +187,7 @@ ElevenLabs sends post-call webhooks to:
 
 The app expects the `ElevenLabs-Signature` header and verifies it with `ELEVENLABS_WEBHOOK_SECRET`.
 
-Each environment registers its URL as a workspace webhook in ElevenLabs and sets its ID as `ELEVENLABS_POST_CALL_WEBHOOK_ID`, together with the webhook's signing secret as `ELEVENLABS_WEBHOOK_SECRET`. The app points every agent branch it creates or configures at that webhook: a new branch starts as a copy of the agent's main branch, and would otherwise send its conversations to production. `none` removes the branch's webhook instead, which E2E uses, since the tests post signed webhooks themselves. Previews register and delete their webhook themselves (see [Preview deployments](#preview-deployments)).
+Each environment registers its URL as a workspace webhook in ElevenLabs and sets its ID as `ELEVENLABS_POST_CALL_WEBHOOK_ID`, together with the webhook's signing secret as `ELEVENLABS_WEBHOOK_SECRET`. The app points every agent branch it uses at that webhook: it sets it on a branch it creates, corrects it on an existing branch that uses another one, and sets it again whenever it configures the agent. A new branch starts as a copy of the agent's main branch, and would otherwise send its conversations to production. `none` removes the branch's webhook instead, which E2E uses, since the tests post signed webhooks themselves. Previews register and delete their webhook themselves (see [Preview deployments](#preview-deployments)).
 
 After verification, the payload is parsed and stored as:
 
@@ -281,9 +281,9 @@ branch is pushed before changing anything. Then it:
    and `BETTER_AUTH_SECRET` generated for the preview,
 4. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`, and
    waits until that deploy is live. It fails when the build fails or `netlify.toml` skips it.
-   Only then does it point existing `preview/<branch>` agent branches at a new webhook and delete
-   the old one: until the new deploy is live, the running one can only verify the old webhook's
-   signatures.
+   Only then does it point the `preview/<branch>` agent branches at the preview's webhook and
+   delete any webhook it replaced: until the new deploy is live, the running one can only verify
+   the old webhook's signatures.
 
 The script creates no ElevenLabs branch itself. The preview app creates the agent branch
 `preview/<branch>` from the main branch the first time it reads or writes the agent, just like
