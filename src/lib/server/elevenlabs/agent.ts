@@ -99,6 +99,7 @@ export type ElevenLabsEnv = {
 // Refers to each agent's main branch, whatever it is called: ElevenLabs names
 // it "Main" on some agents.
 const MAIN_BRANCH_NAME = "main";
+const BRANCH_LIST_LIMIT = 100;
 
 export function resolveElevenLabsAgentBranchName(environment: ElevenLabsEnv): string {
 	const branchName = environment.ELEVENLABS_AGENT_BRANCH_NAME?.trim();
@@ -167,7 +168,7 @@ export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): A
 		list: async (agentId) => {
 			const response = await client.conversationalAi.agents.branches.list(agentId, {
 				includeArchived: false,
-				limit: 100,
+				limit: BRANCH_LIST_LIMIT,
 			});
 			return response.results;
 		},
@@ -246,6 +247,14 @@ async function findOrCreateElevenLabsBranch(
 	if (existing) {
 		await ensurePostCallWebhook(agentId, existing.id, postCallWebhookId, reader);
 		return existing.id;
+	}
+	// ElevenLabs cannot page past one response, so a full one may just not show
+	// the branch, and creating it would fail on the name every time.
+	if (branches.length >= BRANCH_LIST_LIMIT) {
+		throw error(
+			500,
+			`ElevenLabs agent ${agentId} has ${BRANCH_LIST_LIMIT}+ active branches; archive unused ones first.`,
+		);
 	}
 
 	const mainBranchDetails = await reader.get(agentId, await requireMainBranchId(agentId, reader));

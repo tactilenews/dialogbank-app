@@ -14,6 +14,7 @@ import {
 	type AgentReaderResponse,
 	createElevenLabsAgentReader,
 	createElevenLabsAgentWriter,
+	type ElevenLabsAgentTarget,
 	type ElevenLabsEditorAgent,
 	getElevenLabsEditorAgent,
 	type Question,
@@ -331,12 +332,15 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				.filter(Boolean),
 		}));
 
-		const agentTarget = await resolveElevenLabsAgentTarget(process.env);
 		const reader = createElevenLabsAgentReader(process.env);
 		const writer = createElevenLabsAgentWriter(process.env);
 
+		// Resolving the branch may list, create or update branches in ElevenLabs,
+		// whose failures get the same form message as reading the agent.
+		let agentTarget: ElevenLabsAgentTarget;
 		let existingAgent: AgentReaderResponse;
 		try {
+			agentTarget = await resolveElevenLabsAgentTarget(process.env);
 			existingAgent = await reader.get(agentTarget.agentId, { branchId: agentTarget.branchId });
 		} catch (e) {
 			if (!(e instanceof ElevenLabsError)) throw e;

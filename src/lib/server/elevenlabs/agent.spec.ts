@@ -319,6 +319,32 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 		expect(branchReader.setPostCallWebhook).not.toHaveBeenCalled();
 	});
 
+	it("refuses to create a branch that a full branch list may just not show", async () => {
+		const branchReader = createBranchReader({
+			branches: Array.from({ length: 100 }, (_, index) => ({
+				id: `agtbrch_${index}`,
+				name: `other-${index}`,
+				isArchived: false,
+			})),
+		});
+
+		await expect(
+			resolveElevenLabsAgentTargetForAgentId(
+				{
+					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
+					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
+					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+				},
+				"agent_main_123",
+				branchReader,
+			),
+		).rejects.toMatchObject({
+			status: 500,
+			body: { message: expect.stringContaining("100+ active branches") },
+		});
+		expect(branchReader.create).not.toHaveBeenCalled();
+	});
+
 	it("ignores archived branches with the configured name", async () => {
 		const branchReader = createBranchReader({
 			branches: [
