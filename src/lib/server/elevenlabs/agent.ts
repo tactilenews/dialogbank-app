@@ -178,10 +178,12 @@ export async function resolveElevenLabsAgentTargetForAgentId(
 	return { agentId, branchId, workflowNodeId, postCallWebhookId };
 }
 
-// Netlify ends a function after about ten seconds, and the SDK waits up to four
-// minutes and retries twice by default. A hanging ElevenLabs request would then
-// end in a generic error page; with a limit below Netlify's, the page reports
-// the failure itself, and reloading it is the retry.
+// The SDK waits up to four minutes per request and retries twice by default,
+// while Netlify ends a function after 60 seconds. A hanging ElevenLabs request
+// would keep the editor waiting and then end in a generic error page. Failing
+// after eight seconds lets the page report the failure itself, and reloading it
+// is the retry. The limit is per request: an operation of several requests that
+// are each slow but succeed can still take longer.
 export const ELEVENLABS_REQUEST_TIMEOUT_SECONDS = 8;
 
 export function createElevenLabsClient(apiKey: string): ElevenLabsClient {

@@ -19,7 +19,7 @@ const {
 } = await import("./agent");
 
 describe("ElevenLabs clients of the app", () => {
-	it("give up before Netlify ends the function, without retrying", () => {
+	it("give up on a hanging request after eight seconds, without retrying", () => {
 		const environment = { ELEVENLABS_API_KEY: "api-key" };
 
 		createElevenLabsAgentReader(environment);
