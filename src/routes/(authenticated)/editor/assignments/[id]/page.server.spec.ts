@@ -122,7 +122,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		await expect(
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
-		).resolves.toMatchObject({ success: true, action: "save" });
+		).resolves.toMatchObject({ success: true });
 
 		const pro = await db.query.classifications.findFirst({
 			where: (c, { eq }) => eq(c.key, "assignpro"),
@@ -182,11 +182,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 		]);
 	});
 
-	it("connectAgent: rejects an agent owned by another assignment", async ({
-		db,
-		expect,
-		schema,
-	}) => {
+	it("save: rejects an agent owned by another assignment", async ({ db, expect, schema }) => {
 		await db.insert(schema.assignments).values({
 			name: "Another Assignment",
 			slug: "another-assignment",
@@ -206,12 +202,12 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 
 		await expect(
-			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
 		).resolves.toMatchObject({
 			status: 409,
 			data: {
-				action: "connectAgent",
-				message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
+				message:
+					"Einsatz gespeichert, aber der Agent konnte nicht verbunden werden: Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
 			},
 		});
 
@@ -252,7 +248,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		await expect(
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
-		).resolves.toMatchObject({ success: true, action: "save" });
+		).resolves.toMatchObject({ success: true });
 
 		const created = await db.query.classifications.findMany({
 			where: (c, { eq }) => eq(c.key, "assign-pro"),
@@ -327,7 +323,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		await expect(
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
-		).resolves.toMatchObject({ success: true, action: "save" });
+		).resolves.toMatchObject({ success: true });
 
 		const links = await db.select().from(schema.questionClassifications);
 		expect(links).toHaveLength(1);
@@ -369,18 +365,21 @@ describe("/editor/assignments/[id] +page.server", () => {
 		expect(remaining[0].text).toBe("Nur eine Frage");
 	});
 
-	it("save: configures the connected agent, not the one selected in the form", async ({
+	it("save: switches to the selected agent without disconnecting the current one first", async ({
 		db,
 		expect,
 		schema,
 	}) => {
 		await db
 			.update(schema.assignments)
-			.set({ elevenLabsAgentId: "agent_current" })
+			.set({
+				elevenLabsAgentId: "agent_current",
+				elevenLabsAgentVersionId: "agtvrsn_current",
+			})
 			.where(eq(schema.assignments.id, 1));
 		const formData = new FormData();
 		formData.append("name", "Standard");
-		formData.append("elevenLabsAgentId", "agent_replacement");
+		formData.append("elevenLabsAgentId", "agent_available");
 		formData.append("questions", "Frage 1");
 		formData.append("question_classification_ids", "[]");
 		formData.append("question_new_classifications", "[]");
@@ -396,15 +395,17 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		await expect(
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
-		).resolves.toMatchObject({
+		).resolves.toEqual({
 			success: true,
-			action: "save",
+			message: "Einsatz gespeichert und Agent verbunden.",
 		});
-		const assignment = await db.query.assignments.findFirst({
-			where: (row, { eq }) => eq(row.id, 1),
+		await expect(
+			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, 1) }),
+		).resolves.toMatchObject({
+			elevenLabsAgentId: "agent_available",
+			elevenLabsAgentVersionId: "agtvrsn_new",
 		});
-		expect(assignment?.elevenLabsAgentId).toBe("agent_current");
-		expect(elevenLabs.resolveElevenLabsAgentTargetForAgentId).toHaveBeenCalledWith(
+		expect(elevenLabs.resolveElevenLabsAgentTargetForAgentId).not.toHaveBeenCalledWith(
 			expect.anything(),
 			"agent_current",
 		);
@@ -432,7 +433,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		await expect(
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
-		).resolves.toMatchObject({ success: true, action: "save" });
+		).resolves.toMatchObject({ success: true });
 
 		const assignment = await db.query.assignments.findFirst({
 			where: (row, { eq }) => eq(row.id, 1),
@@ -454,7 +455,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 
 		await expect(
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
-		).resolves.toEqual({ success: true, action: "save", message: "Einsatz gespeichert." });
+		).resolves.toEqual({ success: true, message: "Einsatz gespeichert." });
 		expect(elevenLabs.updateElevenLabsAgentQuestions).not.toHaveBeenCalled();
 	});
 
@@ -486,7 +487,6 @@ describe("/editor/assignments/[id] +page.server", () => {
 			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
 		).resolves.toEqual({
 			success: true,
-			action: "save",
 			message: "Einsatz gespeichert und Agent aktualisiert.",
 		});
 
@@ -535,7 +535,6 @@ describe("/editor/assignments/[id] +page.server", () => {
 		).resolves.toMatchObject({
 			status: 503,
 			data: {
-				action: "save",
 				message: expect.stringMatching(
 					/^Einsatz gespeichert, aber der Agent konnte nicht aktualisiert werden: .*ElevenLabs unavailable/,
 				),
@@ -552,7 +551,56 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 	});
 
-	it("connectAgent: saves the assignment before configuring the new agent with it", async ({
+	it("save: flags the agent's new owner when the agent changed hands while being configured", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_current" })
+			.where(eq(schema.assignments.id, 1));
+		const [newOwner] = await db
+			.insert(schema.assignments)
+			.values({ name: "Another Assignment", slug: "another-assignment" })
+			.returning();
+		elevenLabs.updateElevenLabsAgentQuestions.mockImplementation(async () => {
+			await db
+				.update(schema.assignments)
+				.set({ elevenLabsAgentId: null })
+				.where(eq(schema.assignments.id, 1));
+			await db
+				.update(schema.assignments)
+				.set({ elevenLabsAgentId: "agent_current", agentConfiguredAt: new Date() })
+				.where(eq(schema.assignments.id, newOwner.id));
+			return "agtvrsn_new";
+		});
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({
+			status: 409,
+			data: {
+				message:
+					"Einsatz gespeichert, aber der Agent konnte nicht aktualisiert werden: Der Agent wurde während des Speicherns einem anderen Einsatz zugewiesen.",
+			},
+		});
+		await expect(
+			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, newOwner.id) }),
+		).resolves.toMatchObject({ elevenLabsAgentId: "agent_current", agentConfiguredAt: null });
+	});
+
+	it("save: saves the assignment before configuring the new agent with it", async ({
 		db,
 		expect,
 		schema,
@@ -564,7 +612,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 		formData.append("question_classification_ids", "[]");
 		formData.append("question_new_classifications", "[]");
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/assignments/1?/connectAgent", {
+			request: new Request("http://localhost/editor/assignments/1?/save", {
 				method: "POST",
 				body: formData,
 			}),
@@ -573,10 +621,9 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 
 		await expect(
-			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
 		).resolves.toEqual({
 			success: true,
-			action: "connectAgent",
 			message: "Einsatz gespeichert und Agent verbunden.",
 		});
 
@@ -596,15 +643,12 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 	});
 
-	it("connectAgent: rejects disconnecting when no agent is connected", async ({
-		db,
-		expect,
-		schema,
-	}) => {
+	it("save: saves an assignment that stays without an agent", async ({ db, expect, schema }) => {
 		const formData = new FormData();
 		formData.append("name", "Standard");
+		formData.append("elevenLabsAgentId", "");
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/assignments/1?/connectAgent", {
+			request: new Request("http://localhost/editor/assignments/1?/save", {
 				method: "POST",
 				body: formData,
 			}),
@@ -613,14 +657,9 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 
 		await expect(
-			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
-		).resolves.toMatchObject({
-			status: 400,
-			data: {
-				action: "connectAgent",
-				message: "Dem Einsatz ist kein Agent zugewiesen.",
-			},
-		});
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toEqual({ success: true, message: "Einsatz gespeichert." });
+		expect(elevenLabs.listElevenLabsDialogbankAgents).not.toHaveBeenCalled();
 	});
 
 	it("load: does not resolve an agent outside the catalog, which could create a branch on it", async ({
@@ -669,7 +708,6 @@ describe("/editor/assignments/[id] +page.server", () => {
 		).resolves.toMatchObject({
 			status: 409,
 			data: {
-				action: "save",
 				message:
 					"Einsatz gespeichert, aber der Agent konnte nicht aktualisiert werden: Der Agent ist nicht mit dem Tag dialogbank für die Dialogbank freigegeben.",
 			},
@@ -685,7 +723,7 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 	});
 
-	it("connectAgent: disconnecting only detaches the agent in the database", async ({
+	it("save: disconnecting only detaches the agent in the database", async ({
 		db,
 		expect,
 		schema,
@@ -696,8 +734,9 @@ describe("/editor/assignments/[id] +page.server", () => {
 			.where(eq(schema.assignments.id, 1));
 		const formData = new FormData();
 		formData.append("name", "Standard");
+		formData.append("elevenLabsAgentId", "");
 		const event = createRequestEvent({
-			request: new Request("http://localhost/editor/assignments/1?/connectAgent", {
+			request: new Request("http://localhost/editor/assignments/1?/save", {
 				method: "POST",
 				body: formData,
 			}),
@@ -706,10 +745,9 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 
 		await expect(
-			actions.connectAgent(event as unknown as Parameters<typeof actions.connectAgent>[0]),
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
 		).resolves.toEqual({
 			success: true,
-			action: "connectAgent",
 			message: "Einsatz gespeichert und Agent getrennt.",
 		});
 		expect(elevenLabs.listElevenLabsDialogbankAgents).not.toHaveBeenCalled();

@@ -437,8 +437,8 @@ function parseAssignmentId(rawId: string): number {
 	return id;
 }
 
-// Every action on the page submits the assignment form, so what the editor sees
-// is what gets saved, and what gets configured on the agent.
+// Saving submits the whole assignment form, so what the editor sees is what gets
+// saved, and what gets configured on the agent.
 async function saveAssignmentForm(db: DbClient, id: number, formData: FormData) {
 	const name = (formData.get("name") as string | null)?.trim();
 	if (!name) return fail(400, { message: "Name ist erforderlich." });
@@ -507,7 +507,7 @@ async function configureAssignmentAgent(
 		// Sharing one timestamp lets the page tell whether the assignment changed
 		// after its agent was last configured.
 		const configuredAt = new Date();
-		await db
+		const configuredAssignments = await db
 			.update(assignments)
 			.set({
 				elevenLabsAgentVersionId: versionId,
@@ -515,7 +515,17 @@ async function configureAssignmentAgent(
 				agentConfigurationError: null,
 				updatedAt: configuredAt,
 			})
-			.where(ownedByAgent);
+			.where(ownedByAgent)
+			.returning();
+		if (configuredAssignments.length === 0) {
+			// The agent changed hands while it was being written, so it may now carry
+			// this assignment's configuration instead of its new owner's.
+			await db
+				.update(assignments)
+				.set({ agentConfiguredAt: null })
+				.where(eq(assignments.elevenLabsAgentId, agentId));
+			throw error(409, "Der Agent wurde während des Speicherns einem anderen Einsatz zugewiesen.");
+		}
 		return { ok: true };
 	} catch (cause) {
 		const message = describeError(cause);
@@ -526,9 +536,10 @@ async function configureAssignmentAgent(
 }
 
 // Disconnecting only changes the database: conversations are attributed by
-// agent, so the agent's configuration needs no cleanup.
-async function disconnectAssignmentAgent(db: DbClient, id: number, agentId: string) {
-	await db
+// agent, so the agent's configuration needs no cleanup. It disconnects whichever
+// agent the assignment has by now, since "Kein Agent" is what the editor chose.
+async function disconnectAssignmentAgent(db: DbClient, id: number): Promise<boolean> {
+	const disconnectedAssignments = await db
 		.update(assignments)
 		.set({
 			elevenLabsAgentId: null,
@@ -536,7 +547,78 @@ async function disconnectAssignmentAgent(db: DbClient, id: number, agentId: stri
 			agentConfiguredAt: null,
 			agentConfigurationError: null,
 		})
-		.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, agentId)));
+		.where(and(eq(assignments.id, id), isNotNull(assignments.elevenLabsAgentId)))
+		.returning();
+	return disconnectedAssignments.length > 0;
+}
+
+type AgentClaimResult = { ok: true } | { ok: false; status: number; message: string };
+
+// Claims the selected agent in place of the current one, if there is any. The
+// update only applies while the assignment still has the agent the editor saw,
+// and the unique constraint keeps an agent from being claimed twice.
+async function claimAssignmentAgent(
+	db: DbClient,
+	id: number,
+	currentAgentId: string | null,
+	selectedAgentId: string,
+): Promise<AgentClaimResult> {
+	const alreadyClaimed: AgentClaimResult = {
+		ok: false,
+		status: 409,
+		message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
+	};
+	const [agentOwner] = await db
+		.select({ assignmentId: assignments.id })
+		.from(assignments)
+		.where(eq(assignments.elevenLabsAgentId, selectedAgentId))
+		.limit(1);
+	if (agentOwner && agentOwner.assignmentId !== id) return alreadyClaimed;
+
+	let selectedAgentIsInCatalog: boolean;
+	try {
+		selectedAgentIsInCatalog = await isInDialogbankCatalog(selectedAgentId);
+	} catch (cause) {
+		return {
+			ok: false,
+			status: errorStatus(cause),
+			message: `Agentenkatalog konnte nicht geprüft werden: ${describeError(cause)}`,
+		};
+	}
+	if (!selectedAgentIsInCatalog) {
+		return { ok: false, status: 400, message: notInCatalogMessage() };
+	}
+
+	try {
+		const claimedAssignments = await db
+			.update(assignments)
+			.set({
+				elevenLabsAgentId: selectedAgentId,
+				elevenLabsAgentVersionId: null,
+				agentConfiguredAt: null,
+				agentConfigurationError: null,
+			})
+			.where(
+				and(
+					eq(assignments.id, id),
+					currentAgentId
+						? eq(assignments.elevenLabsAgentId, currentAgentId)
+						: isNull(assignments.elevenLabsAgentId),
+				),
+			)
+			.returning();
+		if (claimedAssignments.length === 0) {
+			return {
+				ok: false,
+				status: 409,
+				message: "Der Einsatz wurde zwischenzeitlich geändert. Bitte laden Sie die Seite neu.",
+			};
+		}
+	} catch (cause) {
+		if (!isUniqueConstraintViolation(cause)) throw cause;
+		return alreadyClaimed;
+	}
+	return { ok: true };
 }
 
 export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], Actions>({
@@ -546,102 +628,32 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const invalid = await saveAssignmentForm(event.locals.db, id, formData);
 		if (invalid) return invalid;
 
-		const agentId = await loadAssignmentAgentId(event.locals.db, id);
-		if (!agentId) {
-			return { success: true, action: "save", message: "Einsatz gespeichert." };
-		}
-
-		const configured = await configureAssignmentAgent(event.locals.db, id, agentId);
-		if (!configured.ok) {
-			return fail(configured.status, {
-				action: "save",
-				message: `Einsatz gespeichert, aber der Agent konnte nicht aktualisiert werden: ${configured.message}`,
-			});
-		}
-		return {
-			success: true,
-			action: "save",
-			message: "Einsatz gespeichert und Agent aktualisiert.",
-		};
-	},
-
-	connectAgent: async (event) => {
-		const id = parseAssignmentId(event.params.id);
-		const formData = await event.request.formData();
-		const invalid = await saveAssignmentForm(event.locals.db, id, formData);
-		if (invalid) return invalid;
-
-		const selectedAgentId = parseElevenLabsAgentId(formData);
 		const currentAgentId = await loadAssignmentAgentId(event.locals.db, id);
+		// Only an explicit "Kein Agent" selection disconnects the agent, not a
+		// form without the agent field.
+		const agentFieldSubmitted = formData.has("elevenLabsAgentId");
+		const selectedAgentId = agentFieldSubmitted ? parseElevenLabsAgentId(formData) : currentAgentId;
 
 		if (!selectedAgentId) {
-			if (!currentAgentId) {
-				return fail(400, {
-					action: "connectAgent",
-					message: "Dem Einsatz ist kein Agent zugewiesen.",
-				});
-			}
-			await disconnectAssignmentAgent(event.locals.db, id, currentAgentId);
+			const disconnected =
+				agentFieldSubmitted && (await disconnectAssignmentAgent(event.locals.db, id));
 			return {
 				success: true,
-				action: "connectAgent",
-				message: "Einsatz gespeichert und Agent getrennt.",
+				message: disconnected ? "Einsatz gespeichert und Agent getrennt." : "Einsatz gespeichert.",
 			};
 		}
 
-		if (currentAgentId && currentAgentId !== selectedAgentId) {
-			return fail(409, {
-				action: "connectAgent",
-				message: "Der aktuelle Agent muss zuerst getrennt werden.",
-			});
-		}
-		const [agentOwner] = await event.locals.db
-			.select({ assignmentId: assignments.id })
-			.from(assignments)
-			.where(eq(assignments.elevenLabsAgentId, selectedAgentId))
-			.limit(1);
-		if (agentOwner && agentOwner.assignmentId !== id) {
-			return fail(409, {
-				action: "connectAgent",
-				message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
-			});
-		}
-
-		let selectedAgentIsInCatalog: boolean;
-		try {
-			selectedAgentIsInCatalog = await isInDialogbankCatalog(selectedAgentId);
-		} catch (cause) {
-			return fail(errorStatus(cause), {
-				action: "connectAgent",
-				message: `Agentenkatalog konnte nicht geprüft werden: ${describeError(cause)}`,
-			});
-		}
-		if (!selectedAgentIsInCatalog) {
-			return fail(400, { action: "connectAgent", message: notInCatalogMessage() });
-		}
-
-		const newlyClaimedAgent = !currentAgentId;
-		if (newlyClaimedAgent) {
-			try {
-				const claimedAssignments = await event.locals.db
-					.update(assignments)
-					.set({
-						elevenLabsAgentId: selectedAgentId,
-						agentConfigurationError: null,
-					})
-					.where(and(eq(assignments.id, id), isNull(assignments.elevenLabsAgentId)))
-					.returning();
-				if (claimedAssignments.length === 0) {
-					return fail(409, {
-						action: "connectAgent",
-						message: "Der Einsatz wurde zwischenzeitlich geändert. Bitte laden Sie die Seite neu.",
-					});
-				}
-			} catch (cause) {
-				if (!isUniqueConstraintViolation(cause)) throw cause;
-				return fail(409, {
-					action: "connectAgent",
-					message: "Dieser Agent ist bereits einem anderen Einsatz zugewiesen.",
+		const agentChanged = selectedAgentId !== currentAgentId;
+		if (agentChanged) {
+			const claimed = await claimAssignmentAgent(
+				event.locals.db,
+				id,
+				currentAgentId,
+				selectedAgentId,
+			);
+			if (!claimed.ok) {
+				return fail(claimed.status, {
+					message: `Einsatz gespeichert, aber der Agent konnte nicht verbunden werden: ${claimed.message}`,
 				});
 			}
 		}
@@ -649,16 +661,14 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const configured = await configureAssignmentAgent(event.locals.db, id, selectedAgentId);
 		if (!configured.ok) {
 			return fail(configured.status, {
-				action: "connectAgent",
-				message: `Einsatz gespeichert, aber der Agent konnte nicht konfiguriert werden: ${configured.message}`,
+				message: `Einsatz gespeichert, aber der Agent konnte nicht aktualisiert werden: ${configured.message}`,
 			});
 		}
 		return {
 			success: true,
-			action: "connectAgent",
-			message: newlyClaimedAgent
+			message: agentChanged
 				? "Einsatz gespeichert und Agent verbunden."
-				: "Einsatz gespeichert und Agent neu konfiguriert.",
+				: "Einsatz gespeichert und Agent aktualisiert.",
 		};
 	},
 });

@@ -1,7 +1,9 @@
 <script lang="ts">
 import type { LiteralJsonSchemaProperty } from "@elevenlabs/elevenlabs-js/api";
+import type { SubmitFunction } from "@sveltejs/kit";
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
+import { invalidateAll } from "$app/navigation";
 import { resolve } from "$app/paths";
 import EmojiPicker from "$lib/components/EmojiPicker.svelte";
 import type { ActionData, PageData } from "./$types";
@@ -25,18 +27,6 @@ let selectedAgentIsInCatalog = $derived(
 			)
 		: true,
 );
-let selectedAgent = $derived(
-	data.availableAgents.find(
-		(catalogAgent: (typeof data.availableAgents)[number]) => catalogAgent.id === selectedAgentId,
-	),
-);
-let agentSwitchRequiresDisconnect = $derived(
-	Boolean(
-		selectedAgentId &&
-			data.assignment.elevenLabsAgentId &&
-			selectedAgentId !== data.assignment.elevenLabsAgentId,
-	),
-);
 // Saving configures the agent too, so this only happens when that failed or the
 // assignment was saved before saving did so.
 let agentNeedsConfiguration = $derived(
@@ -45,13 +35,6 @@ let agentNeedsConfiguration = $derived(
 			(data.assignment.agentConfigurationError ||
 				!data.assignment.agentConfiguredAt ||
 				data.assignment.updatedAt > data.assignment.agentConfiguredAt),
-	),
-);
-let agentIsUpToDate = $derived(
-	Boolean(
-		data.assignment.elevenLabsAgentId &&
-			selectedAgentId === data.assignment.elevenLabsAgentId &&
-			!agentNeedsConfiguration,
 	),
 );
 type NewClassification = { label: string; emoji: string | null };
@@ -122,16 +105,16 @@ function removeNewClassification(questionId: number, label: string) {
 	if (idx !== -1) q.newClassifications.splice(idx, 1);
 }
 
-function makeEnhancer() {
-	return () => {
-		submitting = true;
-		return ({ update }: { update: (opts: { reset: boolean }) => Promise<void> }) => {
-			update({ reset: false }).then(() => {
-				submitting = false;
-			});
-		};
+const enhancer: SubmitFunction = () => {
+	submitting = true;
+	return async ({ result, update }) => {
+		await update({ reset: false });
+		// A failed save may still have saved the assignment or claimed its agent,
+		// but `update` only reloads the page data after a successful one.
+		if (result.type === "failure") await invalidateAll();
+		submitting = false;
 	};
-}
+};
 </script>
 
 <svelte:head>
@@ -151,9 +134,8 @@ function makeEnhancer() {
 
 	<div class="rounded-lg border bg-white p-6 shadow-md">
 		<form
-			id="assignment-form"
 			method="POST"
-			use:enhance={makeEnhancer()}
+			use:enhance={enhancer}
 		>
 			<fieldset disabled={submitting} class="min-w-0">
 				<!-- Metadata -->
@@ -318,12 +300,62 @@ function makeEnhancer() {
 					</button>
 				</div>
 
+				<!-- Agent -->
+				<div class="mt-6 border-t border-gray-100 pt-6">
+					<label for="elevenLabsAgentId" class="mb-1 block text-sm font-medium text-gray-700">
+						Agent
+					</label>
+					<select
+						id="elevenLabsAgentId"
+						name="elevenLabsAgentId"
+						bind:value={selectedAgentId}
+						class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
+					>
+						<optgroup label="Kein Agent">
+							<option value="">Kein Agent</option>
+						</optgroup>
+						{#if data.unavailableAgents.length > 0}
+							<optgroup label="Nicht verfügbare Agenten">
+								{#each data.unavailableAgents as catalogAgent (catalogAgent.id)}
+									<option value={catalogAgent.id} disabled>
+										{catalogAgent.name} — {catalogAgent.assignmentName}
+									</option>
+								{/each}
+							</optgroup>
+						{/if}
+						<optgroup label="Verfügbare Agenten">
+							{#if data.assignment.elevenLabsAgentId && !selectedAgentIsInCatalog}
+								<option value={data.assignment.elevenLabsAgentId}>
+									{data.assignment.elevenLabsAgentId}{data.agentCatalogError ? "" : " (nicht im Katalog)"}
+								</option>
+							{/if}
+							{#each data.availableAgents as catalogAgent (catalogAgent.id)}
+								<option value={catalogAgent.id}>{catalogAgent.name}</option>
+							{/each}
+						</optgroup>
+					</select>
+					{#if data.agentCatalogError}
+						<p class="mt-1 text-xs text-red-700">
+							Agentenkatalog konnte nicht geladen werden: {data.agentCatalogError}
+						</p>
+					{:else if data.availableAgents.length === 0 && data.unavailableAgents.length === 0}
+						<p class="mt-1 text-xs text-gray-500">
+							Keine Dialogbank-Agenten gefunden. Markieren Sie geeignete ElevenLabs-Agenten mit dem
+							Tag {data.agentCatalogTag}.
+						</p>
+					{:else if agentNeedsConfiguration}
+						<p class="mt-1 text-xs text-amber-700">
+							Der Agent ist nicht auf dem Stand des Einsatzes. Speichern aktualisiert ihn.
+						</p>
+					{/if}
+				</div>
+
 				<!-- Actions -->
 				<div class="mt-6 flex flex-wrap items-center gap-3 border-t border-gray-100 pt-6">
 					<button
 						type="submit"
 						formaction="?/save"
-						class="flex items-center gap-2 rounded border border-gray-300 px-4 py-2 text-sm font-semibold text-gray-700 hover:bg-gray-100 disabled:cursor-not-allowed disabled:opacity-60"
+						class="flex items-center gap-2 rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
 					>
 						{#if submitting}
 							<svg class="h-4 w-4 animate-spin" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
@@ -333,7 +365,7 @@ function makeEnhancer() {
 						{/if}
 						Speichern
 					</button>
-					{#if form?.message && form.action !== "connectAgent"}
+					{#if form?.message}
 						<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">
 							{form.message}
 						</p>
@@ -348,10 +380,6 @@ function makeEnhancer() {
 		{#if data.assignment.agentConfigurationError}
 			<p class="mb-4 text-sm text-red-700">{data.assignment.agentConfigurationError}</p>
 		{/if}
-		<p class="mb-4 text-sm text-amber-700">
-			Konfigurieren Sie denselben Agenten nicht gleichzeitig in mehreren Browserfenstern. Der zuletzt
-			abgeschlossene Vorgang bestimmt die Konfiguration in ElevenLabs.
-		</p>
 		{#if data.assignment.agentConfiguredAt}
 			<p class="mb-4 text-xs text-gray-500">
 				Zuletzt konfiguriert: {new Intl.DateTimeFormat("de-DE", {
@@ -363,83 +391,6 @@ function makeEnhancer() {
 				{/if}
 			</p>
 		{/if}
-		<div class="mb-6">
-			<label for="elevenLabsAgentId" class="mb-1 block text-sm font-medium text-gray-700">
-				Agent
-			</label>
-			<select
-				id="elevenLabsAgentId"
-				name="elevenLabsAgentId"
-				form="assignment-form"
-				bind:value={selectedAgentId}
-				class="w-full rounded border border-gray-300 px-3 py-2 text-sm disabled:cursor-not-allowed"
-			>
-				<optgroup label="Kein Agent">
-					<option value="">Kein Agent</option>
-				</optgroup>
-				{#if data.unavailableAgents.length > 0}
-					<optgroup label="Nicht verfügbare Agenten">
-						{#each data.unavailableAgents as catalogAgent (catalogAgent.id)}
-							<option value={catalogAgent.id} disabled>
-								{catalogAgent.name} — {catalogAgent.assignmentName}
-							</option>
-						{/each}
-					</optgroup>
-				{/if}
-				<optgroup label="Verfügbare Agenten">
-					{#if data.assignment.elevenLabsAgentId && !selectedAgentIsInCatalog}
-						<option value={data.assignment.elevenLabsAgentId}>
-							{data.assignment.elevenLabsAgentId}{data.agentCatalogError ? "" : " (nicht im Katalog)"}
-						</option>
-					{/if}
-					{#each data.availableAgents as catalogAgent (catalogAgent.id)}
-						<option value={catalogAgent.id}>{catalogAgent.name}</option>
-					{/each}
-				</optgroup>
-			</select>
-			{#if data.agentCatalogError}
-				<p class="mt-1 text-xs text-red-700">
-					Agentenkatalog konnte nicht geladen werden: {data.agentCatalogError}
-				</p>
-			{:else if data.availableAgents.length === 0 && data.unavailableAgents.length === 0}
-				<p class="mt-1 text-xs text-gray-500">
-					Keine Dialogbank-Agenten gefunden. Markieren Sie geeignete ElevenLabs-Agenten mit dem
-					Tag {data.agentCatalogTag}.
-				</p>
-			{/if}
-
-			<div class="mt-3 flex flex-wrap items-center gap-3">
-			{#if agentIsUpToDate}
-				<p class="text-sm text-gray-600">
-					{selectedAgent?.name ?? selectedAgentId} ist verbunden. Speichern aktualisiert den Agenten.
-				</p>
-			{:else}
-			<button
-				type="submit"
-				form="assignment-form"
-				formaction="?/connectAgent"
-				disabled={submitting || agentSwitchRequiresDisconnect || (!selectedAgentId && !data.assignment.elevenLabsAgentId)}
-				class="rounded bg-gray-900 px-4 py-2 text-sm font-semibold text-white hover:bg-gray-700 disabled:cursor-not-allowed disabled:opacity-60"
-			>
-				{#if agentSwitchRequiresDisconnect}
-					Aktuellen Agent zuerst trennen
-				{:else if !selectedAgentId && data.assignment.elevenLabsAgentId}
-					Agent trennen
-				{:else if !selectedAgentId}
-					Kein Agent ausgewählt
-				{:else if data.assignment.elevenLabsAgentId === selectedAgentId}
-					{selectedAgent?.name ?? selectedAgentId} neu konfigurieren
-				{:else}
-					{selectedAgent?.name ?? selectedAgentId} verbinden
-				{/if}
-			</button>
-			{/if}
-			{#if form?.message && form.action === "connectAgent"}
-				<p class="text-sm {form.success ? 'text-green-600' : 'text-red-600'}">{form.message}</p>
-			{/if}
-			</div>
-		</div>
-
 		{#if data.agent}
 			<div>
 				<h3 class="mb-2 text-sm font-medium tracking-wider text-gray-500 uppercase">
