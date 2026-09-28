@@ -1,5 +1,19 @@
+import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
+import { error } from "@sveltejs/kit";
+import { vi } from "vitest";
 import { createRequestEvent, describe, it } from "$lib/server/test/fixtures";
 import { actions, load } from "./+page.server";
+
+const elevenLabs = vi.hoisted(() => ({
+	resolveElevenLabsAgentTarget: vi.fn(),
+	createElevenLabsAgentReader: vi.fn(() => ({ get: vi.fn() })),
+	createElevenLabsAgentWriter: vi.fn(() => ({ update: vi.fn() })),
+}));
+
+vi.mock("$lib/server/elevenlabs/agent", async (importOriginal) => ({
+	...(await importOriginal<typeof import("$lib/server/elevenlabs/agent")>()),
+	...elevenLabs,
+}));
 
 // Use ID ranges that don't collide with other spec files
 const CLASSIFICATION_ID_OFFSET = 500;
@@ -242,5 +256,63 @@ describe("/editor/assignments/[id] +page.server", () => {
 		const remaining = await db.select().from(schema.questions);
 		expect(remaining).toHaveLength(1);
 		expect(remaining[0].text).toBe("Nur eine Frage");
+	});
+
+	it("activate: reports an ElevenLabs failure while resolving the agent branch", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		elevenLabs.resolveElevenLabsAgentTarget.mockRejectedValue(
+			new ElevenLabsError({ message: "ElevenLabs unavailable", statusCode: 503 }),
+		);
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/activate", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.activate(event as unknown as Parameters<typeof actions.activate>[0]),
+		).resolves.toMatchObject({
+			status: 503,
+			data: { message: expect.stringContaining("Agent konnte nicht geladen werden") },
+		});
+	});
+
+	it("activate: reports a branch the resolver could not set up in the form", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		elevenLabs.resolveElevenLabsAgentTarget.mockImplementation(async () =>
+			error(500, "ElevenLabs branch could not be pointed at this environment's post-call webhook"),
+		);
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/activate", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.activate(event as unknown as Parameters<typeof actions.activate>[0]),
+		).resolves.toMatchObject({
+			status: 500,
+			data: {
+				message: expect.stringContaining(
+					"could not be pointed at this environment's post-call webhook",
+				),
+			},
+		});
 	});
 });

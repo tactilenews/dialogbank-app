@@ -1,5 +1,5 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
-import { error, fail } from "@sveltejs/kit";
+import { error, fail, isHttpError } from "@sveltejs/kit";
 import { asc, eq, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
@@ -14,6 +14,7 @@ import {
 	type AgentReaderResponse,
 	createElevenLabsAgentReader,
 	createElevenLabsAgentWriter,
+	type ElevenLabsAgentTarget,
 	type ElevenLabsEditorAgent,
 	getElevenLabsEditorAgent,
 	type Question,
@@ -252,7 +253,7 @@ export const load = withAuthenticatedLoad<
 
 	let agent: ElevenLabsEditorAgent | null = null;
 	try {
-		const agentTarget = resolveElevenLabsAgentTarget(process.env);
+		const agentTarget = await resolveElevenLabsAgentTarget(process.env);
 		const reader = createElevenLabsAgentReader(process.env);
 		agent = await getElevenLabsEditorAgent(agentTarget, reader);
 	} catch {
@@ -331,14 +332,22 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				.filter(Boolean),
 		}));
 
-		const agentTarget = resolveElevenLabsAgentTarget(process.env);
 		const reader = createElevenLabsAgentReader(process.env);
 		const writer = createElevenLabsAgentWriter(process.env);
 
+		// Resolving the branch may list, create or update branches in ElevenLabs,
+		// whose failures get the same form message as reading the agent.
+		let agentTarget: ElevenLabsAgentTarget;
 		let existingAgent: AgentReaderResponse;
 		try {
+			agentTarget = await resolveElevenLabsAgentTarget(process.env);
 			existingAgent = await reader.get(agentTarget.agentId, { branchId: agentTarget.branchId });
 		} catch (e) {
+			// The resolver reports its own failures, such as a branch it could not
+			// point at this environment's webhook, as HTTP errors.
+			if (isHttpError(e)) {
+				return fail(e.status, { message: `Agent konnte nicht geladen werden: ${e.body.message}` });
+			}
 			if (!(e instanceof ElevenLabsError)) throw e;
 			return fail(e.statusCode || 500, {
 				message: `Agent konnte nicht geladen werden: ${e.message || "Unbekannter Fehler"}`,
