@@ -316,9 +316,9 @@ To tear a preview down, run (defaults to the current branch):
 infisical run --env staging -- pnpm run preview:down [branch]
 ```
 
-It deletes the branch's values in Netlify, the Neon branch and the preview's webhook, and archives
-the ElevenLabs agent branch. The branch's last Netlify deploy stays reachable, without a
-database, until you delete it in the Netlify UI.
+It deletes the branch's values and deploys in Netlify, the Neon branch and the preview's webhook,
+and archives the ElevenLabs agent branch. Afterwards, the preview's URL answers 404 instead of
+serving a deploy without its database.
 
 To upload sourcemaps from Netlify builds, the deployment environment also needs:
 

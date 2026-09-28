@@ -335,6 +335,7 @@ function readSharedPreviewValues(): Record<string, string> {
 type NetlifyDeploy = {
 	id: string;
 	state: string;
+	context: string | null;
 	branch: string | null;
 	title: string | null;
 	skipped: boolean | null;
@@ -442,6 +443,36 @@ function deleteBranchValues(branch: string, keepKeys: string[] = []): void {
 	}
 }
 
+const DEPLOYS_PAGE_SIZE = 100;
+
+// A branch URL serves the branch's latest ready deploy and falls back to an
+// earlier one when that is deleted, so every deploy of the branch has to go for
+// the URL to answer 404 instead of a preview without its database. Only branch
+// deploys of exactly this branch match, never production. Deleting is not
+// retried: a repeat after a timeout would fail on a deploy that is gone.
+function deleteBranchDeploys(branch: string): number {
+	const deployIds: string[] = [];
+	for (let page = 1; ; page += 1) {
+		const deploys = netlifyApi<NetlifyDeploy[]>("listSiteDeploys", {
+			site_id: NETLIFY_SITE_ID,
+			per_page: DEPLOYS_PAGE_SIZE,
+			page,
+		});
+		for (const deploy of deploys) {
+			if (deploy.context === "branch-deploy" && deploy.branch === branch) {
+				deployIds.push(deploy.id);
+			}
+		}
+		if (deploys.length < DEPLOYS_PAGE_SIZE) break;
+	}
+	for (const deployId of deployIds) {
+		runNetlify(["api", "deleteDeploy", "--data", JSON.stringify({ deploy_id: deployId })], {
+			retry: false,
+		});
+	}
+	return deployIds.length;
+}
+
 function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -541,6 +572,7 @@ async function down(): Promise<void> {
 	// about to be deleted: without PREVIEW_BRANCH, `netlify.toml` skips it.
 	console.log(`Deleting Netlify values for branch "${branch}"`);
 	deleteBranchValues(branch);
+	console.log(`Deleted ${deleteBranchDeploys(branch)} Netlify deploys of "${branch}"`);
 
 	console.log(`Deleting the Neon branch, ElevenLabs branches and webhook for "${branch}"`);
 	const name = `preview/${branch}`;
@@ -548,9 +580,7 @@ async function down(): Promise<void> {
 	await Promise.all([deleteNeonBranch(name), archiveElevenLabsBranches(name)]);
 	const origin = `https://${branch}--${NETLIFY_SITE_NAME}.netlify.app`;
 	await deletePreviewWebhooks(client, await findPreviewWebhookIds(client, origin));
-	console.log(
-		`Done. The last deploy at https://${branch}--${NETLIFY_SITE_NAME}.netlify.app stays reachable until you delete it in Netlify, but its database is gone.`,
-	);
+	console.log(`Done. https://${branch}--${NETLIFY_SITE_NAME}.netlify.app now answers 404.`);
 }
 
 // Seeds a preview's database with `db:seed`, which reads the accounts from
