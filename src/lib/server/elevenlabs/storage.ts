@@ -31,7 +31,10 @@ export async function processElevenLabsPostCall({ db, payload }: StorageInput): 
 	const conversationBase = data.conversation;
 
 	// An agent belongs to at most one assignment. A conversation of an agent that
-	// belongs to none, such as one that was disconnected, is not stored.
+	// belongs to none, such as one that was disconnected, is not stored (#282).
+	// The owner is the one when the webhook arrives, not during the call: an
+	// agent moved to another assignment in between takes the conversation along.
+	// That is a known, accepted limitation (#285).
 	const [assignment] = await db
 		.select({ id: assignments.id })
 		.from(assignments)
