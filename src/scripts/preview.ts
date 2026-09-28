@@ -1,7 +1,4 @@
 import { execFileSync } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join } from "node:path";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { selectLatestCommittedVersionId } from "../lib/server/elevenlabs/branch.ts";
 
@@ -9,7 +6,6 @@ const NEON_API_BASE = "https://console.neon.tech/api/v2";
 const NETLIFY_BUILD_HOOK_PREFIX = "https://api.netlify.com/build_hooks/";
 const NETLIFY_SITE_NAME = "dialogbank";
 const NETLIFY_SITE_ID = `${NETLIFY_SITE_NAME}.netlify.app`;
-const NETLIFY_API_BASE = "https://api.netlify.com/api/v1";
 
 // The values every preview shares, such as API keys and its own
 // BETTER_AUTH_SECRET. The folder imports `prod` `/`; the values generated for
@@ -77,14 +73,6 @@ function requireEnvironment(name: string): string {
 function requireEnvironments(names: string[]): void {
 	const missing = names.filter((name) => !process.env[name]);
 	if (missing.length > 0) throw new Error(`Missing environment variables: ${missing.join(", ")}`);
-}
-
-function readJson(path: string): Record<string, unknown> | undefined {
-	try {
-		return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-	} catch {
-		return undefined;
-	}
 }
 
 function git(...args: string[]): string {
@@ -276,6 +264,8 @@ function readSharedPreviewValues(): Record<string, string> {
 			INFISICAL_PREVIEW_PATH,
 			"--format",
 			"json",
+			// Personal overrides would put the operator's own values into the preview.
+			"--secret-overriding=false",
 		),
 	) as { key: string; value: string }[];
 	if (secrets.length === 0) {
@@ -303,107 +293,74 @@ type NetlifyDeploy = {
 
 type NetlifyEnvVar = {
 	key: string;
-	values: { id?: string; context: string; context_parameter?: string; value?: string }[];
+	values: { context: string; context_parameter?: string }[];
 };
 
 // The signed-in user's own `netlify login` session, like the Infisical CLI
-// session above; no deployment credential is stored anywhere. The Netlify CLI
-// has no command that prints it, so it comes from the CLI's configuration.
-// Calling the API directly keeps secret values out of command-line arguments,
-// which other local processes could read.
-function netlifyToken(): string {
-	if (process.env.NETLIFY_AUTH_TOKEN) return process.env.NETLIFY_AUTH_TOKEN;
-	const configDirectory =
-		process.platform === "darwin"
-			? join(homedir(), "Library", "Preferences", "netlify")
-			: join(process.env.XDG_CONFIG_HOME ?? join(homedir(), ".config"), "netlify");
-	const config = readJson(join(configDirectory, "config.json")) as
-		| { userId?: string; users?: Record<string, { auth?: { token?: string } }> }
-		| undefined;
-	const token = config?.userId ? config.users?.[config.userId]?.auth?.token : undefined;
-	if (!token)
-		throw new Error("No Netlify session found; install the Netlify CLI and run `netlify login`");
-	return token;
+// session above; no deployment credential is stored anywhere.
+function netlifyApi<T>(operation: string, data: Record<string, unknown>): T {
+	const output = execFileSync("netlify", ["api", operation, "--data", JSON.stringify(data)], {
+		encoding: "utf8",
+		stdio: ["ignore", "pipe", "inherit"],
+		timeout: NETLIFY_CALL_TIMEOUT_MS,
+	});
+	return JSON.parse(output) as T;
 }
 
-async function netlifyRequest<T>(path: string, init?: RequestInit): Promise<T> {
-	const response = await fetch(`${NETLIFY_API_BASE}${path}`, {
-		signal: AbortSignal.timeout(NETLIFY_CALL_TIMEOUT_MS),
-		...init,
-		headers: {
-			Accept: "application/json",
-			Authorization: `Bearer ${netlifyToken()}`,
-			...(init?.body ? { "Content-Type": "application/json" } : {}),
-			...init?.headers,
-		},
+// Passes arguments, including secret values, on the command line, where other
+// local processes can briefly see them; the CLI offers no other way to pass
+// them, and the script only ever runs on the machine of the person running it.
+function netlifyCli(...args: string[]): void {
+	execFileSync("netlify", [...args, "--site", NETLIFY_SITE_NAME, "--force"], {
+		stdio: ["ignore", "ignore", "inherit"],
+		timeout: NETLIFY_CALL_TIMEOUT_MS,
 	});
-	if (!response.ok) {
-		throw new Error(`Netlify API ${response.status}: ${await response.text()}`);
-	}
-	return (response.status === 204 ? undefined : await response.json()) as T;
 }
 
 let netlifyAccountId: string | undefined;
 
 // Also checks that the session can read the site before anything is created.
-async function requireNetlifyAccountId(): Promise<string> {
-	netlifyAccountId ??= (await netlifyRequest<{ account_id: string }>(`/sites/${NETLIFY_SITE_ID}`))
-		.account_id;
+function requireNetlifyAccountId(): string {
+	try {
+		netlifyAccountId ??= netlifyApi<{ account_id: string }>("getSite", {
+			site_id: NETLIFY_SITE_ID,
+		}).account_id;
+	} catch {
+		throw new Error(
+			`Cannot read the Netlify site ${NETLIFY_SITE_ID}; install the Netlify CLI and run \`netlify login\``,
+		);
+	}
 	return netlifyAccountId;
 }
 
-async function listEnvVars(): Promise<NetlifyEnvVar[]> {
-	const accountId = await requireNetlifyAccountId();
-	return netlifyRequest<NetlifyEnvVar[]>(
-		`/accounts/${accountId}/env?${new URLSearchParams({ site_id: NETLIFY_SITE_ID })}`,
-	);
-}
-
-function isBranchValue(value: NetlifyEnvVar["values"][number], branch: string): boolean {
-	return value.context === "branch" && value.context_parameter === branch;
+function branchValueKeys(branch: string): string[] {
+	const variables = netlifyApi<NetlifyEnvVar[]>("getEnvVars", {
+		account_id: requireNetlifyAccountId(),
+		site_id: NETLIFY_SITE_ID,
+	});
+	return variables
+		.filter((variable) =>
+			variable.values.some(
+				(value) => value.context === "branch" && value.context_parameter === branch,
+			),
+		)
+		.map((variable) => variable.key);
 }
 
 // Values for the `branch:<branch>` context apply to that branch's deploys only,
 // so every preview has its own and several can exist at once. Other contexts,
 // including the production values Infisical syncs, stay as they are.
-async function writeBranchValues(branch: string, values: Record<string, string>): Promise<void> {
-	const accountId = await requireNetlifyAccountId();
-	const query = new URLSearchParams({ site_id: NETLIFY_SITE_ID });
-	const existingKeys = new Set((await listEnvVars()).map((variable) => variable.key));
-	const created = Object.entries(values).filter(([key]) => !existingKeys.has(key));
-	if (created.length > 0) {
-		await netlifyRequest(`/accounts/${accountId}/env?${query}`, {
-			method: "POST",
-			body: JSON.stringify(
-				created.map(([key, value]) => ({
-					key,
-					values: [{ context: "branch", context_parameter: branch, value }],
-				})),
-			),
-		});
-	}
-	for (const [key, value] of Object.entries(values).filter(([key]) => existingKeys.has(key))) {
-		await netlifyRequest(`/accounts/${accountId}/env/${encodeURIComponent(key)}?${query}`, {
-			method: "PATCH",
-			body: JSON.stringify({ context: "branch", context_parameter: branch, value }),
-		});
+function writeBranchValues(branch: string, values: Record<string, string>): void {
+	for (const [key, value] of Object.entries(values)) {
+		netlifyCli("env:set", key, value, "--context", `branch:${branch}`);
 	}
 }
 
 // Removes the branch's values, including keys an earlier `up` set that the
 // current one no longer does.
-async function deleteBranchValues(branch: string, keepKeys: string[] = []): Promise<void> {
-	const accountId = await requireNetlifyAccountId();
-	const query = new URLSearchParams({ site_id: NETLIFY_SITE_ID });
-	for (const variable of await listEnvVars()) {
-		if (keepKeys.includes(variable.key)) continue;
-		for (const value of variable.values.filter((candidate) => isBranchValue(candidate, branch))) {
-			if (!value.id) continue;
-			await netlifyRequest(
-				`/accounts/${accountId}/env/${encodeURIComponent(variable.key)}/value/${value.id}?${query}`,
-				{ method: "DELETE" },
-			);
-		}
+function deleteBranchValues(branch: string, keepKeys: string[] = []): void {
+	for (const key of branchValueKeys(branch).filter((key) => !keepKeys.includes(key))) {
+		netlifyCli("env:unset", key, "--context", `branch:${branch}`);
 	}
 }
 
@@ -431,9 +388,10 @@ async function triggerNetlifyBuild(branch: string): Promise<string> {
 async function findTriggeredDeploy(branch: string, title: string): Promise<NetlifyDeploy> {
 	const deadline = Date.now() + DEPLOY_APPEAR_TIMEOUT_MS;
 	while (Date.now() < deadline) {
-		const deploys = await netlifyRequest<NetlifyDeploy[]>(
-			`/sites/${NETLIFY_SITE_ID}/deploys?per_page=20`,
-		);
+		const deploys = netlifyApi<NetlifyDeploy[]>("listSiteDeploys", {
+			site_id: NETLIFY_SITE_ID,
+			per_page: 20,
+		});
 		const deploy = deploys.find(
 			(candidate) => candidate.branch === branch && candidate.title === title,
 		);
@@ -464,7 +422,7 @@ async function waitForPreviewDeploy(branch: string, title: string): Promise<void
 		}
 		if (deploy.state === "ready") return;
 		await sleep(DEPLOY_POLL_INTERVAL_MS);
-		deploy = await netlifyRequest<NetlifyDeploy>(`/deploys/${deploy.id}`);
+		deploy = netlifyApi<NetlifyDeploy>("getDeploy", { deploy_id: deploy.id });
 	}
 	throw new Error(`Timed out waiting for Netlify deploy ${deploy.id}`);
 }
@@ -475,7 +433,7 @@ async function up(): Promise<void> {
 	// Check everything that can be checked before any resource is created.
 	requireEnvironments(UP_ENVIRONMENT);
 	requireBuildHookUrl();
-	await requireNetlifyAccountId();
+	requireNetlifyAccountId();
 	requirePushedBranch(branch);
 	const sharedValues = readSharedPreviewValues();
 	const name = `preview/${branch}`;
@@ -495,8 +453,8 @@ async function up(): Promise<void> {
 	};
 	const values = { ...sharedValues, ...generatedValues };
 	console.log(`Writing ${Object.keys(values).length} values to Netlify for branch "${branch}"`);
-	await writeBranchValues(branch, values);
-	await deleteBranchValues(branch, Object.keys(values));
+	writeBranchValues(branch, values);
+	deleteBranchValues(branch, Object.keys(values));
 
 	console.log("Triggering Netlify build");
 	const title = await triggerNetlifyBuild(branch);
@@ -512,7 +470,7 @@ async function down(): Promise<void> {
 	// Delete the values first so that no later build can use a database that is
 	// about to be deleted: without PREVIEW_BRANCH, `netlify.toml` skips it.
 	console.log(`Deleting Netlify values for branch "${branch}"`);
-	await deleteBranchValues(branch);
+	deleteBranchValues(branch);
 
 	console.log(`Deleting Neon branch and archiving ElevenLabs branches for "${branch}"`);
 	await Promise.all([deleteNeonBranch(`preview/${branch}`), archiveElevenLabsBranches(branch)]);

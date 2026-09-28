@@ -255,9 +255,9 @@ branch is pushed before changing anything. Then it:
    ElevenLabs agent branch `preview/<branch>/<timestamp>` from the latest committed version of
    `ELEVENLABS_AGENT_PARENT_BRANCH_ID`,
 2. writes the preview's values to Netlify as values of the `branch:<branch>` context, which
-   apply to that branch's deploys only: everything in the Infisical `prod` folder `/preview`,
-   with `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_ID` and `ORIGIN` generated for
-   the preview,
+   apply to that branch's deploys only: the shared values in the Infisical `prod` folder
+   `/preview` (your personal overrides are ignored), with `PREVIEW_BRANCH`, `DATABASE_URL`,
+   `ELEVENLABS_AGENT_BRANCH_ID` and `ORIGIN` generated for the preview,
 3. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`, and
    waits until that deploy is live. It fails when the build fails or `netlify.toml` skips it.
 
@@ -276,9 +276,8 @@ and Sentry settings with production; `/preview` overrides `BETTER_AUTH_SECRET` s
 production do not share a signing key. The Infisical sync of `prod` `/` writes only to Netlify's
 Production context and leaves the branch values alone.
 
-The script reads the Netlify session token from the CLI's configuration, or from
-`NETLIFY_AUTH_TOKEN` if set, and calls the Netlify API directly, so secret values never appear in
-command-line arguments.
+The Netlify CLI takes the values as command-line arguments, so while `preview:up` sets them,
+other processes on your machine can briefly see them.
 
 To tear a preview down, run (defaults to the current branch):
 
