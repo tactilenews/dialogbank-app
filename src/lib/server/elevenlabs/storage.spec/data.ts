@@ -125,4 +125,17 @@ export const samplePayload4: ElevenLabsWebhookPayload = {
 	},
 };
 
+/**
+ * A conversation of an agent that no assignment owns, e.g. one disconnected
+ * before its webhook arrived.
+ */
+export const disconnectedAgentPayload: ElevenLabsWebhookPayload = {
+	...samplePayload2,
+	data: {
+		...samplePayload2.data,
+		agent_id: "agent_disconnected",
+		conversation_id: "conversation_of_disconnected_agent",
+	},
+};
+
 export const samplePayloads: ElevenLabsWebhookPayload[] = [samplePayload1, samplePayload2];
