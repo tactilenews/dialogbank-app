@@ -248,16 +248,17 @@ infisical run --env test -- pnpm run preview:up
 
 The script runs on your machine with your own Infisical and Netlify sessions, so it needs the
 [Netlify CLI](https://docs.netlify.com/cli/get-started/) and `netlify login`; no deployment
-credentials live in CI. It checks the required variables, the Netlify session, that the branch is
-pushed, and that the Infisical sync exists before changing anything. Then it:
+credentials live in CI. It checks the required variables, the Netlify session, and that the
+branch is pushed before changing anything. Then it:
 
 1. creates (or reuses) the Neon branch `preview/<branch>` from `PARENT_BRANCH_ID` and an
    ElevenLabs agent branch `preview/<branch>/<timestamp>` from the latest committed version of
    `ELEVENLABS_AGENT_PARENT_BRANCH_ID`,
-2. writes `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_ID` and `ORIGIN` into the
-   Infisical `prod` folder `/preview`,
-3. runs that folder's Netlify sync (Netlify's `branch-deploy` context) and waits for it to finish,
-4. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`, and
+2. writes the preview's values to Netlify as values of the `branch:<branch>` context, which
+   apply to that branch's deploys only: the shared values in the Infisical `prod` folder
+   `/preview` (your personal overrides are ignored), with `PREVIEW_BRANCH`, `DATABASE_URL`,
+   `ELEVENLABS_AGENT_BRANCH_ID` and `ORIGIN` generated for the preview,
+3. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`, and
    waits until that deploy is live. It fails when the build fails or `netlify.toml` skips it.
 
 The preview is served at `https://<branch>--dialogbank.netlify.app`, so branch names must be
@@ -265,21 +266,18 @@ lowercase letters, digits, and single dashes. Branch deploys run migrations befo
 Netlify does not build branches on push, so run `preview:up` again to deploy new commits; it
 reuses the existing Neon and ElevenLabs branches.
 
-`/preview` holds the values of one branch at a time. `netlify.toml` also skips every branch
-deploy whose `BRANCH` differs from `PREVIEW_BRANCH` (and fails the build if the skip does not
-apply), so a branch never builds against another branch's database. Running `preview:up` on
-another branch takes over `/preview`: the previous preview keeps serving its last deploy, but
-can no longer be redeployed, and its resources stay until you run `preview:down` for it. Deploy
-previews for pull requests are skipped altogether. Nothing prevents two people from running
-`preview:up` or `preview:down` at the same time, so coordinate if more than one person sets up
-previews.
+Every preview has its own values, so several can run at once. `netlify.toml` skips every branch
+deploy without them (and fails the build if the skip does not apply), so a branch never builds
+against another branch's database or production's. Deploy previews for pull requests are
+skipped altogether.
 
-`/preview` imports the `prod` root folder, so it inherits shared keys such as the ElevenLabs API
-key and Sentry settings, and overrides `BETTER_AUTH_SECRET` so previews and production do not
-share a signing key. Because of that import, the four preview keys are never deleted from
-`/preview`, only reset to placeholders that cannot connect anywhere; otherwise branch deploys
-would receive production's `DATABASE_URL`. `pnpm run preview:init` writes those placeholders
-once, before the `/preview` sync is created.
+`/preview` imports the `prod` root folder, so previews share keys such as the ElevenLabs API key
+and Sentry settings with production; `/preview` overrides `BETTER_AUTH_SECRET` so previews and
+production do not share a signing key. The Infisical sync of `prod` `/` writes only to Netlify's
+Production context and leaves the branch values alone.
+
+The Netlify CLI takes the values as command-line arguments, so while `preview:up` sets them,
+other processes on your machine can briefly see them.
 
 To tear a preview down, run (defaults to the current branch):
 
@@ -287,8 +285,7 @@ To tear a preview down, run (defaults to the current branch):
 infisical run --env test -- pnpm run preview:down [branch]
 ```
 
-It resets `/preview` to the placeholders if it belongs to that branch, deletes the Neon branch,
-and archives the ElevenLabs branch. The branch's last Netlify deploy stays reachable, without a
+It deletes the branch's values in Netlify, the Neon branch, and archives the ElevenLabs branch. The branch's last Netlify deploy stays reachable, without a
 database, until you delete it in the Netlify UI.
 
 To upload sourcemaps from Netlify builds, the deployment environment also needs:

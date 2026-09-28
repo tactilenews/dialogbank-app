@@ -1,32 +1,24 @@
 import { execFileSync } from "node:child_process";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { homedir, tmpdir } from "node:os";
-import { join } from "node:path";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 import { selectLatestCommittedVersionId } from "../lib/server/elevenlabs/branch.ts";
 
 const NEON_API_BASE = "https://console.neon.tech/api/v2";
-const INFISICAL_DEFAULT_DOMAIN = "https://app.infisical.com/api";
 const NETLIFY_BUILD_HOOK_PREFIX = "https://api.netlify.com/build_hooks/";
 const NETLIFY_SITE_NAME = "dialogbank";
 const NETLIFY_SITE_ID = `${NETLIFY_SITE_NAME}.netlify.app`;
 
-// The folder whose Netlify sync feeds the `branch-deploy` context. It holds the
-// values of one preview at a time; `netlify.toml` refuses to build any other branch.
+// The values every preview shares, such as API keys and its own
+// BETTER_AUTH_SECRET. The folder imports `prod` `/`; the values generated for
+// each preview below replace whatever it holds under the same keys.
 const INFISICAL_ENVIRONMENT = "prod";
 const INFISICAL_PREVIEW_PATH = "/preview";
 
-// `/preview` imports the `prod` root folder, so deleting a key there would let
-// production's value (such as its DATABASE_URL) reach branch deploys. Keys are
-// therefore never deleted, only reset to values that cannot connect anywhere.
-const UNSET = "unset";
-const PREVIEW_PLACEHOLDERS = {
-	PREVIEW_BRANCH: UNSET,
-	DATABASE_URL: "postgres://unset:unset@preview-unset.invalid/unset",
-	ELEVENLABS_AGENT_BRANCH_ID: UNSET,
-	ORIGIN: "https://preview-unset.invalid",
+type GeneratedPreviewValues = {
+	PREVIEW_BRANCH: string;
+	DATABASE_URL: string;
+	ELEVENLABS_AGENT_BRANCH_ID: string;
+	ORIGIN: string;
 };
-type PreviewValues = Record<keyof typeof PREVIEW_PLACEHOLDERS, string>;
 
 const UP_ENVIRONMENT = [
 	"NEON_API_KEY",
@@ -44,8 +36,6 @@ const DOWN_ENVIRONMENT = [
 	"ELEVENLABS_AGENT_ID",
 ];
 
-const SYNC_TIMEOUT_MS = 120_000;
-const SYNC_POLL_INTERVAL_MS = 2_000;
 const DEPLOY_APPEAR_TIMEOUT_MS = 120_000;
 const DEPLOY_TIMEOUT_MS = 20 * 60_000;
 const DEPLOY_POLL_INTERVAL_MS = 5_000;
@@ -74,15 +64,6 @@ type NeonConnectionUriResponse = {
 	uri: string;
 };
 
-type InfisicalSecretSync = {
-	id: string;
-	syncStatus: "pending" | "running" | "succeeded" | "failed" | null;
-	lastSyncMessage: string | null;
-	lastSyncedAt: string | null;
-	folder: { path: string } | null;
-	environment: { slug: string } | null;
-};
-
 function requireEnvironment(name: string): string {
 	const value = process.env[name];
 	if (!value) throw new Error(`${name} is not set`);
@@ -92,14 +73,6 @@ function requireEnvironment(name: string): string {
 function requireEnvironments(names: string[]): void {
 	const missing = names.filter((name) => !process.env[name]);
 	if (missing.length > 0) throw new Error(`Missing environment variables: ${missing.join(", ")}`);
-}
-
-function readJson(path: string): Record<string, unknown> | undefined {
-	try {
-		return JSON.parse(readFileSync(path, "utf8")) as Record<string, unknown>;
-	} catch {
-		return undefined;
-	}
 }
 
 function git(...args: string[]): string {
@@ -117,7 +90,7 @@ function infisical(...args: string[]): string {
 // guess how Netlify rewrites other characters, only accept names that are
 // already valid as that DNS label, so `ORIGIN` is guaranteed to match.
 function validateBranchName(branch: string): void {
-	if (branch === "main" || branch === "HEAD" || branch === UNSET) {
+	if (branch === "main" || branch === "HEAD") {
 		throw new Error(`Refusing to set up a preview for "${branch}"`);
 	}
 	if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(branch)) {
@@ -280,126 +253,25 @@ async function archiveElevenLabsBranches(branch: string): Promise<void> {
 	}
 }
 
-// Use the same Infisical instance as the CLI, whose session token the API calls
-// reuse; a token from one instance is rejected by any other.
-function infisicalApiBase(): string {
-	const domain =
-		process.env.INFISICAL_DOMAIN ??
-		readJson(".infisical.json")?.domain ??
-		readJson(join(homedir(), ".infisical", "infisical-config.json"))?.LoggedInUserDomain ??
-		INFISICAL_DEFAULT_DOMAIN;
-	if (typeof domain !== "string") throw new Error("Could not determine the Infisical domain");
-	const base = domain.replace(/\/+$/, "");
-	return base.endsWith("/api") ? base : `${base}/api`;
-}
-
-let infisicalToken: string | undefined;
-
-async function infisicalRequest<T>(path: string, init?: RequestInit): Promise<T> {
-	// The signed-in user's own session; no machine identity is needed.
-	infisicalToken ??= infisical("user", "get", "token", "--plain");
-	const token = infisicalToken;
-	const response = await fetch(`${infisicalApiBase()}${path}`, {
-		...init,
-		headers: {
-			Accept: "application/json",
-			Authorization: `Bearer ${token}`,
-			...init?.headers,
-		},
-	});
-
-	if (!response.ok) {
-		throw new Error(`Infisical API ${response.status}: ${await response.text()}`);
-	}
-
-	return (await response.json()) as T;
-}
-
-async function findPreviewSync(): Promise<InfisicalSecretSync> {
-	const workspaceId = readJson(".infisical.json")?.workspaceId;
-	if (typeof workspaceId !== "string") throw new Error("No workspaceId in .infisical.json");
-	const { secretSyncs } = await infisicalRequest<{ secretSyncs: InfisicalSecretSync[] }>(
-		`/v1/secret-syncs/netlify?${new URLSearchParams({ projectId: workspaceId })}`,
-	);
-	const matches = secretSyncs.filter(
-		(sync) =>
-			sync.environment?.slug === INFISICAL_ENVIRONMENT &&
-			sync.folder?.path === INFISICAL_PREVIEW_PATH,
-	);
-	const [sync] = matches;
-	if (!sync || matches.length > 1) {
-		throw new Error(
-			`Expected exactly one Netlify sync for ${INFISICAL_ENVIRONMENT} ${INFISICAL_PREVIEW_PATH}, found ${matches.length}`,
-		);
-	}
-	return sync;
-}
-
-// Netlify reads environment variables when a build starts, so the build may only
-// be triggered once the new values have arrived there.
-async function syncPreviewSecrets(syncId: string): Promise<void> {
-	const path = `/v1/secret-syncs/netlify/${syncId}`;
-	const { secretSync: before } = await infisicalRequest<{ secretSync: InfisicalSecretSync }>(path);
-	// Queuing a sync resets its status to pending, so any failure seen afterwards
-	// belongs to this run.
-	await infisicalRequest(`${path}/sync-secrets`, { method: "POST" });
-
-	const deadline = Date.now() + SYNC_TIMEOUT_MS;
-	while (Date.now() < deadline) {
-		const { secretSync } = await infisicalRequest<{ secretSync: InfisicalSecretSync }>(path);
-		if (secretSync.syncStatus === "failed") {
-			throw new Error(`Infisical sync to Netlify failed: ${secretSync.lastSyncMessage}`);
-		}
-		if (secretSync.syncStatus === "succeeded" && secretSync.lastSyncedAt !== before.lastSyncedAt) {
-			return;
-		}
-		await new Promise((resolve) => setTimeout(resolve, SYNC_POLL_INTERVAL_MS));
-	}
-	throw new Error("Timed out waiting for the Infisical sync to Netlify");
-}
-
-// With --plain the CLI prints nothing for a missing secret. Any other failure,
-// such as an expired session, must abort: `down` would otherwise delete the
-// database while `/preview` still points at it.
-function readPreviewBranchSecret(): string {
-	return infisical(
-		"secrets",
-		"get",
-		"PREVIEW_BRANCH",
-		"--env",
-		INFISICAL_ENVIRONMENT,
-		"--path",
-		INFISICAL_PREVIEW_PATH,
-		"--plain",
-	);
-}
-
-function readPreviewBranch(): string | undefined {
-	const value = readPreviewBranchSecret();
-	return value && value !== UNSET ? value : undefined;
-}
-
-// Secrets go through a private temporary file instead of command-line arguments,
-// which other local processes could read.
-function writePreviewSecrets(values: PreviewValues): void {
-	const directory = mkdtempSync(join(tmpdir(), "preview-"));
-	const file = join(directory, "preview.env");
-	try {
-		const lines = Object.entries(values).map(([key, value]) => `${key}=${JSON.stringify(value)}`);
-		writeFileSync(file, `${lines.join("\n")}\n`, { mode: 0o600 });
+// Includes the values `/preview` imports from `prod` `/`.
+function readSharedPreviewValues(): Record<string, string> {
+	const secrets = JSON.parse(
 		infisical(
-			"secrets",
-			"set",
-			"--file",
-			file,
+			"export",
 			"--env",
 			INFISICAL_ENVIRONMENT,
 			"--path",
 			INFISICAL_PREVIEW_PATH,
-		);
-	} finally {
-		rmSync(directory, { recursive: true, force: true });
+			"--format",
+			"json",
+			// Personal overrides would put the operator's own values into the preview.
+			"--secret-overriding=false",
+		),
+	) as { key: string; value: string }[];
+	if (secrets.length === 0) {
+		throw new Error(`Infisical ${INFISICAL_ENVIRONMENT} ${INFISICAL_PREVIEW_PATH} holds no values`);
 	}
+	return Object.fromEntries(secrets.map((secret) => [secret.key, secret.value]));
 }
 
 function requireBuildHookUrl(): string {
@@ -419,6 +291,11 @@ type NetlifyDeploy = {
 	error_message: string | null;
 };
 
+type NetlifyEnvVar = {
+	key: string;
+	values: { context: string; context_parameter?: string }[];
+};
+
 // The signed-in user's own `netlify login` session, like the Infisical CLI
 // session above; no deployment credential is stored anywhere.
 function netlifyApi<T>(operation: string, data: Record<string, unknown>): T {
@@ -430,13 +307,60 @@ function netlifyApi<T>(operation: string, data: Record<string, unknown>): T {
 	return JSON.parse(output) as T;
 }
 
-function requireNetlifySession(): void {
+// Passes arguments, including secret values, on the command line, where other
+// local processes can briefly see them; the CLI offers no other way to pass
+// them, and the script only ever runs on the machine of the person running it.
+function netlifyCli(...args: string[]): void {
+	execFileSync("netlify", [...args, "--site", NETLIFY_SITE_NAME, "--force"], {
+		stdio: ["ignore", "ignore", "inherit"],
+		timeout: NETLIFY_CALL_TIMEOUT_MS,
+	});
+}
+
+let netlifyAccountId: string | undefined;
+
+// Also checks that the session can read the site before anything is created.
+function requireNetlifyAccountId(): string {
 	try {
-		netlifyApi("getSite", { site_id: NETLIFY_SITE_ID });
+		netlifyAccountId ??= netlifyApi<{ account_id: string }>("getSite", {
+			site_id: NETLIFY_SITE_ID,
+		}).account_id;
 	} catch {
 		throw new Error(
 			`Cannot read the Netlify site ${NETLIFY_SITE_ID}; install the Netlify CLI and run \`netlify login\``,
 		);
+	}
+	return netlifyAccountId;
+}
+
+function branchValueKeys(branch: string): string[] {
+	const variables = netlifyApi<NetlifyEnvVar[]>("getEnvVars", {
+		account_id: requireNetlifyAccountId(),
+		site_id: NETLIFY_SITE_ID,
+	});
+	return variables
+		.filter((variable) =>
+			variable.values.some(
+				(value) => value.context === "branch" && value.context_parameter === branch,
+			),
+		)
+		.map((variable) => variable.key);
+}
+
+// Values for the `branch:<branch>` context apply to that branch's deploys only,
+// so every preview has its own and several can exist at once. Other contexts,
+// including the production values Infisical syncs, stay as they are.
+function writeBranchValues(branch: string, values: Record<string, string>): void {
+	for (const [key, value] of Object.entries(values)) {
+		netlifyCli("env:set", key, value, "--context", `branch:${branch}`);
+	}
+}
+
+// Removes the branch's values, including keys an earlier `up` set that the
+// current one no longer does.
+function deleteBranchValues(branch: string, keepKeys: string[] = []): void {
+	for (const key of branchValueKeys(branch).filter((key) => !keepKeys.includes(key))) {
+		netlifyCli("env:unset", key, "--context", `branch:${branch}`);
 	}
 }
 
@@ -506,13 +430,12 @@ async function waitForPreviewDeploy(branch: string, title: string): Promise<void
 async function up(): Promise<void> {
 	const branch = git("rev-parse", "--abbrev-ref", "HEAD");
 	validateBranchName(branch);
-	// Check everything that can be checked before any resource is created or
-	// `/preview` is taken over from another branch.
+	// Check everything that can be checked before any resource is created.
 	requireEnvironments(UP_ENVIRONMENT);
 	requireBuildHookUrl();
-	requireNetlifySession();
+	requireNetlifyAccountId();
 	requirePushedBranch(branch);
-	const { id: syncId } = await findPreviewSync();
+	const sharedValues = readSharedPreviewValues();
 	const name = `preview/${branch}`;
 	const origin = `https://${branch}--${NETLIFY_SITE_NAME}.netlify.app`;
 
@@ -522,24 +445,16 @@ async function up(): Promise<void> {
 		provisionElevenLabsBranch(branch),
 	]);
 
-	const previousBranch = readPreviewBranch();
-	if (previousBranch && previousBranch !== branch) {
-		console.log(
-			`Taking over Infisical ${INFISICAL_PREVIEW_PATH} from "${previousBranch}". Its last deploy keeps working but cannot be redeployed; run \`pnpm run preview:down ${previousBranch}\` once it is no longer needed.`,
-		);
-	}
-	console.log(
-		`Writing preview values to Infisical ${INFISICAL_ENVIRONMENT} ${INFISICAL_PREVIEW_PATH}`,
-	);
-	writePreviewSecrets({
+	const generatedValues: GeneratedPreviewValues = {
 		PREVIEW_BRANCH: branch,
 		DATABASE_URL: databaseUrl,
 		ELEVENLABS_AGENT_BRANCH_ID: elevenLabsBranchId,
 		ORIGIN: origin,
-	});
-
-	console.log("Syncing Infisical to Netlify");
-	await syncPreviewSecrets(syncId);
+	};
+	const values = { ...sharedValues, ...generatedValues };
+	console.log(`Writing ${Object.keys(values).length} values to Netlify for branch "${branch}"`);
+	writeBranchValues(branch, values);
+	deleteBranchValues(branch, Object.keys(values));
 
 	console.log("Triggering Netlify build");
 	const title = await triggerNetlifyBuild(branch);
@@ -551,15 +466,11 @@ async function down(): Promise<void> {
 	const branch = process.argv[3] ?? git("rev-parse", "--abbrev-ref", "HEAD");
 	validateBranchName(branch);
 	requireEnvironments(DOWN_ENVIRONMENT);
-	const { id: syncId } = await findPreviewSync();
 
-	// Reset the values first so that no later build can use a database that is
-	// about to be deleted.
-	if (readPreviewBranch() === branch) {
-		console.log(`Resetting preview values in Infisical ${INFISICAL_PREVIEW_PATH}`);
-		writePreviewSecrets(PREVIEW_PLACEHOLDERS);
-		await syncPreviewSecrets(syncId);
-	}
+	// Delete the values first so that no later build can use a database that is
+	// about to be deleted: without PREVIEW_BRANCH, `netlify.toml` skips it.
+	console.log(`Deleting Netlify values for branch "${branch}"`);
+	deleteBranchValues(branch);
 
 	console.log(`Deleting Neon branch and archiving ElevenLabs branches for "${branch}"`);
 	await Promise.all([deleteNeonBranch(`preview/${branch}`), archiveElevenLabsBranches(branch)]);
@@ -568,26 +479,11 @@ async function down(): Promise<void> {
 	);
 }
 
-// Runs once, before the `/preview` sync is created: that sync starts by copying
-// the folder to Netlify, and without these values the folder would hand
-// branch deploys the production values it imports.
-function init(): void {
-	if (readPreviewBranchSecret() !== "") {
-		console.log(`Infisical ${INFISICAL_PREVIEW_PATH} is already initialized`);
-		return;
-	}
-	writePreviewSecrets(PREVIEW_PLACEHOLDERS);
-	console.log(
-		`Wrote placeholder values to Infisical ${INFISICAL_ENVIRONMENT} ${INFISICAL_PREVIEW_PATH}`,
-	);
-}
-
 async function main() {
 	const action = process.argv[2];
-	if (action === "init") return init();
 	if (action === "up") return up();
 	if (action === "down") return down();
-	throw new Error('Expected action "init", "up" or "down"');
+	throw new Error('Expected action "up" or "down"');
 }
 
 try {
