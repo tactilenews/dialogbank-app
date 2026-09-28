@@ -43,7 +43,8 @@ const DEPLOY_APPEAR_TIMEOUT_MS = 120_000;
 const DEPLOY_TIMEOUT_MS = 20 * 60_000;
 const DEPLOY_POLL_INTERVAL_MS = 5_000;
 // Bounds each Netlify call, which the deadlines above cannot interrupt.
-const NETLIFY_CALL_TIMEOUT_MS = 60_000;
+const NETLIFY_CALL_TIMEOUT_MS = 30_000;
+const NETLIFY_CALL_ATTEMPTS = 3;
 
 type NeonBranch = {
 	id: string;
@@ -358,25 +359,41 @@ type NetlifyEnvVar = {
 	values: { context: string; context_parameter?: string; value?: string }[];
 };
 
+// The CLI occasionally stalls on a call that otherwise takes seconds, so calls
+// that are safe to run twice are retried when they time out.
+function runNetlify(args: string[], { retry }: { retry: boolean }): string {
+	for (let attempt = 1; ; attempt += 1) {
+		try {
+			return execFileSync("netlify", args, {
+				encoding: "utf8",
+				stdio: ["ignore", "pipe", "inherit"],
+				timeout: NETLIFY_CALL_TIMEOUT_MS,
+			});
+		} catch (cause) {
+			const timedOut = cause instanceof Error && "code" in cause && cause.code === "ETIMEDOUT";
+			if (!retry || !timedOut || attempt >= NETLIFY_CALL_ATTEMPTS) throw cause;
+			console.log(`netlify ${args[0]} timed out; retrying`);
+		}
+	}
+}
+
 // The signed-in user's own `netlify login` session, like the Infisical CLI
-// session above; no deployment credential is stored anywhere.
-function netlifyApi<T>(operation: string, data: Record<string, unknown>): T {
-	const output = execFileSync("netlify", ["api", operation, "--data", JSON.stringify(data)], {
-		encoding: "utf8",
-		stdio: ["ignore", "pipe", "inherit"],
-		timeout: NETLIFY_CALL_TIMEOUT_MS,
-	});
-	return JSON.parse(output) as T;
+// session above; no deployment credential is stored anywhere. Only reads are
+// retried by default.
+function netlifyApi<T>(
+	operation: string,
+	data: Record<string, unknown>,
+	{ retry = true }: { retry?: boolean } = {},
+): T {
+	return JSON.parse(runNetlify(["api", operation, "--data", JSON.stringify(data)], { retry })) as T;
 }
 
 // Passes arguments, including secret values, on the command line, where other
 // local processes can briefly see them; the CLI offers no other way to pass
 // them, and the script only ever runs on the machine of the person running it.
+// Setting or unsetting a value is safe to repeat.
 function netlifyCli(...args: string[]): void {
-	execFileSync("netlify", [...args, "--site", NETLIFY_SITE_NAME, "--force"], {
-		stdio: ["ignore", "ignore", "inherit"],
-		timeout: NETLIFY_CALL_TIMEOUT_MS,
-	});
+	runNetlify([...args, "--site", NETLIFY_SITE_NAME, "--force"], { retry: true });
 }
 
 let netlifyAccountId: string | undefined;
