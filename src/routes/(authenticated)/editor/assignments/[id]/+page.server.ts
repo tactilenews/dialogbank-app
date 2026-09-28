@@ -282,35 +282,40 @@ export const load = withAuthenticatedLoad<
 		.from(classifications)
 		.orderBy(classifications.label);
 
+	const ownedAgentsQuery = event.locals.db
+		.select({
+			assignmentId: assignments.id,
+			assignmentName: assignments.name,
+			agentId: assignments.elevenLabsAgentId,
+		})
+		.from(assignments)
+		.where(isNotNull(assignments.elevenLabsAgentId));
+
 	const agentCatalogTag = resolveElevenLabsDialogbankAgentTag(process.env);
 	// The catalog comes from ElevenLabs and does not depend on the queries above,
 	// so they run at the same time.
 	const loadAgentCatalog = async () => {
 		try {
-			const [agentCatalog, ownedAgents] = await Promise.all([
-				listElevenLabsDialogbankAgents(process.env),
-				event.locals.db
-					.select({
-						assignmentId: assignments.id,
-						assignmentName: assignments.name,
-						agentId: assignments.elevenLabsAgentId,
-					})
-					.from(assignments)
-					.where(isNotNull(assignments.elevenLabsAgentId)),
-			]);
-			return { agentCatalog, ownedAgents, agentCatalogError: null };
+			return {
+				agentCatalog: await listElevenLabsDialogbankAgents(process.env),
+				agentCatalogError: null,
+			};
 		} catch (cause) {
 			// non-fatal: the page says the catalog is unavailable instead of empty
 			reportAgentError(cause, { assignmentId: id, agentId: null });
 			return {
 				agentCatalog: [] as ElevenLabsAgentCatalogEntry[],
-				ownedAgents: [],
 				agentCatalogError: describeError(cause),
 			};
 		}
 	};
-	const [rawRows, allClassifications, { agentCatalog, ownedAgents, agentCatalogError }] =
-		await Promise.all([questionRowsQuery, classificationsQuery, loadAgentCatalog()]);
+	const [rawRows, allClassifications, ownedAgents, { agentCatalog, agentCatalogError }] =
+		await Promise.all([
+			questionRowsQuery,
+			classificationsQuery,
+			ownedAgentsQuery,
+			loadAgentCatalog(),
+		]);
 
 	const questionsMap = new Map<
 		number,
