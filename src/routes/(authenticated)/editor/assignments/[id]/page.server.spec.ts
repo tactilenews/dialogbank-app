@@ -735,6 +735,26 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 	});
 
+	it("load: reports a rejected ElevenLabs key to Sentry although it is a client error", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		const revoked = new ElevenLabsError({ message: "Invalid API key", statusCode: 401 });
+		elevenLabs.listElevenLabsDialogbankAgents.mockRejectedValue(revoked);
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1"),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await load(event as unknown as Parameters<typeof load>[0]);
+
+		expect(sentry.captureException).toHaveBeenCalledWith(revoked, {
+			extra: { assignmentId: 1, agentId: null },
+		});
+	});
+
 	it("load: reports a misconfiguration to Sentry, since the page only shows it as unavailable", async ({
 		db,
 		expect,

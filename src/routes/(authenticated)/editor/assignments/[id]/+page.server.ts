@@ -414,16 +414,21 @@ function notInCatalogMessage(): string {
 }
 
 // The page only shows these errors: SvelteKit reports neither caught errors nor
-// `error(500)` to Sentry. Server-side failures, such as a missing configuration
-// or a workflow node an agent lacks, are misconfigurations to be fixed, while
-// client errors such as an agent outside the catalog are expected states.
+// `error(500)` to Sentry. Every ElevenLabs failure is reported, since its 4xx
+// responses mean a revoked key or rate limiting just as its 5xx mean an outage.
+// Of Dialogbank's own errors only server-side ones are: a missing configuration
+// or a workflow node an agent lacks needs fixing, while client errors such as an
+// agent outside the catalog are expected states.
 function reportAgentError(
 	cause: unknown,
 	context: { assignmentId: number; agentId: string | null },
 ): void {
-	if (errorStatus(cause) < 500) return;
-	const exception = isHttpError(cause) ? new Error(cause.body.message) : cause;
-	Sentry.captureException(exception, { extra: context });
+	if (isHttpError(cause)) {
+		if (cause.status < 500) return;
+		Sentry.captureException(new Error(cause.body.message), { extra: context });
+		return;
+	}
+	Sentry.captureException(cause, { extra: context });
 }
 
 function parseAssignmentId(rawId: string): number {

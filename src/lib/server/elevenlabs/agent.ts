@@ -112,22 +112,6 @@ export type ElevenLabsEnv = {
 	ELEVENLABS_WORKFLOW_NODE_ID?: string;
 };
 
-const agentListResponseSchema = z.object({
-	agents: z
-		.array(
-			z.object({
-				agent_id: z.string(),
-				name: z.string(),
-				voice_id: z.string().nullable().optional(),
-				tags: z.array(z.string()).nullable().optional(),
-				archived: z.boolean().optional(),
-			}),
-		)
-		.default([]),
-	has_more: z.boolean().optional(),
-	next_cursor: z.string().nullable().optional(),
-});
-
 export function resolveElevenLabsDialogbankAgentTag(environment: ElevenLabsEnv): string {
 	return environment.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
 }
@@ -374,37 +358,28 @@ export function createElevenLabsAgentCatalogReader(environment: ElevenLabsEnv): 
 		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
 	}
 
+	const client = new ElevenLabsClient({ apiKey });
 	return {
 		list: async ({ tag }) => {
 			const agents: ElevenLabsAgentCatalogEntry[] = [];
 			let cursor: string | undefined;
-
 			do {
-				const url = new URL("https://api.elevenlabs.io/v1/convai/agents");
-				url.searchParams.append("tags", tag);
-				if (cursor) url.searchParams.set("cursor", cursor);
-
-				const response = await fetch(url, {
-					headers: {
-						"xi-api-key": apiKey,
-					},
+				const page = await client.conversationalAi.agents.list({
+					tags: tag,
+					archived: false,
+					pageSize: 100,
+					cursor,
 				});
-
-				if (!response.ok) {
-					throw error(response.status, `ElevenLabs agents could not be loaded.`);
-				}
-
-				const page = agentListResponseSchema.parse(await response.json());
 				agents.push(
 					...page.agents.map((agent) => ({
-						id: agent.agent_id,
+						id: agent.agentId,
 						name: agent.name,
-						voiceId: agent.voice_id ?? null,
+						voiceId: agent.voiceId ?? null,
 						tags: agent.tags ?? [],
 						archived: agent.archived ?? false,
 					})),
 				);
-				cursor = page.has_more ? (page.next_cursor ?? undefined) : undefined;
+				cursor = page.hasMore ? page.nextCursor : undefined;
 			} while (cursor);
 
 			return agents.filter((agent) => !agent.archived);
