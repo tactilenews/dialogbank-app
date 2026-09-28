@@ -1,3 +1,4 @@
+import { and, isNotNull } from "drizzle-orm";
 import { assignments } from "$lib/server/db/schema";
 import { slugify } from "$lib/slugify";
 import type { DbClient } from "./db";
@@ -26,3 +27,11 @@ export async function createUniqueAssignmentSlug(
 
 	return `${base}-${suffix}`;
 }
+
+// An assignment is public once its agent has been configured successfully:
+// right after connecting, or when configuring fails, the agent does not ask its
+// questions yet. Disconnecting clears both columns.
+export const isPublishedAssignment = and(
+	isNotNull(assignments.elevenLabsAgentId),
+	isNotNull(assignments.agentConfiguredAt),
+);

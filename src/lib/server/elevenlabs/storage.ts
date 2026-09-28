@@ -30,24 +30,34 @@ export async function processElevenLabsPostCall({ db, payload }: StorageInput): 
 	const data = parseElevenLabsWebhook(payload);
 	const conversationBase = data.conversation;
 
-	const [active] = await db
+	// An agent belongs to at most one assignment. A conversation of an agent that
+	// belongs to none, such as one that was disconnected, is not stored (#282).
+	// The owner is the one when the webhook arrives, not during the call: an
+	// agent moved to another assignment in between takes the conversation along.
+	// That is a known, accepted limitation (#285).
+	const [assignment] = await db
 		.select({ id: assignments.id })
 		.from(assignments)
-		.where(eq(assignments.isActive, true))
+		.where(eq(assignments.elevenLabsAgentId, conversationBase.agentId))
 		.limit(1);
+	const assignmentId = assignment?.id ?? null;
 
-	if (!active) {
-		Sentry.captureMessage("No active assignment configured; conversation not stored", {
-			level: "error",
-			extra: { conversationId: conversationBase.conversationId },
-		});
+	if (assignmentId === null) {
+		Sentry.captureMessage(
+			"Conversation assignment could not be resolved; conversation not stored",
+			{
+				level: "error",
+				extra: {
+					conversationId: conversationBase.conversationId,
+					agentId: conversationBase.agentId,
+				},
+			},
+		);
 		consola.error(
-			`No active assignment configured; conversation ${conversationBase.conversationId} not stored`,
+			`Assignment for conversation ${conversationBase.conversationId} could not be resolved`,
 		);
 		return null;
 	}
-
-	const assignmentId = active.id;
 
 	try {
 		// Use dbAtomic to run both inserts in the best available atomic mode

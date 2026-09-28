@@ -1,21 +1,16 @@
-import { redirect } from "@sveltejs/kit";
-import { eq } from "drizzle-orm";
+import { asc } from "drizzle-orm";
+import { isPublishedAssignment } from "$lib/server/assignments";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
 	const { db, schema } = event.locals;
 	const { assignments } = schema;
 
-	const activeRows = await db
-		.select({ slug: assignments.slug })
+	const availableAssignments = await db
+		.select({ name: assignments.name, slug: assignments.slug, location: assignments.location })
 		.from(assignments)
-		.where(eq(assignments.isActive, true))
-		.limit(1);
-	const active = activeRows.at(0);
+		.where(isPublishedAssignment)
+		.orderBy(asc(assignments.name));
 
-	if (active) {
-		redirect(302, `/showcase/${active.slug}`);
-	}
-
-	return {};
+	return { availableAssignments };
 };

@@ -9,6 +9,9 @@ import { z } from "zod";
 import { slugify } from "$lib/slugify";
 
 const QUESTION_KEY_PREFIX = "question_";
+// Earlier versions wrote the assignment id into the agent; configuring an agent
+// removes it, since conversations are attributed by agent now.
+const LEGACY_ASSIGNMENT_ID_KEY = "assignment_id";
 const CLASSIFICATION_KEY_PREFIX = "classification_";
 const WORKFLOW_NODE_PROMPT_PREAMBLE = "Stelle der Person nacheinander diese Fragen:\n\n";
 
@@ -42,7 +45,7 @@ type AgentWriter = {
 			};
 			workflow?: AgentWorkflowRequestModel;
 		},
-	) => Promise<void>;
+	) => Promise<{ versionId?: string }>;
 };
 
 // `null` removes the branch's override, leaving it without a post-call webhook
@@ -73,11 +76,23 @@ export type AgentBranchReader = {
 	archive: (agentId: string, branchId: string) => Promise<void>;
 };
 
+export type AgentCatalogReader = {
+	list: (request: { tag: string }) => Promise<ElevenLabsAgentCatalogEntry[]>;
+};
+
 export type ElevenLabsAgentTarget = {
 	agentId: string;
 	branchId?: string;
 	workflowNodeId: string;
 	postCallWebhookId: string | null;
+};
+
+export type ElevenLabsAgentCatalogEntry = {
+	id: string;
+	name: string;
+	voiceId: string | null;
+	tags: string[];
+	archived: boolean;
 };
 
 export type ElevenLabsEditorAgent = {
@@ -92,9 +107,21 @@ export type ElevenLabsEnv = {
 	ELEVENLABS_AGENT_ID?: string;
 	ELEVENLABS_AGENT_BRANCH_NAME?: string;
 	ELEVENLABS_API_KEY?: string;
+	ELEVENLABS_DIALOGBANK_AGENT_TAG?: string;
 	ELEVENLABS_POST_CALL_WEBHOOK_ID?: string;
 	ELEVENLABS_WORKFLOW_NODE_ID?: string;
 };
+
+export function resolveElevenLabsDialogbankAgentTag(environment: ElevenLabsEnv): string {
+	return environment.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
+}
+
+export function isSelectableDialogbankAgent(
+	agent: ElevenLabsAgentCatalogEntry,
+	requiredTag: string,
+): boolean {
+	return !agent.archived && agent.tags.includes(requiredTag);
+}
 
 // Refers to each agent's main branch, whatever it is called: ElevenLabs names
 // it "Main" on some agents.
@@ -120,17 +147,6 @@ export function resolveElevenLabsPostCallWebhookId(environment: ElevenLabsEnv): 
 		throw error(500, "ELEVENLABS_POST_CALL_WEBHOOK_ID is not configured on the server.");
 	}
 	return webhookId === NO_POST_CALL_WEBHOOK ? null : webhookId;
-}
-
-export async function resolveElevenLabsAgentTarget(
-	environment: ElevenLabsEnv,
-	branchReader?: AgentBranchReader,
-): Promise<ElevenLabsAgentTarget> {
-	const agentId = environment.ELEVENLABS_AGENT_ID;
-	if (!agentId) {
-		throw error(500, "ELEVENLABS_AGENT_ID is not configured on the server.");
-	}
-	return resolveElevenLabsAgentTargetForAgentId(environment, agentId, branchReader);
 }
 
 export async function resolveElevenLabsAgentTargetForAgentId(
@@ -162,13 +178,29 @@ export async function resolveElevenLabsAgentTargetForAgentId(
 	return { agentId, branchId, workflowNodeId, postCallWebhookId };
 }
 
+// The SDK waits up to four minutes per request and retries twice by default,
+// while Netlify ends a function after 60 seconds. A hanging ElevenLabs request
+// would keep the editor waiting and then end in a generic error page. Failing
+// after eight seconds lets the page report the failure itself, and reloading it
+// is the retry. The limit is per request: an operation of several requests that
+// are each slow but succeed can still take longer.
+export const ELEVENLABS_REQUEST_TIMEOUT_SECONDS = 8;
+
+export function createElevenLabsClient(apiKey: string): ElevenLabsClient {
+	return new ElevenLabsClient({
+		apiKey,
+		timeoutInSeconds: ELEVENLABS_REQUEST_TIMEOUT_SECONDS,
+		maxRetries: 0,
+	});
+}
+
 export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): AgentBranchReader {
 	const apiKey = environment.ELEVENLABS_API_KEY;
 	if (!apiKey) {
 		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
 	}
 
-	const client = new ElevenLabsClient({ apiKey });
+	const client = createElevenLabsClient(apiKey);
 	return {
 		getMainBranchId: async (agentId) =>
 			(await client.conversationalAi.agents.get(agentId)).mainBranchId,
@@ -327,12 +359,45 @@ export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentRe
 		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
 	}
 
-	const client = new ElevenLabsClient({
-		apiKey,
-	});
+	const client = createElevenLabsClient(apiKey);
 
 	return {
 		get: async (agentId, request) => client.conversationalAi.agents.get(agentId, request),
+	};
+}
+
+export function createElevenLabsAgentCatalogReader(environment: ElevenLabsEnv): AgentCatalogReader {
+	const apiKey = environment.ELEVENLABS_API_KEY;
+	if (!apiKey) {
+		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
+	}
+
+	const client = createElevenLabsClient(apiKey);
+	return {
+		list: async ({ tag }) => {
+			const agents: ElevenLabsAgentCatalogEntry[] = [];
+			let cursor: string | undefined;
+			do {
+				const page = await client.conversationalAi.agents.list({
+					tags: tag,
+					archived: false,
+					pageSize: 100,
+					cursor,
+				});
+				agents.push(
+					...page.agents.map((agent) => ({
+						id: agent.agentId,
+						name: agent.name,
+						voiceId: agent.voiceId ?? null,
+						tags: agent.tags ?? [],
+						archived: agent.archived ?? false,
+					})),
+				);
+				cursor = page.hasMore ? page.nextCursor : undefined;
+			} while (cursor);
+
+			return agents.filter((agent) => !agent.archived);
+		},
 	};
 }
 
@@ -359,15 +424,19 @@ export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWr
 		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
 	}
 
-	const client = new ElevenLabsClient({
-		apiKey,
-	});
+	const client = createElevenLabsClient(apiKey);
 
 	return {
-		update: async (agentId, request) => {
-			await updateAgent(client, agentId, request);
-		},
+		update: async (agentId, request) => updateAgent(client, agentId, request),
 	};
+}
+
+export async function listElevenLabsDialogbankAgents(
+	environment: ElevenLabsEnv,
+	reader = createElevenLabsAgentCatalogReader(environment),
+): Promise<ElevenLabsAgentCatalogEntry[]> {
+	const tag = resolveElevenLabsDialogbankAgentTag(environment);
+	return reader.list({ tag });
 }
 
 export function parseQuestionsFromWorkflowNodePrompt(additionalPrompt: string): string[] {
@@ -482,7 +551,7 @@ export async function updateElevenLabsAgentQuestions(
 	existingAgent: AgentReaderResponse,
 	writer: AgentWriter,
 	options?: { promptSupplement?: string | null },
-): Promise<void> {
+): Promise<string | null> {
 	const existingWorkflow = existingAgent.workflow;
 	const existingNode = existingWorkflow?.nodes[target.workflowNodeId];
 
@@ -515,7 +584,7 @@ export async function updateElevenLabsAgentQuestions(
 			([key]) =>
 				!key.startsWith(QUESTION_KEY_PREFIX) &&
 				!key.startsWith(CLASSIFICATION_KEY_PREFIX) &&
-				key !== "assignment_id",
+				key !== LEGACY_ASSIGNMENT_ID_KEY,
 		),
 	);
 	const newDataCollection = {
@@ -523,7 +592,7 @@ export async function updateElevenLabsAgentQuestions(
 		...buildQuestionDataCollectionEntries(questions),
 	};
 
-	await writer.update(target.agentId, {
+	const updatedAgent = await writer.update(target.agentId, {
 		branchId: target.branchId,
 		workflow: updatedWorkflow,
 		platformSettings: {
@@ -531,4 +600,5 @@ export async function updateElevenLabsAgentQuestions(
 			workspaceOverrides: postCallWebhookOverride(target.postCallWebhookId),
 		},
 	});
+	return updatedAgent.versionId ?? null;
 }

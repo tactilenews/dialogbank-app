@@ -1,5 +1,6 @@
 import { error } from "@sveltejs/kit";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { isPublishedAssignment } from "$lib/server/assignments";
 import { hasVisibleQuoteText } from "../quotes";
 import type { PageServerLoad } from "./$types";
 
@@ -11,11 +12,18 @@ export const load: PageServerLoad = async (event) => {
 	const slug = event.params.name;
 
 	const [assignment] = await db
-		.select({ id: assignments.id, name: assignments.name })
+		.select({
+			id: assignments.id,
+			name: assignments.name,
+			published: sql<boolean>`${isPublishedAssignment}`,
+		})
 		.from(assignments)
 		.where(eq(assignments.slug, slug))
 		.limit(1);
 	if (!assignment) error(404, "Einsatz nicht gefunden.");
+	if (!assignment.published && !event.locals.user) {
+		error(404, "Einsatz nicht gefunden.");
+	}
 
 	const [conversationCountRow] = await db
 		.select({ count: sql<number>`count(*)` })
