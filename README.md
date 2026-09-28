@@ -204,6 +204,14 @@ If you are wiring a new agent to the app, the minimal setup is:
 4. Copy the webhook signing secret into `ELEVENLABS_WEBHOOK_SECRET`.
 5. Trigger a test conversation and confirm that the webhook produces stored conversation and answer data.
 
+To receive webhooks on the local dev server, expose it with a Cloudflare quick tunnel and register `<tunnel URL>/webhook/elevenlabs/post-call` as above:
+
+```sh
+cloudflared tunnel --url http://localhost:5173
+```
+
+The dev server accepts requests for any `*.trycloudflare.com` host, since every quick tunnel gets a new random subdomain.
+
 ## Authentication
 
 Editor access uses Better Auth with email/password sign-in. Sign-up is disabled. The app requires:
