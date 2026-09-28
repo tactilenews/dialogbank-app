@@ -1,5 +1,6 @@
 import { error } from "@sveltejs/kit";
 import { and, desc, eq, sql } from "drizzle-orm";
+import { isPublishedAssignment } from "$lib/server/assignments";
 import { hasVisibleQuoteText } from "../quotes";
 import type { PageServerLoad } from "./$types";
 
@@ -14,13 +15,13 @@ export const load: PageServerLoad = async (event) => {
 		.select({
 			id: assignments.id,
 			name: assignments.name,
-			agentId: assignments.elevenLabsAgentId,
+			published: sql<boolean>`${isPublishedAssignment}`,
 		})
 		.from(assignments)
 		.where(eq(assignments.slug, slug))
 		.limit(1);
 	if (!assignment) error(404, "Einsatz nicht gefunden.");
-	if (!assignment.agentId && !event.locals.user) {
+	if (!assignment.published && !event.locals.user) {
 		error(404, "Einsatz nicht gefunden.");
 	}
 

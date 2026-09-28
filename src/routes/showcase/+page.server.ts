@@ -1,4 +1,5 @@
-import { asc, isNotNull } from "drizzle-orm";
+import { asc } from "drizzle-orm";
+import { isPublishedAssignment } from "$lib/server/assignments";
 import type { PageServerLoad } from "./$types";
 
 export const load: PageServerLoad = async (event) => {
@@ -8,7 +9,7 @@ export const load: PageServerLoad = async (event) => {
 	const availableAssignments = await db
 		.select({ name: assignments.name, slug: assignments.slug, location: assignments.location })
 		.from(assignments)
-		.where(isNotNull(assignments.elevenLabsAgentId))
+		.where(isPublishedAssignment)
 		.orderBy(asc(assignments.name));
 
 	return { availableAssignments };
