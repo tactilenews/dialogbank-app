@@ -25,7 +25,7 @@ export type AgentReaderResponse = Pick<
 	"name" | "conversationConfig" | "platformSettings" | "workflow"
 >;
 
-type AgentReader = {
+export type AgentReader = {
 	get: (
 		agentId: string,
 		request?: {
@@ -194,7 +194,13 @@ export function createElevenLabsClient(apiKey: string): ElevenLabsClient {
 	});
 }
 
-export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): AgentBranchReader {
+// The webhook check reads the agent through `agentReader`, so a caller that
+// reads the same branch afterwards can share one read through
+// `rememberAgentReads`.
+export function createElevenLabsAgentBranchReader(
+	environment: ElevenLabsEnv,
+	agentReader: AgentReader = createElevenLabsAgentReader(environment),
+): AgentBranchReader {
 	const apiKey = environment.ELEVENLABS_API_KEY;
 	if (!apiKey) {
 		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
@@ -219,7 +225,7 @@ export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): A
 			await client.conversationalAi.agents.branches.update(agentId, branchId, { isArchived: true });
 		},
 		getPostCallWebhookId: async (agentId, branchId) => {
-			const agent = await client.conversationalAi.agents.get(agentId, { branchId });
+			const agent = await agentReader.get(agentId, { branchId });
 			return agent.platformSettings?.workspaceOverrides?.webhooks?.postCallWebhookId ?? null;
 		},
 		setPostCallWebhook: async (agentId, branchId, postCallWebhookId) => {
@@ -363,6 +369,24 @@ export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentRe
 
 	return {
 		get: async (agentId, request) => client.conversationalAi.agents.get(agentId, request),
+	};
+}
+
+// Reads each agent branch once for the lifetime of the returned reader, meant
+// for a single request. A write in between, such as correcting a webhook, is
+// not reflected in what it returns afterwards.
+export function rememberAgentReads(reader: AgentReader): AgentReader {
+	const reads = new Map<string, Promise<AgentReaderResponse>>();
+	return {
+		get: (agentId, request) => {
+			const key = `${agentId}:${request?.branchId ?? ""}`;
+			let read = reads.get(key);
+			if (!read) {
+				read = reader.get(agentId, request);
+				reads.set(key, read);
+			}
+			return read;
+		},
 	};
 }
 
