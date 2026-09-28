@@ -36,6 +36,9 @@ export default defineConfig({
 		sveltekit(),
 		devtoolsJson(),
 	],
+	server: {
+		allowedHosts: [".trycloudflare.com"],
+	},
 	test: {
 		expect: {
 			requireAssertions: true,
