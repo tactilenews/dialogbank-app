@@ -252,7 +252,7 @@ export const load = withAuthenticatedLoad<
 
 	let agent: ElevenLabsEditorAgent | null = null;
 	try {
-		const agentTarget = resolveElevenLabsAgentTarget(process.env);
+		const agentTarget = await resolveElevenLabsAgentTarget(process.env);
 		const reader = createElevenLabsAgentReader(process.env);
 		agent = await getElevenLabsEditorAgent(agentTarget, reader);
 	} catch {
@@ -331,7 +331,7 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 				.filter(Boolean),
 		}));
 
-		const agentTarget = resolveElevenLabsAgentTarget(process.env);
+		const agentTarget = await resolveElevenLabsAgentTarget(process.env);
 		const reader = createElevenLabsAgentReader(process.env);
 		const writer = createElevenLabsAgentWriter(process.env);
 
