@@ -1,7 +1,9 @@
 <script lang="ts">
 import type { LiteralJsonSchemaProperty } from "@elevenlabs/elevenlabs-js/api";
+import type { SubmitFunction } from "@sveltejs/kit";
 import { untrack } from "svelte";
 import { enhance } from "$app/forms";
+import { invalidateAll } from "$app/navigation";
 import { resolve } from "$app/paths";
 import EmojiPicker from "$lib/components/EmojiPicker.svelte";
 import type { ActionData, PageData } from "./$types";
@@ -103,16 +105,16 @@ function removeNewClassification(questionId: number, label: string) {
 	if (idx !== -1) q.newClassifications.splice(idx, 1);
 }
 
-function makeEnhancer() {
-	return () => {
-		submitting = true;
-		return ({ update }: { update: (opts: { reset: boolean }) => Promise<void> }) => {
-			update({ reset: false }).then(() => {
-				submitting = false;
-			});
-		};
+const enhancer: SubmitFunction = () => {
+	submitting = true;
+	return async ({ result, update }) => {
+		await update({ reset: false });
+		// A failed save may still have saved the assignment or claimed its agent,
+		// but `update` only reloads the page data after a successful one.
+		if (result.type === "failure") await invalidateAll();
+		submitting = false;
 	};
-}
+};
 </script>
 
 <svelte:head>
@@ -133,7 +135,7 @@ function makeEnhancer() {
 	<div class="rounded-lg border bg-white p-6 shadow-md">
 		<form
 			method="POST"
-			use:enhance={makeEnhancer()}
+			use:enhance={enhancer}
 		>
 			<fieldset disabled={submitting} class="min-w-0">
 				<!-- Metadata -->

@@ -507,7 +507,7 @@ async function configureAssignmentAgent(
 		// Sharing one timestamp lets the page tell whether the assignment changed
 		// after its agent was last configured.
 		const configuredAt = new Date();
-		await db
+		const configuredAssignments = await db
 			.update(assignments)
 			.set({
 				elevenLabsAgentVersionId: versionId,
@@ -515,7 +515,17 @@ async function configureAssignmentAgent(
 				agentConfigurationError: null,
 				updatedAt: configuredAt,
 			})
-			.where(ownedByAgent);
+			.where(ownedByAgent)
+			.returning();
+		if (configuredAssignments.length === 0) {
+			// The agent changed hands while it was being written, so it may now carry
+			// this assignment's configuration instead of its new owner's.
+			await db
+				.update(assignments)
+				.set({ agentConfiguredAt: null })
+				.where(eq(assignments.elevenLabsAgentId, agentId));
+			throw error(409, "Der Agent wurde während des Speicherns einem anderen Einsatz zugewiesen.");
+		}
 		return { ok: true };
 	} catch (cause) {
 		const message = describeError(cause);
@@ -526,9 +536,10 @@ async function configureAssignmentAgent(
 }
 
 // Disconnecting only changes the database: conversations are attributed by
-// agent, so the agent's configuration needs no cleanup.
-async function disconnectAssignmentAgent(db: DbClient, id: number, agentId: string) {
-	await db
+// agent, so the agent's configuration needs no cleanup. It disconnects whichever
+// agent the assignment has by now, since "Kein Agent" is what the editor chose.
+async function disconnectAssignmentAgent(db: DbClient, id: number): Promise<boolean> {
+	const disconnectedAssignments = await db
 		.update(assignments)
 		.set({
 			elevenLabsAgentId: null,
@@ -536,7 +547,9 @@ async function disconnectAssignmentAgent(db: DbClient, id: number, agentId: stri
 			agentConfiguredAt: null,
 			agentConfigurationError: null,
 		})
-		.where(and(eq(assignments.id, id), eq(assignments.elevenLabsAgentId, agentId)));
+		.where(and(eq(assignments.id, id), isNotNull(assignments.elevenLabsAgentId)))
+		.returning();
+	return disconnectedAssignments.length > 0;
 }
 
 type AgentClaimResult = { ok: true } | { ok: false; status: number; message: string };
@@ -618,14 +631,16 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 		const currentAgentId = await loadAssignmentAgentId(event.locals.db, id);
 		// Only an explicit "Kein Agent" selection disconnects the agent, not a
 		// form without the agent field.
-		const selectedAgentId = formData.has("elevenLabsAgentId")
-			? parseElevenLabsAgentId(formData)
-			: currentAgentId;
+		const agentFieldSubmitted = formData.has("elevenLabsAgentId");
+		const selectedAgentId = agentFieldSubmitted ? parseElevenLabsAgentId(formData) : currentAgentId;
 
 		if (!selectedAgentId) {
-			if (!currentAgentId) return { success: true, message: "Einsatz gespeichert." };
-			await disconnectAssignmentAgent(event.locals.db, id, currentAgentId);
-			return { success: true, message: "Einsatz gespeichert und Agent getrennt." };
+			const disconnected =
+				agentFieldSubmitted && (await disconnectAssignmentAgent(event.locals.db, id));
+			return {
+				success: true,
+				message: disconnected ? "Einsatz gespeichert und Agent getrennt." : "Einsatz gespeichert.",
+			};
 		}
 
 		const agentChanged = selectedAgentId !== currentAgentId;

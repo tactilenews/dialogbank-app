@@ -551,6 +551,55 @@ describe("/editor/assignments/[id] +page.server", () => {
 		});
 	});
 
+	it("save: flags the agent's new owner when the agent changed hands while being configured", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		await db
+			.update(schema.assignments)
+			.set({ elevenLabsAgentId: "agent_current" })
+			.where(eq(schema.assignments.id, 1));
+		const [newOwner] = await db
+			.insert(schema.assignments)
+			.values({ name: "Another Assignment", slug: "another-assignment" })
+			.returning();
+		elevenLabs.updateElevenLabsAgentQuestions.mockImplementation(async () => {
+			await db
+				.update(schema.assignments)
+				.set({ elevenLabsAgentId: null })
+				.where(eq(schema.assignments.id, 1));
+			await db
+				.update(schema.assignments)
+				.set({ elevenLabsAgentId: "agent_current", agentConfiguredAt: new Date() })
+				.where(eq(schema.assignments.id, newOwner.id));
+			return "agtvrsn_new";
+		});
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/save", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.save(event as unknown as Parameters<typeof actions.save>[0]),
+		).resolves.toMatchObject({
+			status: 409,
+			data: {
+				message:
+					"Einsatz gespeichert, aber der Agent konnte nicht aktualisiert werden: Der Agent wurde während des Speicherns einem anderen Einsatz zugewiesen.",
+			},
+		});
+		await expect(
+			db.query.assignments.findFirst({ where: (row, { eq }) => eq(row.id, newOwner.id) }),
+		).resolves.toMatchObject({ elevenLabsAgentId: "agent_current", agentConfiguredAt: null });
+	});
+
 	it("save: saves the assignment before configuring the new agent with it", async ({
 		db,
 		expect,
