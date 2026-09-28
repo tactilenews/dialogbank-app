@@ -201,10 +201,15 @@ function createElevenLabsClient(): ElevenLabsClient {
 	return new ElevenLabsClient({ apiKey: requireEnvironment("ELEVENLABS_ADMIN_API_KEY") });
 }
 
+// The preview app reads its catalog tag from the shared values, not from the
+// environment this script runs in, so the script has to use the same one.
+function catalogTag(sharedValues: Record<string, string>): string {
+	return sharedValues.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
+}
+
 // Every agent Dialogbank can select: the preview app creates its branch on each
 // agent it uses. Agents outside that catalog are never touched.
-async function previewAgentIds(client: ElevenLabsClient): Promise<string[]> {
-	const tag = process.env.ELEVENLABS_DIALOGBANK_AGENT_TAG?.trim() || "dialogbank";
+async function previewAgentIds(client: ElevenLabsClient, tag: string): Promise<string[]> {
 	const agentIds: string[] = [];
 	let cursor: string | undefined;
 	do {
@@ -220,10 +225,10 @@ async function previewAgentIds(client: ElevenLabsClient): Promise<string[]> {
 // page past one response, so only active branches are searched: archived ones
 // pile up over time, while active previews stay few. Branches named
 // `preview/<branch>/<timestamp>` come from earlier versions of this script.
-async function findPreviewAgentBranches(client: ElevenLabsClient, name: string) {
+async function findPreviewAgentBranches(client: ElevenLabsClient, name: string, tag: string) {
 	const limit = 100;
 	const found: { agentId: string; branchId: string }[] = [];
-	for (const agentId of await previewAgentIds(client)) {
+	for (const agentId of await previewAgentIds(client, tag)) {
 		const { results } = await client.conversationalAi.agents.branches.list(agentId, {
 			includeArchived: false,
 			limit,
@@ -240,9 +245,9 @@ async function findPreviewAgentBranches(client: ElevenLabsClient, name: string) 
 	return found;
 }
 
-async function archiveElevenLabsBranches(name: string): Promise<void> {
+async function archiveElevenLabsBranches(name: string, tag: string): Promise<void> {
 	const client = createElevenLabsClient();
-	for (const { agentId, branchId } of await findPreviewAgentBranches(client, name)) {
+	for (const { agentId, branchId } of await findPreviewAgentBranches(client, name, tag)) {
 		await client.conversationalAi.agents.branches.update(agentId, branchId, { isArchived: true });
 	}
 }
@@ -307,8 +312,9 @@ async function switchPreviewBranchesToWebhook(
 	client: ElevenLabsClient,
 	name: string,
 	webhookId: string,
+	tag: string,
 ): Promise<void> {
-	for (const target of await findPreviewAgentBranches(client, name)) {
+	for (const target of await findPreviewAgentBranches(client, name, tag)) {
 		await client.conversationalAi.agents.update(target.agentId, {
 			branchId: target.branchId,
 			platformSettings: { workspaceOverrides: { webhooks: { postCallWebhookId: webhookId } } },
@@ -562,7 +568,7 @@ async function up(): Promise<void> {
 	// On every run, not only when the webhook is new: a run that failed before
 	// this point may have left the branches on a webhook this one now replaces.
 	console.log("Pointing the preview's agent branches at its webhook");
-	await switchPreviewBranchesToWebhook(client, name, webhook.webhookId);
+	await switchPreviewBranchesToWebhook(client, name, webhook.webhookId, catalogTag(sharedValues));
 	await deletePreviewWebhooks(client, webhook.replacedIds);
 	console.log(`Preview live at ${origin}`);
 }
@@ -581,7 +587,8 @@ async function down(): Promise<void> {
 	console.log(`Deleting the Neon branch, ElevenLabs branches and webhook for "${branch}"`);
 	const name = `preview/${branch}`;
 	const client = createElevenLabsClient();
-	await Promise.all([deleteNeonBranch(name), archiveElevenLabsBranches(name)]);
+	const tag = catalogTag(readSharedPreviewValues());
+	await Promise.all([deleteNeonBranch(name), archiveElevenLabsBranches(name, tag)]);
 	const origin = `https://${branch}--${NETLIFY_SITE_NAME}.netlify.app`;
 	await deletePreviewWebhooks(client, await findPreviewWebhookIds(client, origin));
 	console.log(`Done. https://${branch}--${NETLIFY_SITE_NAME}.netlify.app now answers 404.`);

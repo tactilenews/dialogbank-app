@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { describe, it } from "$lib/server/test/fixtures";
 import { processElevenLabsPostCall } from "./storage";
 import {
+	disconnectedAgentPayload,
 	samplePayload1,
 	samplePayload2,
 	samplePayload3,
@@ -93,16 +94,10 @@ describe("ElevenLabs Storage", () => {
 		schema,
 	}) => {
 		await db.update(schema.assignments).set({ elevenLabsAgentId: "agent_test" });
-		const payload = {
-			...samplePayload2,
-			data: {
-				...samplePayload2.data,
-				agent_id: "agent_disconnected",
-				conversation_id: "conversation_of_disconnected_agent",
-			},
-		};
 
-		await expect(processElevenLabsPostCall({ db, payload })).resolves.toBeNull();
+		await expect(
+			processElevenLabsPostCall({ db, payload: disconnectedAgentPayload }),
+		).resolves.toBeNull();
 		await expect(db.select().from(schema.conversations)).resolves.toHaveLength(0);
 	});
 

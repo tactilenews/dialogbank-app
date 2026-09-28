@@ -49,7 +49,7 @@ These variables are used by the application:
 - `ORIGIN`: canonical app URL used by auth; if omitted, the app falls back to `URL` or the incoming request origin
 - `ELEVENLABS_API_KEY`: server-side API key used to read agent details
 - `ELEVENLABS_AGENT_ID`: the ElevenLabs conversational agent wired to this app
-- `ELEVENLABS_DIALOGBANK_AGENT_TAG`: the tag that puts an ElevenLabs agent into Dialogbank's catalog (default `dialogbank`). Editors can connect only tagged agents to an assignment, and Dialogbank never writes to an agent without it; removing the tag takes an agent away from Dialogbank
+- `ELEVENLABS_DIALOGBANK_AGENT_TAG`: the tag that puts an ElevenLabs agent into Dialogbank's catalog (default `dialogbank`). Editors can connect only tagged agents to an assignment, and Dialogbank never writes to an agent without it. Removing the tag does not unpublish an assignment: disconnect its agent in the editor to take it off the public pages
 - `ELEVENLABS_AGENT_BRANCH_NAME`: the agent branch the app reads and writes: `main` in production, `development` in `dev`, and a per-branch name for previews (see [Preview deployments](#preview-deployments)). `main` stands for the agent's main branch, whatever ElevenLabs calls it (some agents call it `Main`); any other branch is looked up by its exact name and created from the main branch if it is missing
 - `ELEVENLABS_POST_CALL_WEBHOOK_ID`: the ElevenLabs workspace webhook that receives the post-call webhooks of the agent branch the app uses, or `none` for no webhook (see [Webhook Wiring](#webhook-wiring))
 - `ELEVENLABS_WEBHOOK_SECRET`: secret used to verify `ElevenLabs-Signature`
