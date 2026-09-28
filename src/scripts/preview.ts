@@ -3,7 +3,6 @@ import { randomBytes } from "node:crypto";
 import { ElevenLabsClient } from "@elevenlabs/elevenlabs-js";
 
 const NEON_API_BASE = "https://console.neon.tech/api/v2";
-const NETLIFY_BUILD_HOOK_PREFIX = "https://api.netlify.com/build_hooks/";
 const NETLIFY_SITE_NAME = "dialogbank";
 const NETLIFY_SITE_ID = `${NETLIFY_SITE_NAME}.netlify.app`;
 const POST_CALL_WEBHOOK_PATH = "/webhook/elevenlabs/post-call";
@@ -30,7 +29,6 @@ const UP_ENVIRONMENT = [
 	"PARENT_BRANCH_ID",
 	"ELEVENLABS_ADMIN_API_KEY",
 	"ELEVENLABS_AGENT_ID",
-	"NETLIFY_BUILD_HOOK_URL",
 ];
 const DOWN_ENVIRONMENT = [
 	"NEON_API_KEY",
@@ -39,7 +37,6 @@ const DOWN_ENVIRONMENT = [
 	"ELEVENLABS_AGENT_ID",
 ];
 
-const DEPLOY_APPEAR_TIMEOUT_MS = 120_000;
 const DEPLOY_TIMEOUT_MS = 20 * 60_000;
 const DEPLOY_POLL_INTERVAL_MS = 5_000;
 // Bounds each Netlify call, which the deadlines above cannot interrupt.
@@ -108,7 +105,7 @@ function validateBranchName(branch: string): void {
 	}
 }
 
-// The build hook builds whatever the remote branch points to, so a local commit
+// Netlify builds whatever the remote branch points to, so a local commit
 // that was never pushed would silently not be part of the preview.
 function requirePushedBranch(branch: string): void {
 	const remote = git("ls-remote", "origin", `refs/heads/${branch}`).split(/\s+/)[0];
@@ -335,14 +332,6 @@ function readSharedPreviewValues(): Record<string, string> {
 	return Object.fromEntries(secrets.map((secret) => [secret.key, secret.value]));
 }
 
-function requireBuildHookUrl(): string {
-	const hookUrl = requireEnvironment("NETLIFY_BUILD_HOOK_URL");
-	if (!hookUrl.startsWith(NETLIFY_BUILD_HOOK_PREFIX)) {
-		throw new Error(`NETLIFY_BUILD_HOOK_URL must start with ${NETLIFY_BUILD_HOOK_PREFIX}`);
-	}
-	return hookUrl;
-}
-
 type NetlifyDeploy = {
 	id: string;
 	state: string;
@@ -457,43 +446,21 @@ function sleep(ms: number): Promise<void> {
 	return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-// The title identifies the deploy the build hook starts, which it does not
-// report itself.
-async function triggerNetlifyBuild(branch: string): Promise<string> {
-	const hookUrl = requireBuildHookUrl();
-	const title = `pnpm preview:up for ${branch} at ${new Date().toISOString()}`;
-	const query = new URLSearchParams({ trigger_branch: branch, trigger_title: title });
-	const response = await fetch(`${hookUrl}?${query}`, {
-		method: "POST",
-		body: "{}",
-		signal: AbortSignal.timeout(NETLIFY_CALL_TIMEOUT_MS),
-	});
-	if (!response.ok) {
-		throw new Error(`Netlify build hook ${response.status}: ${await response.text()}`);
-	}
-	return title;
-}
-
-async function findTriggeredDeploy(branch: string, title: string): Promise<NetlifyDeploy> {
-	const deadline = Date.now() + DEPLOY_APPEAR_TIMEOUT_MS;
-	while (Date.now() < deadline) {
-		const deploys = netlifyApi<NetlifyDeploy[]>("listSiteDeploys", {
-			site_id: NETLIFY_SITE_ID,
-			per_page: 20,
-		});
-		const deploy = deploys.find(
-			(candidate) => candidate.branch === branch && candidate.title === title,
-		);
-		if (deploy) return deploy;
-		await sleep(DEPLOY_POLL_INTERVAL_MS);
-	}
-	throw new Error(`Netlify did not start a deploy for "${title}"`);
+// Netlify builds the branch even though it is set to build no branches on
+// push, and reports the deploy the build becomes.
+function triggerNetlifyBuild(branch: string): string {
+	// Not retried: a retry after a timeout could start a second build.
+	return netlifyApi<{ deploy_id: string }>(
+		"createSiteBuild",
+		{ site_id: NETLIFY_SITE_ID, branch, title: `pnpm preview:up for ${branch}` },
+		{ retry: false },
+	).deploy_id;
 }
 
 // Waits until the new deploy serves the preview, so that `up` only finishes
 // once the preview runs with the values it just wrote.
-async function waitForPreviewDeploy(branch: string, title: string): Promise<void> {
-	let deploy = await findTriggeredDeploy(branch, title);
+async function waitForPreviewDeploy(deployId: string): Promise<void> {
+	let deploy = netlifyApi<NetlifyDeploy>("getDeploy", { deploy_id: deployId });
 	const deadline = Date.now() + DEPLOY_TIMEOUT_MS;
 	let lastState = "";
 	while (Date.now() < deadline) {
@@ -501,9 +468,10 @@ async function waitForPreviewDeploy(branch: string, title: string): Promise<void
 			console.log(`Netlify deploy ${deploy.id}: ${deploy.state}`);
 			lastState = deploy.state;
 		}
-		// `netlify.toml` skips branch deploys that do not match PREVIEW_BRANCH. A
-		// skipped deploy can still report the state "ready", but it publishes
-		// nothing, so the skip has to be checked first.
+		// For builds started through the API, the build command of `netlify.toml`
+		// fails a branch that does not match PREVIEW_BRANCH. Should Netlify skip
+		// one instead, the deploy can still report the state "ready" while it
+		// publishes nothing, so the skip has to be checked first.
 		if (deploy.skipped || deploy.state === "error" || deploy.state === "rejected") {
 			throw new Error(
 				`Netlify deploy ${deploy.id} did not go live (${deploy.state}): ${deploy.error_message ?? "skipped"}`,
@@ -521,7 +489,6 @@ async function up(): Promise<void> {
 	validateBranchName(branch);
 	// Check everything that can be checked before any resource is created.
 	requireEnvironments(UP_ENVIRONMENT);
-	requireBuildHookUrl();
 	requireNetlifyAccountId();
 	requirePushedBranch(branch);
 	const sharedValues = readSharedPreviewValues();
@@ -555,8 +522,7 @@ async function up(): Promise<void> {
 	deleteBranchValues(branch, Object.keys(values));
 
 	console.log("Triggering Netlify build");
-	const title = await triggerNetlifyBuild(branch);
-	await waitForPreviewDeploy(branch, title);
+	await waitForPreviewDeploy(triggerNetlifyBuild(branch));
 
 	// On every run, not only when the webhook is new: a run that failed before
 	// this point may have left the branches on a webhook this one now replaces.

@@ -67,7 +67,7 @@ Infisical is the source of truth for application secrets:
 - production secrets are synced from Infisical to Netlify
 - `dev` secrets needed by GitHub Actions are synced from Infisical into GitHub secret stores
 
-`dev` holds only credentials that are harmless outside the team's machines, since CI and Dependabot receive them. `staging` holds the preview tooling's privileged ones, such as the ElevenLabs key allowed to manage workspace webhooks and the Netlify build hook, and is synced nowhere.
+`dev` holds only credentials that are harmless outside the team's machines, since CI and Dependabot receive them. `staging` holds the preview tooling's privileged ones, such as the ElevenLabs key allowed to manage workspace webhooks and the Neon key that creates and deletes preview branches, and is synced nowhere.
 
 Local development, E2E and previews all start from the staging Neon project (`PARENT_BRANCH_ID`), never from production: their databases hold no production data, and the `dev` credentials that developer machines and CI hold cannot reach production's database. The one deliberate exception is [building and previewing a production bundle](#local-development), which runs on the host with `prod` values against the real database.
 
@@ -279,8 +279,8 @@ branch is pushed before changing anything. Then it:
    overrides are ignored), with `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_NAME`
    (`preview/<branch>`), `ELEVENLABS_POST_CALL_WEBHOOK_ID`, `ELEVENLABS_WEBHOOK_SECRET`, `ORIGIN`
    and `BETTER_AUTH_SECRET` generated for the preview,
-4. triggers a build of the branch through the Netlify build hook in `NETLIFY_BUILD_HOOK_URL`, and
-   waits until that deploy is live. It fails when the build fails or `netlify.toml` skips it.
+4. starts a build of the branch through the Netlify API, and waits until that deploy is live.
+   It fails when the build fails or `netlify.toml` rejects the branch.
    Only then does it point the `preview/<branch>` agent branches at the preview's webhook and
    delete any webhook it replaced: until the new deploy is live, the running one can only verify
    the old webhook's signatures.
