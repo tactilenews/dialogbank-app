@@ -178,13 +178,27 @@ export async function resolveElevenLabsAgentTargetForAgentId(
 	return { agentId, branchId, workflowNodeId, postCallWebhookId };
 }
 
+// Netlify ends a function after about ten seconds, and the SDK waits up to four
+// minutes and retries twice by default. A hanging ElevenLabs request would then
+// end in a generic error page; with a limit below Netlify's, the page reports
+// the failure itself, and reloading it is the retry.
+export const ELEVENLABS_REQUEST_TIMEOUT_SECONDS = 8;
+
+export function createElevenLabsClient(apiKey: string): ElevenLabsClient {
+	return new ElevenLabsClient({
+		apiKey,
+		timeoutInSeconds: ELEVENLABS_REQUEST_TIMEOUT_SECONDS,
+		maxRetries: 0,
+	});
+}
+
 export function createElevenLabsAgentBranchReader(environment: ElevenLabsEnv): AgentBranchReader {
 	const apiKey = environment.ELEVENLABS_API_KEY;
 	if (!apiKey) {
 		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
 	}
 
-	const client = new ElevenLabsClient({ apiKey });
+	const client = createElevenLabsClient(apiKey);
 	return {
 		getMainBranchId: async (agentId) =>
 			(await client.conversationalAi.agents.get(agentId)).mainBranchId,
@@ -343,9 +357,7 @@ export function createElevenLabsAgentReader(environment: ElevenLabsEnv): AgentRe
 		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
 	}
 
-	const client = new ElevenLabsClient({
-		apiKey,
-	});
+	const client = createElevenLabsClient(apiKey);
 
 	return {
 		get: async (agentId, request) => client.conversationalAi.agents.get(agentId, request),
@@ -358,7 +370,7 @@ export function createElevenLabsAgentCatalogReader(environment: ElevenLabsEnv): 
 		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
 	}
 
-	const client = new ElevenLabsClient({ apiKey });
+	const client = createElevenLabsClient(apiKey);
 	return {
 		list: async ({ tag }) => {
 			const agents: ElevenLabsAgentCatalogEntry[] = [];
@@ -410,9 +422,7 @@ export function createElevenLabsAgentWriter(environment: ElevenLabsEnv): AgentWr
 		throw error(500, "ELEVENLABS_API_KEY is not configured on the server.");
 	}
 
-	const client = new ElevenLabsClient({
-		apiKey,
-	});
+	const client = createElevenLabsClient(apiKey);
 
 	return {
 		update: async (agentId, request) => updateAgent(client, agentId, request),
