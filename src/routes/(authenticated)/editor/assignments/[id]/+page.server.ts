@@ -1,5 +1,5 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
-import { error, fail } from "@sveltejs/kit";
+import { error, fail, isHttpError } from "@sveltejs/kit";
 import { asc, eq, sql } from "drizzle-orm";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
@@ -343,6 +343,11 @@ export const actions = withAuthenticatedActions<Parameters<Actions["save"]>[0], 
 			agentTarget = await resolveElevenLabsAgentTarget(process.env);
 			existingAgent = await reader.get(agentTarget.agentId, { branchId: agentTarget.branchId });
 		} catch (e) {
+			// The resolver reports its own failures, such as a branch it could not
+			// point at this environment's webhook, as HTTP errors.
+			if (isHttpError(e)) {
+				return fail(e.status, { message: `Agent konnte nicht geladen werden: ${e.body.message}` });
+			}
 			if (!(e instanceof ElevenLabsError)) throw e;
 			return fail(e.statusCode || 500, {
 				message: `Agent konnte nicht geladen werden: ${e.message || "Unbekannter Fehler"}`,

@@ -1,4 +1,5 @@
 import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
+import { error } from "@sveltejs/kit";
 import { vi } from "vitest";
 import { createRequestEvent, describe, it } from "$lib/server/test/fixtures";
 import { actions, load } from "./+page.server";
@@ -281,6 +282,37 @@ describe("/editor/assignments/[id] +page.server", () => {
 		).resolves.toMatchObject({
 			status: 503,
 			data: { message: expect.stringContaining("Agent konnte nicht geladen werden") },
+		});
+	});
+
+	it("activate: reports a branch the resolver could not set up in the form", async ({
+		db,
+		expect,
+		schema,
+	}) => {
+		elevenLabs.resolveElevenLabsAgentTarget.mockImplementation(async () =>
+			error(500, "ElevenLabs branch could not be pointed at this environment's post-call webhook"),
+		);
+		const formData = new FormData();
+		formData.append("name", "Standard");
+		const event = createRequestEvent({
+			request: new Request("http://localhost/editor/assignments/1?/activate", {
+				method: "POST",
+				body: formData,
+			}),
+			params: { id: "1" } as never,
+			locals: { user: authenticatedUser, db, schema },
+		});
+
+		await expect(
+			actions.activate(event as unknown as Parameters<typeof actions.activate>[0]),
+		).resolves.toMatchObject({
+			status: 500,
+			data: {
+				message: expect.stringContaining(
+					"could not be pointed at this environment's post-call webhook",
+				),
+			},
 		});
 	});
 });

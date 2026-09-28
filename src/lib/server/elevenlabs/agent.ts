@@ -147,10 +147,17 @@ export async function resolveElevenLabsAgentTargetForAgentId(
 	}
 
 	const reader = branchReader ?? createElevenLabsAgentBranchReader(environment);
-	const branchId =
-		branchName === MAIN_BRANCH_NAME
-			? await requireMainBranchId(agentId, reader)
-			: await findOrCreateElevenLabsBranch(agentId, branchName, postCallWebhookId, reader);
+	if (branchName !== MAIN_BRANCH_NAME) {
+		const branchId = await findOrCreateElevenLabsBranch(
+			agentId,
+			branchName,
+			postCallWebhookId,
+			reader,
+		);
+		return { agentId, branchId, workflowNodeId, postCallWebhookId };
+	}
+	const branchId = await requireMainBranchId(agentId, reader);
+	await ensurePostCallWebhook(agentId, branchId, postCallWebhookId, reader);
 
 	return { agentId, branchId, workflowNodeId, postCallWebhookId };
 }
@@ -214,9 +221,10 @@ function selectLatestCommittedVersionId(
 	return latestVersion.id;
 }
 
-// A branch that already exists may still carry the webhook it inherited from the
-// main branch, such as one created before this check, by E2E or by hand. It is
-// read on every resolve and only written when it differs.
+// A branch that already exists may use another webhook: one inherited from the
+// main branch, such as a branch created before this check, by E2E or by hand,
+// or production's main branch after its webhook changed. It is read on every
+// resolve and only written when it differs.
 async function ensurePostCallWebhook(
 	agentId: string,
 	branchId: string,

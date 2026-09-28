@@ -220,6 +220,27 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 		expect(branchReader.create).not.toHaveBeenCalled();
 	});
 
+	it("points the main branch at this environment's webhook when it changed", async () => {
+		const branchReader = createBranchReader();
+		branchReader.getPostCallWebhookId.mockResolvedValue("wh_previous");
+
+		await resolveElevenLabsAgentTargetForAgentId(
+			{
+				ELEVENLABS_AGENT_BRANCH_NAME: "main",
+				ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
+				ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
+			},
+			"agent_main_123",
+			branchReader,
+		);
+
+		expect(branchReader.setPostCallWebhook).toHaveBeenCalledWith(
+			"agent_main_123",
+			"agtbrch_main_123",
+			"wh_env",
+		);
+	});
+
 	it("rejects without creating anything when the agent has no main branch", async () => {
 		const branchReader = createBranchReader({ mainBranchId: undefined });
 
