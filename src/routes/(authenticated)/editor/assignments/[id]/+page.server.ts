@@ -2,6 +2,7 @@ import { ElevenLabsError } from "@elevenlabs/elevenlabs-js";
 import * as Sentry from "@sentry/sveltekit";
 import { error, fail, isHttpError } from "@sveltejs/kit";
 import { and, asc, eq, isNotNull, isNull, sql } from "drizzle-orm";
+import { env } from "$env/dynamic/private";
 import { createUniqueAssignmentSlug } from "$lib/server/assignments";
 import type { DbClient } from "$lib/server/db";
 import { dbAtomic } from "$lib/server/db";
@@ -309,7 +310,7 @@ export const load = withAuthenticatedLoad<
 		.from(classifications)
 		.orderBy(classifications.label);
 
-	const agentCatalogTag = resolveElevenLabsDialogbankAgentTag(process.env);
+	const agentCatalogTag = resolveElevenLabsDialogbankAgentTag(env);
 	let availableAgents: ElevenLabsAgentCatalogEntry[] = [];
 	let unavailableAgents: (ElevenLabsAgentCatalogEntry & {
 		assignmentId: number;
@@ -319,7 +320,7 @@ export const load = withAuthenticatedLoad<
 	let agentCatalog: ElevenLabsAgentCatalogEntry[] = [];
 	let agentCatalogError: string | null = null;
 	try {
-		agentCatalog = await listElevenLabsDialogbankAgents(process.env);
+		agentCatalog = await listElevenLabsDialogbankAgents(env);
 		const ownedAgents = await event.locals.db
 			.select({
 				assignmentId: assignments.id,
@@ -360,8 +361,8 @@ export const load = withAuthenticatedLoad<
 		agentCatalog.some((catalogAgent) => isDialogbankAgent(catalogAgent, agentId, agentCatalogTag))
 	) {
 		try {
-			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
-			const reader = createElevenLabsAgentReader(process.env);
+			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(env, agentId);
+			const reader = createElevenLabsAgentReader(env);
 			agent = await getElevenLabsEditorAgent(agentTarget, reader);
 		} catch (cause) {
 			// non-fatal: show agent view as unavailable
@@ -404,13 +405,13 @@ function isDialogbankAgent(
 // after itself. Throws when the catalog cannot be loaded, since the agent then
 // cannot be checked.
 async function isInDialogbankCatalog(agentId: string): Promise<boolean> {
-	const requiredTag = resolveElevenLabsDialogbankAgentTag(process.env);
-	const agentCatalog = await listElevenLabsDialogbankAgents(process.env);
+	const requiredTag = resolveElevenLabsDialogbankAgentTag(env);
+	const agentCatalog = await listElevenLabsDialogbankAgents(env);
 	return agentCatalog.some((catalogAgent) => isDialogbankAgent(catalogAgent, agentId, requiredTag));
 }
 
 function notInCatalogMessage(): string {
-	return `Der Agent ist nicht mit dem Tag ${resolveElevenLabsDialogbankAgentTag(process.env)} für die Dialogbank freigegeben.`;
+	return `Der Agent ist nicht mit dem Tag ${resolveElevenLabsDialogbankAgentTag(env)} für die Dialogbank freigegeben.`;
 }
 
 // The page only shows these errors: SvelteKit reports neither caught errors nor
@@ -491,9 +492,9 @@ async function configureAssignmentAgent(
 		if (!assignment) throw error(409, "Der Agent ist dem Einsatz nicht mehr zugewiesen.");
 		if (!(await isInDialogbankCatalog(agentId))) throw error(409, notInCatalogMessage());
 		const elevenLabsQuestions = await loadElevenLabsQuestions(db, id);
-		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
-		const reader = createElevenLabsAgentReader(process.env);
-		const writer = createElevenLabsAgentWriter(process.env);
+		const agentTarget = await resolveElevenLabsAgentTargetForAgentId(env, agentId);
+		const reader = createElevenLabsAgentReader(env);
+		const writer = createElevenLabsAgentWriter(env);
 		const existingAgent = await reader.get(agentTarget.agentId, {
 			branchId: agentTarget.branchId,
 		});

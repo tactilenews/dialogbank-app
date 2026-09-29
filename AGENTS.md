@@ -60,7 +60,7 @@ dialogbank-app/
 
 - **Infisical**: All commands that require secrets (including `dev`, `build`, `preview`, `test`, `test:e2e`, and `db:*`) must be run using Infisical to provide environment variables.
   - **Usage**: `infisical run --env [env] -- [command]`
-  - **Testing**: All test-related scripts (e.g., `test`, `test:e2e`, `vitest`) **must** be run with `--env dev`, the environment CI uses too.
+  - **Testing**: `test` and `test:e2e` **must** be run with `--env dev`, the environment CI uses too. Unit tests (`test:unit`) need no secrets and run without Infisical; the Vitest setup replaces `$env/dynamic/private` with a fixed, empty environment.
   - **Preview tooling**: `preview:up` and `preview:down` run with `--env staging`, which holds their privileged credentials and is synced nowhere.
   - Example: `infisical run --env dev -- pnpm dev`
   - Example: `infisical run --env dev -- pnpm test:e2e`
@@ -83,16 +83,22 @@ This command:
 - Runs the e2e test suite using Playwright
 - Requires a test database configured in Infisical
 
-### Other Tests
+### Unit Tests
 
-All test-related scripts require Infisical:
+Unit and component tests need no secrets, so they run without Infisical, like in CI:
 
 ```sh
-# Unit/component tests
-infisical --env dev run -- pnpm run test
+# Run once
+pnpm run test:unit --run
 
 # Vitest watch mode
-infisical --env dev run -- pnpm run test:watch
+pnpm run test:unit
+```
+
+`pnpm run test` runs the unit tests and then the E2E tests, so it needs Infisical:
+
+```sh
+infisical --env dev run -- pnpm run test
 ```
 
 ## Database

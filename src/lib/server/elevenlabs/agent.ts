@@ -110,6 +110,7 @@ export type ElevenLabsEnv = {
 	ELEVENLABS_DIALOGBANK_AGENT_TAG?: string;
 	ELEVENLABS_POST_CALL_WEBHOOK_ID?: string;
 	ELEVENLABS_WORKFLOW_NODE_ID?: string;
+	[key: string]: string | undefined;
 };
 
 export function resolveElevenLabsDialogbankAgentTag(environment: ElevenLabsEnv): string {
