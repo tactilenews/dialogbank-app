@@ -55,6 +55,7 @@ These variables are used by the application:
 - `ELEVENLABS_WEBHOOK_SECRET`: secret used to verify `ElevenLabs-Signature`
 - `SENTRY_DSN`: server-side Sentry DSN
 - `PUBLIC_SENTRY_DSN`: optional browser-side Sentry DSN
+- `SENTRY_ENVIRONMENT` / `PUBLIC_SENTRY_ENVIRONMENT`: the Sentry environment of server and browser events (default `production`); `preview` for [previews](#preview-deployments)
 - `SENTRY_AUTH_TOKEN`: Sentry auth token used during Netlify builds for sourcemap upload
 - `SENTRY_ORG`: Sentry organization slug used during Netlify builds
 - `SENTRY_PROJECT`: Sentry project slug used during Netlify builds
@@ -287,7 +288,8 @@ branch is pushed before changing anything. Then it:
    apply to that branch's deploys only: the shared values of Infisical `prod` `/` (your personal
    overrides are ignored), with `PREVIEW_BRANCH`, `DATABASE_URL`, `ELEVENLABS_AGENT_BRANCH_NAME`
    (`preview/<branch>`), `ELEVENLABS_POST_CALL_WEBHOOK_ID`, `ELEVENLABS_WEBHOOK_SECRET`, `ORIGIN`
-   and `BETTER_AUTH_SECRET` generated for the preview,
+   and `BETTER_AUTH_SECRET` generated for the preview, and `SENTRY_ENVIRONMENT` and
+   `PUBLIC_SENTRY_ENVIRONMENT` set to `preview`,
 4. starts a build of the branch through the Netlify API, and waits until that deploy is live.
    It fails when the build fails or `netlify.toml` rejects the branch.
    Only then does it point the `preview/<branch>` agent branches at the preview's webhook and
