@@ -351,6 +351,7 @@ By default, the script syncs test-related values such as:
 
 - `ELEVENLABS_AGENT_ID`
 - `ELEVENLABS_API_KEY`
+- `ELEVENLABS_DIALOGBANK_AGENT_TAG` (the E2E agent carries a `dev`-only tag, so it stays out of the production catalog)
 - `NEON_API_KEY`
 - `NEON_PROJECT_ID`
 - `PARENT_BRANCH_ID`
