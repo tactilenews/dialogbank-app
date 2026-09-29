@@ -21,6 +21,8 @@ type GeneratedPreviewValues = {
 	ELEVENLABS_WEBHOOK_SECRET: string;
 	ORIGIN: string;
 	BETTER_AUTH_SECRET: string;
+	SENTRY_ENVIRONMENT: string;
+	PUBLIC_SENTRY_ENVIRONMENT: string;
 };
 
 const UP_ENVIRONMENT = [
@@ -556,6 +558,10 @@ async function up(): Promise<void> {
 		ELEVENLABS_WEBHOOK_SECRET: webhook.secret,
 		ORIGIN: origin,
 		BETTER_AUTH_SECRET: previewAuthSecret(existingValues, sharedValues.BETTER_AUTH_SECRET),
+		// Previews report to production's Sentry project; without it, their errors
+		// would count as production's.
+		SENTRY_ENVIRONMENT: "preview",
+		PUBLIC_SENTRY_ENVIRONMENT: "preview",
 	};
 	const values = { ...sharedValues, ...generatedValues };
 	console.log(`Writing ${Object.keys(values).length} values to Netlify for branch "${branch}"`);
