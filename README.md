@@ -48,7 +48,6 @@ These variables are used by the application:
 - `BETTER_AUTH_SECRET`: Better Auth secret
 - `ORIGIN`: canonical app URL used by auth; if omitted, the app falls back to `URL` or the incoming request origin
 - `ELEVENLABS_API_KEY`: server-side API key used to read agent details
-- `ELEVENLABS_AGENT_ID`: the ElevenLabs conversational agent wired to this app
 - `ELEVENLABS_DIALOGBANK_AGENT_TAG`: the tag that puts an ElevenLabs agent into Dialogbank's catalog (default `dialogbank`). Editors can connect only tagged agents to an assignment, and Dialogbank never writes to an agent without it. Removing the tag does not unpublish an assignment: disconnect its agent in the editor to take it off the public pages
 - `ELEVENLABS_AGENT_BRANCH_NAME`: the agent branch the app reads and writes: `main` in production, `development` in `dev`, and a per-branch name for previews (see [Preview deployments](#preview-deployments)). `main` stands for the agent's main branch, whatever ElevenLabs calls it (some agents call it `Main`); any other branch is looked up by its exact name and created from the main branch if it is missing
 - `ELEVENLABS_POST_CALL_WEBHOOK_ID`: the ElevenLabs workspace webhook that receives the post-call webhooks of the agent branch the app uses, or `none` for no webhook (see [Webhook Wiring](#webhook-wiring))
@@ -166,17 +165,14 @@ infisical run --env dev -- pnpm run test:e2e
 
 The current ElevenLabs integration has two responsibilities:
 
-1. Read the configured agent so editors can confirm which agent is active.
+1. Configure the agent each assignment owns with that assignment's questions.
 2. Receive post-call webhook payloads and persist structured conversation data.
 
 ### Agent Wiring
 
-The editor agent page reads:
+Each assignment owns at most one ElevenLabs agent, and each agent belongs to at most one assignment. The assignment editor lists the agents tagged with `ELEVENLABS_DIALOGBANK_AGENT_TAG`, using `ELEVENLABS_API_KEY`. Editors connect one of them to the assignment, and saving the assignment configures that agent's `ELEVENLABS_AGENT_BRANCH_NAME` branch with the assignment's questions.
 
-- `ELEVENLABS_API_KEY`
-- `ELEVENLABS_AGENT_ID`
-
-It fetches the agent from ElevenLabs and displays its name and system prompt in the editor UI.
+An incoming conversation is stored under the assignment that owns its agent, and discarded when no assignment does.
 
 ### Webhook Wiring
 
@@ -199,11 +195,12 @@ When validating or debugging the webhook wiring, it can be useful to inspect the
 
 If you are wiring a new agent to the app, the minimal setup is:
 
-1. Create or choose the ElevenLabs conversational agent.
-2. Set `ELEVENLABS_AGENT_ID` and `ELEVENLABS_API_KEY` in the app environment.
+1. Create or choose the ElevenLabs conversational agent, and tag it with `ELEVENLABS_DIALOGBANK_AGENT_TAG` on its `main` branch (ElevenLabs only maintains tags there).
+2. Set `ELEVENLABS_API_KEY` in the app environment.
 3. Register this app's `/webhook/elevenlabs/post-call` endpoint as a workspace webhook in ElevenLabs and set its ID as `ELEVENLABS_POST_CALL_WEBHOOK_ID`.
 4. Copy the webhook signing secret into `ELEVENLABS_WEBHOOK_SECRET`.
-5. Trigger a test conversation and confirm that the webhook produces stored conversation and answer data.
+5. Connect the agent to an assignment in the assignment editor and save it.
+6. Trigger a test conversation and confirm that the webhook produces stored conversation and answer data.
 
 To receive webhooks on the local dev server, expose it with a Cloudflare quick tunnel and register `<tunnel URL>/webhook/elevenlabs/post-call` as above:
 
@@ -256,7 +253,6 @@ In practice, Netlify receives the production runtime variables from Infisical sy
 - `BETTER_AUTH_SECRET`
 - `ORIGIN`
 - `ELEVENLABS_API_KEY`
-- `ELEVENLABS_AGENT_ID`
 - `ELEVENLABS_AGENT_BRANCH_NAME` (`main`)
 - `ELEVENLABS_POST_CALL_WEBHOOK_ID`
 - `ELEVENLABS_WEBHOOK_SECRET`
@@ -349,7 +345,7 @@ infisical run --env dev -- pnpm run sync:dependabot-secrets
 
 By default, the script syncs test-related values such as:
 
-- `ELEVENLABS_AGENT_ID`
+- `ELEVENLABS_AGENT_ID` (the E2E fixture agent)
 - `ELEVENLABS_API_KEY`
 - `NEON_API_KEY`
 - `NEON_PROJECT_ID`

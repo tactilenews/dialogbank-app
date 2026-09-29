@@ -104,7 +104,6 @@ export type ElevenLabsEditorAgent = {
 };
 
 export type ElevenLabsEnv = {
-	ELEVENLABS_AGENT_ID?: string;
 	ELEVENLABS_AGENT_BRANCH_NAME?: string;
 	ELEVENLABS_API_KEY?: string;
 	ELEVENLABS_DIALOGBANK_AGENT_TAG?: string;

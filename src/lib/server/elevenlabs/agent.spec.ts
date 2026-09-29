@@ -237,7 +237,6 @@ describe("resolveElevenLabsAgentTargetForAgentId", () => {
 		await expect(
 			resolveElevenLabsAgentTargetForAgentId(
 				{
-					ELEVENLABS_AGENT_ID: "agent_default",
 					ELEVENLABS_AGENT_BRANCH_NAME: "preview/feature",
 					ELEVENLABS_POST_CALL_WEBHOOK_ID: "wh_env",
 					ELEVENLABS_WORKFLOW_NODE_ID: WORKFLOW_NODE_ID,
