@@ -120,6 +120,13 @@
 			"when": 1790101370060,
 			"tag": "0016_assignment_agents",
 			"breakpoints": true
+		},
+		{
+			"idx": 17,
+			"version": "7",
+			"when": 1790670081090,
+			"tag": "0017_drop_assignments_is_active",
+			"breakpoints": true
 		}
 	]
 }
