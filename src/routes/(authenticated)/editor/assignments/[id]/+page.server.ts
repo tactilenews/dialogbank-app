@@ -12,6 +12,7 @@ import {
 	questions,
 } from "$lib/server/db/schema";
 import {
+	createElevenLabsAgentBranchReader,
 	createElevenLabsAgentReader,
 	createElevenLabsAgentWriter,
 	type ElevenLabsAgentCatalogEntry,
@@ -20,6 +21,7 @@ import {
 	isSelectableDialogbankAgent,
 	listElevenLabsDialogbankAgents,
 	type Question,
+	rememberAgentReads,
 	resolveElevenLabsAgentTargetForAgentId,
 	resolveElevenLabsDialogbankAgentTag,
 	updateElevenLabsAgentQuestions,
@@ -255,7 +257,7 @@ export const load = withAuthenticatedLoad<
 
 	if (!assignment) throw error(404, "Einsatz nicht gefunden.");
 
-	const rawRows = await event.locals.db
+	const questionRowsQuery = event.locals.db
 		.select({
 			id: questions.id,
 			text: questions.text,
@@ -269,6 +271,51 @@ export const load = withAuthenticatedLoad<
 		.leftJoin(classifications, eq(classifications.id, questionClassifications.classificationId))
 		.where(eq(questions.assignmentId, id))
 		.orderBy(asc(questions.displayOrder), asc(questions.id));
+
+	const classificationsQuery = event.locals.db
+		.select({
+			id: classifications.id,
+			key: classifications.key,
+			label: classifications.label,
+			emoji: classifications.emoji,
+		})
+		.from(classifications)
+		.orderBy(classifications.label);
+
+	const ownedAgentsQuery = event.locals.db
+		.select({
+			assignmentId: assignments.id,
+			assignmentName: assignments.name,
+			agentId: assignments.elevenLabsAgentId,
+		})
+		.from(assignments)
+		.where(isNotNull(assignments.elevenLabsAgentId));
+
+	const agentCatalogTag = resolveElevenLabsDialogbankAgentTag(process.env);
+	// The catalog comes from ElevenLabs and does not depend on the queries above,
+	// so they run at the same time.
+	const loadAgentCatalog = async () => {
+		try {
+			return {
+				agentCatalog: await listElevenLabsDialogbankAgents(process.env),
+				agentCatalogError: null,
+			};
+		} catch (cause) {
+			// non-fatal: the page says the catalog is unavailable instead of empty
+			reportAgentError(cause, { assignmentId: id, agentId: null });
+			return {
+				agentCatalog: [] as ElevenLabsAgentCatalogEntry[],
+				agentCatalogError: describeError(cause),
+			};
+		}
+	};
+	const [rawRows, allClassifications, ownedAgents, { agentCatalog, agentCatalogError }] =
+		await Promise.all([
+			questionRowsQuery,
+			classificationsQuery,
+			ownedAgentsQuery,
+			loadAgentCatalog(),
+		]);
 
 	const questionsMap = new Map<
 		number,
@@ -299,58 +346,27 @@ export const load = withAuthenticatedLoad<
 	}
 	const assignmentQuestions = [...questionsMap.values()];
 
-	const allClassifications = await event.locals.db
-		.select({
-			id: classifications.id,
-			key: classifications.key,
-			label: classifications.label,
-			emoji: classifications.emoji,
-		})
-		.from(classifications)
-		.orderBy(classifications.label);
-
-	const agentCatalogTag = resolveElevenLabsDialogbankAgentTag(process.env);
-	let availableAgents: ElevenLabsAgentCatalogEntry[] = [];
-	let unavailableAgents: (ElevenLabsAgentCatalogEntry & {
-		assignmentId: number;
-		assignmentName: string;
-	})[] = [];
+	const ownersByAgentId = new Map(
+		ownedAgents
+			.filter((ownedAgent) => ownedAgent.agentId !== null && ownedAgent.assignmentId !== id)
+			.map((ownedAgent) => [ownedAgent.agentId as string, ownedAgent]),
+	);
+	const availableAgents = agentCatalog.filter(
+		(catalogAgent) => !ownersByAgentId.has(catalogAgent.id),
+	);
+	const unavailableAgents = agentCatalog.flatMap((catalogAgent) => {
+		const owner = ownersByAgentId.get(catalogAgent.id);
+		return owner
+			? [
+					{
+						...catalogAgent,
+						assignmentId: owner.assignmentId,
+						assignmentName: owner.assignmentName,
+					},
+				]
+			: [];
+	});
 	let agent: ElevenLabsEditorAgent | null = null;
-	let agentCatalog: ElevenLabsAgentCatalogEntry[] = [];
-	let agentCatalogError: string | null = null;
-	try {
-		agentCatalog = await listElevenLabsDialogbankAgents(process.env);
-		const ownedAgents = await event.locals.db
-			.select({
-				assignmentId: assignments.id,
-				assignmentName: assignments.name,
-				agentId: assignments.elevenLabsAgentId,
-			})
-			.from(assignments)
-			.where(isNotNull(assignments.elevenLabsAgentId));
-		const ownersByAgentId = new Map(
-			ownedAgents
-				.filter((ownedAgent) => ownedAgent.agentId !== null && ownedAgent.assignmentId !== id)
-				.map((ownedAgent) => [ownedAgent.agentId as string, ownedAgent]),
-		);
-		availableAgents = agentCatalog.filter((catalogAgent) => !ownersByAgentId.has(catalogAgent.id));
-		unavailableAgents = agentCatalog.flatMap((catalogAgent) => {
-			const owner = ownersByAgentId.get(catalogAgent.id);
-			return owner
-				? [
-						{
-							...catalogAgent,
-							assignmentId: owner.assignmentId,
-							assignmentName: owner.assignmentName,
-						},
-					]
-				: [];
-		});
-	} catch (cause) {
-		// non-fatal: the page says the catalog is unavailable instead of empty
-		agentCatalogError = describeError(cause);
-		reportAgentError(cause, { assignmentId: id, agentId: null });
-	}
 
 	const agentId = assignment.elevenLabsAgentId;
 	// Resolving the target can create a branch on the agent, so only agents in the
@@ -360,8 +376,14 @@ export const load = withAuthenticatedLoad<
 		agentCatalog.some((catalogAgent) => isDialogbankAgent(catalogAgent, agentId, agentCatalogTag))
 	) {
 		try {
-			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(process.env, agentId);
-			const reader = createElevenLabsAgentReader(process.env);
+			// Resolving checks the branch's webhook by reading the agent, which the
+			// editor needs as well.
+			const reader = rememberAgentReads(createElevenLabsAgentReader(process.env));
+			const agentTarget = await resolveElevenLabsAgentTargetForAgentId(
+				process.env,
+				agentId,
+				createElevenLabsAgentBranchReader(process.env, reader),
+			);
 			agent = await getElevenLabsEditorAgent(agentTarget, reader);
 		} catch (cause) {
 			// non-fatal: show agent view as unavailable
@@ -579,6 +601,7 @@ async function claimAssignmentAgent(
 	try {
 		selectedAgentIsInCatalog = await isInDialogbankCatalog(selectedAgentId);
 	} catch (cause) {
+		reportAgentError(cause, { assignmentId: id, agentId: selectedAgentId });
 		return {
 			ok: false,
 			status: errorStatus(cause),

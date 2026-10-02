@@ -25,7 +25,7 @@ describe("ElevenLabs clients of the app", () => {
 		createElevenLabsAgentReader(environment);
 		createElevenLabsAgentWriter(environment);
 		createElevenLabsAgentCatalogReader(environment);
-		createElevenLabsAgentBranchReader(environment);
+		createElevenLabsAgentBranchReader(environment, { get: vi.fn() });
 
 		expect(constructedWith).toHaveLength(4);
 		for (const options of constructedWith) {
